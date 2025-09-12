@@ -179,13 +179,34 @@ async function processPIXSubscription(customer: any, planData: any) {
     throw new Error('PIX charge not found in subscription');
   }
 
+  // Debug: Log the actual structure of pixCharge to understand Vindi's response
+  console.log('[VINDI-PIX] PIX Charge structure:', JSON.stringify(pixCharge, null, 2));
+  console.log('[VINDI-PIX] First bill structure:', JSON.stringify(firstBill, null, 2));
+
+  // Try different possible field names for PIX EMV code from Vindi
+  const pixCode = pixCharge.qr_code || 
+                  pixCharge.pix_code || 
+                  pixCharge.emv_code || 
+                  pixCharge.code ||
+                  pixCharge.payment_method?.pix_code ||
+                  pixCharge.payment_method?.qr_code ||
+                  pixCharge.last_transaction?.gateway_response_fields?.pix_code ||
+                  pixCharge.last_transaction?.gateway_response_fields?.qr_code;
+
+  console.log('[VINDI-PIX] Extracted PIX code:', pixCode ? pixCode.substring(0, 50) + '...' : 'NOT FOUND');
+
+  if (!pixCode) {
+    console.error('[VINDI-PIX] PIX code not found in any expected fields');
+    throw new Error('PIX code not found in Vindi response');
+  }
+
   return {
     success: true,
     subscription_id: subscription.id,
     subscription: subscription,
     pix_data: {
-      qr_code: pixCharge.qr_code,
-      pix_code: pixCharge.pix_code,
+      qr_code: pixCode,
+      pix_code: pixCode, // Provide both for compatibility
       expires_at: firstBill.due_at,
       amount: pixCharge.amount,
       charge_id: pixCharge.id
