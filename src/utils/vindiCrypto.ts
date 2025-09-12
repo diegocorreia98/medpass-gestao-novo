@@ -1,14 +1,18 @@
 import { CardData } from '@/types/checkout';
-import { supabase } from '@/integrations/supabase/client';
 
 interface VindiEnvironment {
   sandbox: string;
   production: string;
 }
 
-const VINDI_HOSTED_URLS: VindiEnvironment = {
-  sandbox: 'https://sandbox-app.vindi.com.br/api/v1/hosted',
-  production: 'https://app.vindi.com.br/api/v1/hosted'
+const VINDI_PUBLIC_URLS: VindiEnvironment = {
+  sandbox: 'https://sandbox-app.vindi.com.br/api/v1/public',
+  production: 'https://app.vindi.com.br/api/v1/public'
+};
+
+const VINDI_PRIVATE_URLS: VindiEnvironment = {
+  sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+  production: 'https://app.vindi.com.br/api/v1'
 };
 
 export interface VindiKeys {
@@ -42,57 +46,63 @@ export class VindiCrypto {
   }
 
   /**
-   * Encrypts card data using Vindi's hosted endpoints
-   * This method calls the vindi-encrypt-card edge function to perform encryption securely
+   * Creates a payment profile (tokenization) using Vindi's public API
+   * This method follows the transparent checkout specification by calling Vindi directly from frontend
    */
   static async encryptCard(cardData: CardData): Promise<EncryptedCardData> {
     try {
-      console.log('[VINDI-CRYPTO] Starting card encryption process');
+      console.log('[VINDI-CRYPTO] Starting card tokenization via Vindi public API');
       
       // Validate card data
       this.validateCardData(cardData);
 
-      // Prepare card data for encryption
-      const encryptionData = {
+      // Prepare payment profile data for Vindi's public API
+      const paymentProfileData = {
+        holder_name: cardData.holder_name.trim(),
         card_number: cardData.number.replace(/\s/g, ''), // Remove spaces
-        card_holder_name: cardData.holder_name,
+        card_cvv: cardData.cvv,
         card_expiry_month: cardData.expiry_month.padStart(2, '0'),
         card_expiry_year: cardData.expiry_year,
-        card_cvv: cardData.cvv,
-        public_key: this.getPublicKey(),
-        environment: this.getEnvironment()
+        allow_as_fallback: false
       };
 
-      console.log('[VINDI-CRYPTO] Sending card data for encryption (sensitive data masked)');
+      console.log('[VINDI-CRYPTO] Calling Vindi public payment_profiles endpoint');
 
-      // Call Supabase edge function for encryption
-      const { data, error } = await supabase.functions.invoke('vindi-encrypt-card', {
-        body: encryptionData
+      // Call Vindi's public API for tokenization (as per specification)
+      const response = await fetch(`${this.getPublicUrl()}/payment_profiles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(this.getPublicKey() + ':')}`
+        },
+        body: JSON.stringify(paymentProfileData)
       });
 
-      if (error) {
-        throw new Error(error.message || 'Erro na comunicação com o servidor');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.errors?.[0]?.message || `HTTP ${response.status}`;
+        throw new Error(`Vindi API error: ${errorMessage}`);
       }
 
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erro na criptografia do cartão');
-      }
+      const result = await response.json();
       
-      if (!data.gateway_token) {
-        throw new Error('Token de gateway não recebido');
+      if (!result.payment_profile?.gateway_token) {
+        throw new Error('Gateway token não recebido da Vindi');
       }
 
-      console.log('[VINDI-CRYPTO] Card encryption successful');
+      console.log('[VINDI-CRYPTO] Tokenization successful, gateway_token received');
+      
+      const paymentProfile = result.payment_profile;
       
       return {
-        gateway_token: data.gateway_token,
-        card_brand: data.card_brand || this.detectCardBrand(cardData.number),
-        card_last_four: data.card_last_four || cardData.number.replace(/\s/g, '').slice(-4)
+        gateway_token: paymentProfile.gateway_token,
+        card_brand: paymentProfile.card_company_name?.toLowerCase() || this.detectCardBrand(cardData.number),
+        card_last_four: paymentProfile.card_number_first_six?.slice(-4) || cardData.number.replace(/\s/g, '').slice(-4)
       };
 
     } catch (error) {
-      console.error('[VINDI-CRYPTO] Encryption failed:', error);
-      throw new Error(`Falha na criptografia do cartão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      console.error('[VINDI-CRYPTO] Tokenization failed:', error);
+      throw new Error(`Falha na tokenização do cartão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   }
 
@@ -188,11 +198,66 @@ export class VindiCrypto {
   }
 
   /**
-   * Gets the hosted URL for the current environment
+   * Gets the public API URL for the current environment (for tokenization)
    */
-  static getHostedUrl(): string {
+  static getPublicUrl(): string {
     const environment = this.getEnvironment();
-    return VINDI_HOSTED_URLS[environment];
+    return VINDI_PUBLIC_URLS[environment];
+  }
+
+  /**
+   * Gets the private API URL for the current environment (for backend operations)
+   */
+  static getPrivateUrl(): string {
+    const environment = this.getEnvironment();
+    return VINDI_PRIVATE_URLS[environment];
+  }
+}
+
+/**
+ * Token information interface for better type safety
+ */
+export interface TokenInfo {
+  gateway_token: string;
+  expires_at: Date;
+  created_at: Date;
+  is_expired: boolean;
+}
+
+/**
+ * Utility class for managing gateway tokens
+ */
+export class GatewayTokenManager {
+  private static readonly TOKEN_TTL_MINUTES = 5;
+
+  /**
+   * Creates a token info object with expiration tracking
+   */
+  static createTokenInfo(gateway_token: string): TokenInfo {
+    const now = new Date();
+    const expires_at = new Date(now.getTime() + (this.TOKEN_TTL_MINUTES * 60 * 1000));
+    
+    return {
+      gateway_token,
+      expires_at,
+      created_at: now,
+      is_expired: false
+    };
+  }
+
+  /**
+   * Checks if a token is expired
+   */
+  static isTokenExpired(tokenInfo: TokenInfo): boolean {
+    return new Date() > tokenInfo.expires_at;
+  }
+
+  /**
+   * Gets remaining TTL in milliseconds
+   */
+  static getRemainingTTL(tokenInfo: TokenInfo): number {
+    const remaining = tokenInfo.expires_at.getTime() - new Date().getTime();
+    return Math.max(0, remaining);
   }
 }
 
