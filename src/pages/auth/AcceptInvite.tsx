@@ -58,37 +58,38 @@ export function AcceptInvite() {
       try {
         console.log('Validando token:', token)
         
-        // Primeiro tenta buscar como convite de franqueado
+        // Use the secure function to get invite by token
         let { data: franqueadoData, error: franqueadoError } = await supabase
-          .from('convites_franqueados')
-          .select(`
-            id,
-            email,
-            expires_at,
-            aceito,
-            unidades:unidade_id (
-              nome
-            )
-          `)
-          .eq('token', token)
-          .maybeSingle()
+          .rpc('get_convite_by_token', {
+            invitation_token: token
+          })
 
-        if (franqueadoData && !franqueadoError) {
-          if (franqueadoData.aceito) {
+        if (franqueadoData && franqueadoData.length > 0 && !franqueadoError) {
+          const convite = franqueadoData[0]
+
+          if (convite.aceito) {
             setError("Este convite já foi aceito")
             return
           }
 
-          if (new Date(franqueadoData.expires_at) < new Date()) {
+          if (new Date(convite.expires_at) < new Date()) {
             setError("Este convite expirou")
             return
           }
 
+          // Get unit name - we need to fetch it separately since the function doesn't return it
+          const { data: unidadeData } = await supabase
+            .from('unidades')
+            .select('nome')
+            .eq('id', convite.unidade_id)
+            .single()
+
           setConviteData({
-            ...franqueadoData,
-            tipo: 'franqueado'
+            ...convite,
+            tipo: 'franqueado',
+            unidades: unidadeData ? { nome: unidadeData.nome } : undefined
           } as ConviteData)
-          setValue('email', franqueadoData.email)
+          setValue('email', convite.email)
           setLoading(false)
           return
         }
@@ -148,67 +149,92 @@ export function AcceptInvite() {
       
       let userId: string
 
-      // 1. Try to authenticate the invited user
+      // 1. Handle invite acceptance - different approach based on invite type
       try {
-        console.log('Processing invite - attempting to authenticate user')
+        console.log('Processing invite for:', data.email, 'Type:', conviteData.tipo)
 
-        // For invited users, try to confirm their signup with the provided password
-        const { data: authData, error: authError } = await supabase.auth.verifyOtp({
-          email: data.email,
-          token: token,
-          type: 'invite'
-        })
+        if (conviteData.tipo === 'franqueado') {
+          // For franchise invites, user was created via inviteUserByEmail by our Edge Function
+          // First check if user exists in auth system
 
-        if (authData.user) {
-          // User verified successfully via invite token
-          userId = authData.user.id
-          console.log('User verified via invite token:', userId)
-
-          // Update user password
-          const { error: updateError } = await supabase.auth.updateUser({
-            password: data.password
-          })
-
-          if (updateError) {
-            console.error('Error updating password:', updateError)
-            throw new Error('Falha ao configurar senha')
-          }
-
-        } else if (authError) {
-          // If invite verification fails, try traditional flow
-          console.log('Invite verification failed, trying traditional authentication...')
-
+          console.log('Attempting to sign in with provided credentials...')
           const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
             email: data.email,
             password: data.password
           })
 
           if (signInData.user) {
+            // User successfully signed in
             userId = signInData.user.id
-            console.log('Traditional sign in successful:', userId)
-          } else if (signInError?.message.includes('Invalid login credentials')) {
-            // Try to create account
-            console.log('Creating new account...')
+            console.log('Sign in successful:', userId)
+          } else if (signInError) {
+            console.log('Sign in failed:', signInError.message)
+
+            // If user doesn't exist or credentials are wrong, they might need to set up their account
+            if (signInError.message.includes('Invalid login credentials')) {
+              // User exists but password is wrong, or user was invited but hasn't set password yet
+              // In this case, we'll create the account with the provided password
+              console.log('Attempting to create account for invited user...')
+
+              const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+                email: data.email,
+                password: data.password,
+                options: {
+                  data: {
+                    user_type: 'unidade',
+                    full_name: conviteData.unidades?.nome || data.email
+                  }
+                }
+              })
+
+              if (signUpError) {
+                console.error('Sign up error:', signUpError)
+                if (signUpError.message.includes('User already registered')) {
+                  toast({
+                    title: "Usuário já existe",
+                    description: "Este email já está cadastrado. Tente fazer login ou usar 'Esqueci minha senha'.",
+                    variant: "destructive"
+                  })
+                  return
+                }
+                throw signUpError
+              }
+
+              if (!signUpData.user) {
+                throw new Error("Falha ao criar conta do usuário")
+              }
+
+              userId = signUpData.user.id
+              console.log('Account created successfully:', userId)
+            } else {
+              throw signInError
+            }
+          }
+        } else {
+          // For matriz invites, use the existing flow
+          console.log('Processing matriz invite...')
+
+          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: data.email,
+            password: data.password
+          })
+
+          if (authData.user) {
+            userId = authData.user.id
+          } else if (authError?.message.includes('Invalid login credentials')) {
+            // Try to create account for matriz users
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
               email: data.email,
               password: data.password,
               options: {
                 data: {
-                  user_type: conviteData.tipo || 'unidade',
+                  user_type: 'matriz',
                   full_name: data.email
                 }
               }
             })
 
             if (signUpError) {
-              if (signUpError.message.includes('already been registered')) {
-                toast({
-                  title: "Credenciais inválidas",
-                  description: "Este email já está cadastrado. Verifique sua senha.",
-                  variant: "destructive"
-                })
-                return
-              }
               throw signUpError
             }
 
@@ -217,16 +243,15 @@ export function AcceptInvite() {
             }
 
             userId = signUpData.user.id
-            console.log('New account created:', userId)
           } else {
-            throw signInError
+            throw authError
           }
         }
       } catch (error: any) {
         console.error('Erro no processo de autenticação:', error)
         toast({
           title: "Erro de autenticação",
-          description: error.message || "Erro ao processar convite. Verifique suas credenciais.",
+          description: error.message || "Erro ao processar convite. Tente novamente.",
           variant: "destructive"
         })
         return
@@ -259,53 +284,27 @@ export function AcceptInvite() {
         return
         
       } else {
-        // Convite de franqueado (comportamento original)
-        const { error: updateError } = await supabase
-          .from('convites_franqueados')
-          .update({
-            aceito: true,
-            user_id_aceito: userId
-          })
-          .eq('token', token)
+        // Convite de franqueado - use the secure function
+        console.log('Accepting franchise invite using secure function...')
 
-        if (updateError) {
-          console.error('Erro ao marcar convite como aceito:', updateError)
-          throw updateError
+        const { data: acceptResult, error: acceptError } = await supabase
+          .rpc('accept_franchise_invite', {
+            invitation_token: token,
+            accepting_user_id: userId
+          })
+
+        if (acceptError) {
+          console.error('Erro ao aceitar convite:', acceptError)
+          throw acceptError
         }
 
-        console.log('Convite marcado como aceito')
+        console.log('Accept result:', acceptResult)
 
-        // 3. Buscar dados da unidade pelo convite
-        const { data: conviteComUnidade, error: conviteQueryError } = await supabase
-          .from('convites_franqueados')
-          .select('unidade_id')
-          .eq('token', token)
-          .single()
-
-        if (conviteQueryError) {
-          console.error('Erro ao buscar dados do convite:', conviteQueryError)
-          throw conviteQueryError
+        if (!acceptResult?.success) {
+          throw new Error('Falha ao aceitar convite - token pode ter expirado ou já foi usado')
         }
 
-        // 4. Vincular usuário à unidade
-        const { error: unidadeError } = await supabase
-          .from('unidades')
-          .update({
-            user_id: userId
-          })
-          .eq('id', conviteComUnidade.unidade_id)
-
-        if (unidadeError) {
-          console.error('Erro ao vincular usuário à unidade:', unidadeError)
-          // Continuar o fluxo mesmo se der erro aqui
-          toast({
-            title: "Atenção",
-            description: "Conta criada, mas houve erro ao vincular à unidade. Entre em contato com o suporte.",
-            variant: "destructive"
-          })
-        } else {
-          console.log('Usuário vinculado à unidade com sucesso')
-        }
+        console.log('Convite aceito e usuário vinculado à unidade com sucesso')
 
         toast({
           title: "Convite aceito com sucesso!",

@@ -53,54 +53,65 @@ export function useUnidades() {
       if (profile?.user_type === 'matriz' && unidade.email && unidade.responsavel) {
         console.log('Creating unit with user via Edge Function...');
 
-        const { data: result, error: functionError } = await supabase.functions.invoke('create-unit-with-user', {
-          body: {
-            unidade: {
-              nome: unidade.nome,
-              cnpj: unidade.cnpj,
-              endereco: unidade.endereco,
-              cidade: unidade.cidade,
-              estado: unidade.estado,
-              telefone: unidade.telefone,
-              franquia_id: unidade.franquia_id,
-              status: unidade.status || 'ativo'
-            },
-            responsavel: {
-              nome: unidade.responsavel,
-              email: unidade.email,
-              telefone: unidade.telefone
+        try {
+          const { data: result, error: functionError } = await supabase.functions.invoke('create-unit-with-user', {
+            body: {
+              unidade: {
+                nome: unidade.nome,
+                cnpj: unidade.cnpj,
+                endereco: unidade.endereco,
+                cidade: unidade.cidade,
+                estado: unidade.estado,
+                telefone: unidade.telefone,
+                franquia_id: unidade.franquia_id,
+                status: unidade.status || 'ativo'
+              },
+              responsavel: {
+                nome: unidade.responsavel,
+                email: unidade.email,
+                telefone: unidade.telefone
+              }
             }
+          });
+
+          if (functionError) {
+            console.error('Error calling create-unit-with-user:', functionError);
+            throw new Error(`Edge Function não disponível: ${functionError.message}`);
           }
-        });
 
-        if (functionError) {
-          console.error('Error calling create-unit-with-user:', functionError);
-          throw new Error(`Falha ao criar unidade: ${functionError.message}`);
+          if (result?.success) {
+            console.log('Unit and user created successfully via Edge Function:', result);
+
+            toast({
+              title: "Unidade e usuário criados!",
+              description: result.invitation_sent
+                ? "Unidade criada, usuário criado e convite enviado com sucesso."
+                : "Unidade criada e usuário criado. Convite será enviado posteriormente.",
+            });
+
+            return {
+              id: result.unidade_id,
+              nome: unidade.nome,
+              email: unidade.email,
+              responsavel: unidade.responsavel,
+              user_id: result.user_id,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            };
+          } else {
+            throw new Error(result?.error || 'Edge Function falhou');
+          }
+
+        } catch (edgeFunctionError) {
+          console.warn('Edge Function falhou, usando método tradicional:', edgeFunctionError);
+
+          // Fallback to traditional method with a warning
+          toast({
+            title: "Aviso",
+            description: "Função avançada não disponível. Criando unidade sem usuário - será necessário convidar manualmente.",
+            variant: "destructive"
+          });
         }
-
-        if (!result?.success) {
-          throw new Error(result?.error || 'Falha ao criar unidade e usuário');
-        }
-
-        console.log('Unit and user created successfully:', result);
-
-        toast({
-          title: "Unidade e usuário criados!",
-          description: result.invitation_sent
-            ? "Unidade criada, usuário criado e convite enviado com sucesso."
-            : "Unidade criada e usuário criado. Convite será enviado posteriormente.",
-        });
-
-        // Return mock data that matches the expected format
-        return {
-          id: result.unidade_id,
-          nome: unidade.nome,
-          email: unidade.email,
-          responsavel: unidade.responsavel,
-          user_id: result.user_id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
       }
 
       // For unidade users, create their own unit (existing behavior)

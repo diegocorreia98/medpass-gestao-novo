@@ -96,3 +96,6 @@ verify_jwt = true
 
 [functions.vindi-transparent-checkout]
 verify_jwt = false
+
+[functions.create-unit-with-user]
+verify_jwt = true
