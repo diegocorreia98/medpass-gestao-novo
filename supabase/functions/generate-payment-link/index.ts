@@ -18,6 +18,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔄 [GENERATE-PAYMENT-LINK] Function updated - Version 2.0');
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -100,11 +101,11 @@ serve(async (req) => {
     });
 
     // Get Vindi API configuration
-    const vindiApiKey = Deno.env.get('VINDI_API_KEY');
+    const vindiApiKey = Deno.env.get('VINDI_PRIVATE_KEY') || Deno.env.get('VINDI_API_KEY');
     const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
 
     if (!vindiApiKey) {
-      throw new Error('Chave API Vindi não configurada');
+      throw new Error('VINDI_PRIVATE_KEY ou VINDI_API_KEY não configurada');
     }
 
     // ✅ SANDBOX SUPPORT: Dynamic API URLs
@@ -211,8 +212,9 @@ serve(async (req) => {
         headers: {
           'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
           'Content-Type': 'application/json',
+          'User-Agent': 'MedPass-Sistema/1.0'
         },
-        body: JSON.stringify({ customer: customerData }),
+        body: JSON.stringify(customerData),
       });
 
       const customerResult = await customerResponse.json();
@@ -235,6 +237,12 @@ serve(async (req) => {
       throw new Error('Não foi possível obter ID do cliente Vindi');
     }
 
+    // Debug: Log all values before creating subscription
+    console.log('🔍 [DEBUG] Values before subscription creation:');
+    console.log('  - vindiPlanId:', vindiPlanId, '(type:', typeof vindiPlanId, ')');
+    console.log('  - vindiCustomerId:', vindiCustomerId, '(type:', typeof vindiCustomerId, ')');
+    console.log('  - payment_method:', payment_method, '(type:', typeof payment_method, ')');
+
     // Create subscription in Vindi
     const subscriptionData = {
       plan_id: Number(vindiPlanId),
@@ -243,15 +251,17 @@ serve(async (req) => {
       start_at: new Date().toISOString().split('T')[0],
     };
 
-    console.log('Creating subscription with data:', JSON.stringify(subscriptionData, null, 2));
+    console.log('🚀 [DEBUG] Final subscription data:', JSON.stringify(subscriptionData, null, 2));
+    console.log('🌐 [DEBUG] Sending to URL:', `${vindiApiUrl}/subscriptions`);
 
     const subscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
         'Content-Type': 'application/json',
+        'User-Agent': 'MedPass-Sistema/1.0'
       },
-      body: JSON.stringify({ subscription: subscriptionData }),
+      body: JSON.stringify(subscriptionData),
     });
 
     const subscriptionResult = await subscriptionResponse.json();
