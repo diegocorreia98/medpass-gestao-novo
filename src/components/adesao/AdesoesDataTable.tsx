@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard } from "lucide-react";
+import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,6 +13,8 @@ import { ReativarAdesaoModal } from "./ReativarAdesaoModal";
 import { GeneratePaymentLinkModal } from "./GeneratePaymentLinkModal";
 import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import { usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import type { BeneficiarioCompleto } from "@/types/database";
 
 interface AdesoesDataTableProps {
@@ -27,7 +29,9 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
   const [reativarModalOpen, setReativarModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [beneficiarioSelecionado, setBeneficiarioSelecionado] = useState<BeneficiarioCompleto | undefined>();
+  const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set()); // Track loading per beneficiario
   const { refreshPaymentStatuses } = usePaymentStatus();
+  const { toast } = useToast();
 
   const formatarData = (data: string) => {
     return format(new Date(data), "dd/MM/yyyy", { locale: ptBR });
@@ -85,6 +89,77 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
             beneficiario.payment_status === 'not_requested' || 
             beneficiario.payment_status === 'failed');
   };
+
+  // ✅ NOVA: Gerar link direto via API Vindi (sem modal)
+  const handleGenerateVindiLink = async (beneficiario: BeneficiarioCompleto) => {
+    const beneficiarioId = beneficiario.id;
+    setGeneratingLinks(prev => new Set([...prev, beneficiarioId]));
+    
+    try {
+      console.log('🔗 [VINDI-LINK] Gerando link para:', beneficiario.nome);
+      
+      const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+        body: { 
+          beneficiario_id: beneficiarioId,
+          payment_method: 'bank_slip' // Gera boleto/PIX
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      console.log('✅ [VINDI-LINK] Link gerado:', data);
+      
+      // Copiar link automaticamente
+      let linkToCopy = '';
+      let linkType = '';
+      
+      if (data.checkout_url) {
+        linkToCopy = data.checkout_url;
+        linkType = 'Checkout';
+      } else if (data.payment_url) {
+        linkToCopy = data.payment_url;
+        linkType = 'Vindi';
+      }
+      
+      if (linkToCopy) {
+        await navigator.clipboard.writeText(linkToCopy);
+        toast({
+          title: `Link ${linkType} gerado! 🔗`,
+          description: `Link copiado para área de transferência. ${data.due_date ? `Vencimento: ${new Date(data.due_date).toLocaleDateString('pt-BR')}` : ''}`,
+          action: (
+            <Button
+              size="sm"
+              onClick={() => window.open(linkToCopy, '_blank')}
+            >
+              Abrir Link
+            </Button>
+          )
+        });
+      } else {
+        throw new Error('Nenhum link foi gerado na resposta');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ [VINDI-LINK] Erro:', error);
+      toast({
+        title: "Erro ao gerar link Vindi",
+        description: error.message || "Erro interno do servidor",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingLinks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(beneficiarioId);
+        return newSet;
+      });
+    }
+  };
+
+  const isGeneratingLink = (beneficiarioId: string) => generatingLinks.has(beneficiarioId);
 
   if (isLoading) {
     return (
@@ -183,15 +258,32 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                               <Trash2 className="h-4 w-4" />
                             </Button>
                             {canGeneratePaymentLink(beneficiario) && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleGeneratePaymentLink(beneficiario)}
-                                className="h-8 w-8 text-primary hover:text-primary"
-                                title="Gerar Link de Pagamento"
-                              >
-                                <CreditCard className="h-4 w-4" />
-                              </Button>
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleGeneratePaymentLink(beneficiario)}
+                                  className="h-8 w-8 text-primary hover:text-primary"
+                                  title="Gerar Link de Pagamento (Modal)"
+                                >
+                                  <CreditCard className="h-4 w-4" />
+                                </Button>
+                                {/* ✅ NOVO: Botão direto para gerar link via Vindi */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleGenerateVindiLink(beneficiario)}
+                                  disabled={isGeneratingLink(beneficiario.id)}
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                                  title="Gerar Link Vindi (Direto)"
+                                >
+                                  {isGeneratingLink(beneficiario.id) ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Link className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </>
                             )}
                           </>
                         )}
@@ -237,10 +329,25 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                   Cancelar
                                 </DropdownMenuItem>
                                 {canGeneratePaymentLink(beneficiario) && (
-                                  <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
-                                    <CreditCard className="h-4 w-4 mr-2" />
-                                    Gerar Link Pagamento
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
+                                      <CreditCard className="h-4 w-4 mr-2" />
+                                      Gerar Link (Modal)
+                                    </DropdownMenuItem>
+                                    {/* ✅ NOVO: Botão direto Vindi no mobile */}
+                                    <DropdownMenuItem 
+                                      onClick={() => handleGenerateVindiLink(beneficiario)}
+                                      disabled={isGeneratingLink(beneficiario.id)}
+                                      className="text-blue-600"
+                                    >
+                                      {isGeneratingLink(beneficiario.id) ? (
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                      ) : (
+                                        <Link className="h-4 w-4 mr-2" />
+                                      )}
+                                      Gerar Link Vindi
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
                               </>
                             )}
