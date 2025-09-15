@@ -1,5 +1,4 @@
 import QRCode from 'qrcode';
-import { PIXStaticPayload } from 'pix-utils';
 
 export interface PixQRCodeOptions {
   pixKey?: string;
@@ -90,45 +89,19 @@ export async function generateQRCodeFromPayload(pixPayload: string): Promise<Pix
 
 /**
  * Generates static PIX QR Code (when you have PIX key and amount)
- * Use this only if you don't have a PSP payload and need to generate manually
+ * SIMPLIFIED VERSION - Use Vindi's SVG QR Code instead when possible
  */
 export async function generateStaticPixQRCode(options: PixQRCodeOptions): Promise<PixQRCodeResult> {
   try {
-    const {
-      pixKey,
-      merchantName = 'MedPass',
-      merchantCity = 'MARINGA',
-      amount,
-      transactionId,
-      description
-    } = options;
-
-    if (!pixKey) {
-      return {
-        success: false,
-        error: 'Chave PIX é obrigatória'
-      };
-    }
-
-    console.log('[PIX-QR] Generating static PIX QR Code for key:', pixKey);
-
-    // Create PIX payload using pix-utils
-    const pixPayload = PIXStaticPayload({
-      pixKey,
-      merchantName: merchantName.substring(0, 25), // Max 25 chars
-      merchantCity: merchantCity.substring(0, 15), // Max 15 chars, no accents
-      amount: amount,
-      transactionId: transactionId?.substring(0, 25), // Max 25 chars
-      description: description?.substring(0, 72) // Max 72 chars
-    });
-
-    console.log('[PIX-QR] Static payload generated:', pixPayload.substring(0, 50) + '...');
-
-    // Generate QR Code from the payload
-    return await generateQRCodeFromPayload(pixPayload);
+    console.log('[PIX-QR] Static PIX generation requested, but using Vindi SVG is recommended');
+    
+    return {
+      success: false,
+      error: 'Use o QR Code SVG fornecido pela Vindi (mais preciso). Esta função foi desabilitada para evitar conflitos.'
+    };
 
   } catch (error) {
-    console.error('[PIX-QR] Error generating static PIX QR Code:', error);
+    console.error('[PIX-QR] Error in static PIX function:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erro ao gerar PIX estático'
