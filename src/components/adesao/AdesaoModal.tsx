@@ -115,8 +115,8 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
           cep: values.cep || null,
           valor_plano: planoSelecionado.valor,
           observacoes: values.observacoes || null,
-          status: 'pendente', // Status pendente até confirmação do pagamento
-          payment_status: 'payment_requested' // Status válido conforme constraint
+          status: 'ativo', // Status ativo para permitir geração de link de pagamento
+          payment_status: 'not_requested' // Status inicial antes da geração do link
         })
         .select()
         .single();
