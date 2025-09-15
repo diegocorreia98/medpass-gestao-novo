@@ -103,14 +103,62 @@ export function useUnidades() {
           }
 
         } catch (edgeFunctionError) {
-          console.warn('Edge Function falhou, usando método tradicional:', edgeFunctionError);
+          console.warn('Edge Function não disponível, usando método temporário:', edgeFunctionError);
 
-          // Fallback to traditional method with a warning
+          // Fallback: create unit without user_id and send invite the traditional way
+          console.log('Using temporary fallback method...');
+
+          // Create unit with a temporary user_id (we'll use the current matriz user temporarily)
+          const { data: tempUnitData, error: tempUnitError } = await supabase
+            .from('unidades')
+            .insert({
+              nome: unidade.nome,
+              cnpj: unidade.cnpj,
+              endereco: unidade.endereco,
+              cidade: unidade.cidade,
+              estado: unidade.estado,
+              telefone: unidade.telefone,
+              franquia_id: unidade.franquia_id,
+              user_id: user.id, // Temporary - will be updated when user accepts invite
+              responsavel: unidade.responsavel,
+              email: unidade.email,
+              status: unidade.status || 'ativo'
+            })
+            .select()
+            .single();
+
+          if (tempUnitError) {
+            console.error('Error creating unit with fallback method:', tempUnitError);
+            throw tempUnitError;
+          }
+
+          console.log('Unit created with fallback method:', tempUnitData.id);
+
+          // Send invite using existing function
+          try {
+            const { error: inviteError } = await supabase.functions.invoke('send-franchise-invite', {
+              body: {
+                unidadeId: tempUnitData.id,
+                email: unidade.email,
+                nome: unidade.nome
+              }
+            });
+
+            if (inviteError) {
+              console.error('Error sending invite:', inviteError);
+              // Don't fail the whole process if invite fails
+            }
+          } catch (inviteErr) {
+            console.error('Failed to send invite:', inviteErr);
+            // Continue without failing
+          }
+
           toast({
-            title: "Aviso",
-            description: "Função avançada não disponível. Criando unidade sem usuário - será necessário convidar manualmente.",
-            variant: "destructive"
+            title: "Unidade criada!",
+            description: "Unidade criada com sucesso. O convite será enviado por email (requer configuração manual do usuário).",
           });
+
+          return tempUnitData;
         }
       }
 

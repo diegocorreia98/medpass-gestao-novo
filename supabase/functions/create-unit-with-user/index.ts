@@ -59,17 +59,20 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Creating unit with user:', { unidade: unidade.nome, email: responsavel.email });
 
-    // 1. Create user in auth.users using invite flow
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      responsavel.email,
-      {
-        data: {
-          user_type: 'unidade',
-          full_name: responsavel.nome,
-          telefone: responsavel.telefone
-        }
+    // 1. Create user in auth.users directly - user will set password when accepting invite
+    const tempPassword = crypto.randomUUID(); // Temporary password
+
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
+      email: responsavel.email,
+      password: tempPassword,
+      email_confirm: true, // Auto-confirm to avoid email confirmation step
+      user_metadata: {
+        user_type: 'unidade',
+        full_name: responsavel.nome,
+        telefone: responsavel.telefone,
+        invited_by_system: true
       }
-    );
+    });
 
     if (userError) {
       console.error('Error creating user:', userError);

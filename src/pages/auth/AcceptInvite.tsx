@@ -170,12 +170,11 @@ export function AcceptInvite() {
           } else if (signInError) {
             console.log('Sign in failed:', signInError.message)
 
-            // If user doesn't exist or credentials are wrong, they might need to set up their account
+            // If user doesn't exist or credentials are wrong, create new account
             if (signInError.message.includes('Invalid login credentials')) {
-              // User exists but password is wrong, or user was invited but hasn't set password yet
-              // In this case, we'll create the account with the provided password
-              console.log('Attempting to create account for invited user...')
+              console.log('User does not exist - creating new account...')
 
+              // Create new user account
               const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email: data.email,
                 password: data.password,
@@ -192,7 +191,7 @@ export function AcceptInvite() {
                 if (signUpError.message.includes('User already registered')) {
                   toast({
                     title: "Usuário já existe",
-                    description: "Este email já está cadastrado. Tente fazer login ou usar 'Esqueci minha senha'.",
+                    description: "Este email já está cadastrado. Use 'Esqueci minha senha' para redefinir sua senha.",
                     variant: "destructive"
                   })
                   return
@@ -206,6 +205,22 @@ export function AcceptInvite() {
 
               userId = signUpData.user.id
               console.log('Account created successfully:', userId)
+
+            } else if (signInError.message.includes('Email not confirmed')) {
+              console.log('Email not confirmed - resending confirmation...')
+
+              const { error: resendError } = await supabase.auth.resend({
+                type: 'signup',
+                email: data.email
+              })
+
+              if (!resendError) {
+                toast({
+                  title: "Email de confirmação reenviado",
+                  description: "Verifique seu email e clique no link de confirmação.",
+                })
+              }
+              return
             } else {
               throw signInError
             }
