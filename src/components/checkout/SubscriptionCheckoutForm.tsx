@@ -31,7 +31,9 @@ interface PaymentResult {
   status: string;
   pix_qr_code?: string;
   pix_qr_code_url?: string;
+  pix_qr_svg?: string; // ✅ SVG do QR Code da Vindi
   pix_code?: string;
+  pix_copia_cola?: string; // ✅ Código PIX copia e cola
   due_at?: string;
 }
 
