@@ -277,6 +277,85 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
+  // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE CORRETAMENTE
+  const renderPixQr = useCallback((r: PaymentResult) => {
+    const s = (r.pix_qr_svg || '').trim();
+
+    // 1) Se vier MARKUP SVG, injeta como HTML
+    if (s.startsWith('<svg')) {
+      return (
+        <div
+          className="w-48 h-48 p-2 bg-white border rounded-lg flex items-center justify-center"
+          dangerouslySetInnerHTML={{ __html: s }}
+        />
+      );
+    }
+
+    // 2) Se vier DATA URI (svg ou png), usa <img>
+    if (s.startsWith('data:image/')) {
+      return (
+        <img
+          src={s}
+          alt="QR Code PIX"
+          className="w-48 h-48 border rounded-lg bg-white p-2"
+        />
+      );
+    }
+
+    // 3) Se vier URL http(s) (como no seu caso), usa <img>
+    if (/^https?:\/\//i.test(s)) {
+      return (
+        <img
+          src={s}
+          alt="QR Code PIX"
+          className="w-48 h-48 border rounded-lg bg-white p-2"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
+      );
+    }
+
+    // 4) Fallbacks já existentes
+    if (r.pix_qr_code_url) {
+      return (
+        <img
+          src={r.pix_qr_code_url}
+          alt="QR Code PIX"
+          className="w-48 h-48 border rounded-lg bg-white p-2"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
+      );
+    }
+
+    if (r.pix_qr_code) {
+      const src = r.pix_qr_code.startsWith('data:')
+        ? r.pix_qr_code
+        : `data:image/png;base64,${r.pix_qr_code}`;
+      return (
+        <img
+          src={src}
+          alt="QR Code PIX"
+          className="w-48 h-48 border rounded-lg bg-white p-2"
+        />
+      );
+    }
+
+    // sem nada: placeholder
+    return (
+      <div className="w-48 h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border">
+        <QrCode className="h-16 w-16 text-gray-400 mb-2" />
+        <span className="text-xs text-muted-foreground text-center">
+          QR Code não disponível<br />Use o código PIX abaixo
+        </span>
+      </div>
+    );
+  }, []);
+
   const isFormValid = () => {
     if (selectedPaymentMethod === 'credit_card') {
       return cardData.number && cardData.cvv && cardData.holder_name && 
@@ -356,34 +435,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
                 )}
 
                 <div className="flex justify-center">
-                  {paymentResult.pix_qr_svg ? (
-                    // 🎯 PRIORIDADE: SVG QR Code da Vindi (mais preciso e limpo)
-                    <div 
-                      className="w-48 h-48 p-2 bg-white border rounded-lg flex items-center justify-center"
-                      dangerouslySetInnerHTML={{ __html: paymentResult.pix_qr_svg }}
-                    />
-                  ) : paymentResult.pix_qr_code_url ? (
-                    <img 
-                      src={paymentResult.pix_qr_code_url} 
-                      alt="QR Code PIX" 
-                      className="w-48 h-48 border rounded-lg"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                      }}
-                    />
-                  ) : paymentResult.pix_qr_code ? (
-                    <img
-                      src={paymentResult.pix_qr_code.startsWith('data:') ? paymentResult.pix_qr_code : `data:image/png;base64,${paymentResult.pix_qr_code}`}
-                      alt="QR Code PIX"
-                      className="w-48 h-48 border rounded-lg"
-                    />
-                  ) : (
-                    <div className="w-48 h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border">
-                      <QrCode className="h-16 w-16 text-gray-400 mb-2" />
-                      <span className="text-xs text-muted-foreground text-center">QR Code não disponível<br />Use o código PIX abaixo</span>
-                    </div>
-                  )}
+                  {renderPixQr(paymentResult)}
                 </div>
 
                 {/* ✅ CÓDIGO PIX COPIA E COLA - MELHORADO */}
