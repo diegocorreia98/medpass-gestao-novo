@@ -74,9 +74,74 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
 
+  const fetchSubscriptionData = useCallback(async () => {
+    try {
+      console.log('Buscando dados do checkout com token:', token);
+
+      // Usar edge function segura para validação de checkout
+      const { data, error } = await supabase.functions.invoke('secure-checkout-validation', {
+        body: { token }
+      });
+
+      console.log('Resposta da validação segura:', data);
+
+      if (error || !data?.success) {
+        console.error('Link inválido ou expirado:', error || data?.error);
+        toast({
+          title: "Erro",
+          description: data?.error || "Link de pagamento inválido ou expirado",
+          variant: "destructive",
+        });
+        navigate('/');
+        return;
+      }
+
+      const checkoutData = data.data;
+
+      // Processar dados já mascarados vindos da edge function segura
+      const processedData = {
+        id: checkoutData.id,
+        customer_name: checkoutData.customer_name, // Já mascarado pela função
+        customer_email: checkoutData.customer_email, // Já mascarado pela função
+        customer_document: checkoutData.customer_document, // Sempre mascarado
+        plan_id: '', // Não expostos no checkout por segurança
+        plan_price: checkoutData.plan_price,
+        // payment_method: checkoutData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
+        status: checkoutData.status,
+        planos: {
+          nome: checkoutData.plan_name,
+          descricao: 'Plano de saúde',
+          valor: checkoutData.plan_price
+        }
+      };
+
+      console.log('Dados da subscription processados (seguros e mascarados):', processedData);
+      setSubscriptionData(processedData);
+
+      // Pre-fill customer data com dados mascarados (para exibição apenas)
+      setCustomerData(prev => ({
+        ...prev,
+        name: processedData.customer_name || '',
+        email: processedData.customer_email || '',
+        cpf: processedData.customer_document || '',
+      }));
+
+    } catch (error) {
+      console.error('Error fetching subscription data:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar dados da assinatura",
+        variant: "destructive",
+      });
+      navigate('/');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, navigate]);
+
   useEffect(() => {
     fetchSubscriptionData();
-  }, [token]);
+  }, [fetchSubscriptionData]);
 
   // Timer effect for PIX expiration
   useEffect(() => {
@@ -117,7 +182,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
           },
           (payload) => {
             console.log('Transaction update received:', payload);
-            const newTransaction = payload.new as any;
+            const newTransaction = payload.new as { status: string; id: string };
             
             if (newTransaction.status === 'paid') {
               console.log('Payment confirmed! Transitioning to approved step');
@@ -137,70 +202,6 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     }
   }, [currentStep, subscriptionData?.id]);
 
-  const fetchSubscriptionData = async () => {
-    try {
-      console.log('Buscando dados do checkout com token:', token);
-      
-      // Usar edge function segura para validação de checkout
-      const { data, error } = await supabase.functions.invoke('secure-checkout-validation', {
-        body: { token }
-      });
-
-      console.log('Resposta da validação segura:', data);
-
-      if (error || !data?.success) {
-        console.error('Link inválido ou expirado:', error || data?.error);
-        toast({
-          title: "Erro",
-          description: data?.error || "Link de pagamento inválido ou expirado",
-          variant: "destructive",
-        });
-        navigate('/');
-        return;
-      }
-
-      const checkoutData = data.data;
-      
-      // Processar dados já mascarados vindos da edge function segura
-      const processedData = {
-        id: checkoutData.id,
-        customer_name: checkoutData.customer_name, // Já mascarado pela função
-        customer_email: checkoutData.customer_email, // Já mascarado pela função
-        customer_document: checkoutData.customer_document, // Sempre mascarado
-        plan_id: '', // Não expostos no checkout por segurança
-        plan_price: checkoutData.plan_price,
-        // payment_method: checkoutData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
-        status: checkoutData.status,
-        planos: {
-          nome: checkoutData.plan_name,
-          descricao: 'Plano de saúde',
-          valor: checkoutData.plan_price
-        }
-      };
-      
-      console.log('Dados da subscription processados (seguros e mascarados):', processedData);
-      setSubscriptionData(processedData);
-      
-      // Pre-fill customer data com dados mascarados (para exibição apenas)
-      setCustomerData(prev => ({
-        ...prev,
-        name: processedData.customer_name || '',
-        email: processedData.customer_email || '',
-        cpf: processedData.customer_document || '',
-      }));
-
-    } catch (error) {
-      console.error('Error fetching subscription data:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar dados da assinatura",
-        variant: "destructive",
-      });
-      navigate('/');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handlePayment = async () => {
     if (!subscriptionData) return;
