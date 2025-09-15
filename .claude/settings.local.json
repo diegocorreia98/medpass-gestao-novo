@@ -8,7 +8,9 @@
       "Bash(npm run lint:*)",
       "Bash(npm run build:dev:*)",
       "Bash(curl:*)",
-      "Bash(npx typescript:*)"
+      "Bash(npx typescript:*)",
+      "Bash(psql:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
