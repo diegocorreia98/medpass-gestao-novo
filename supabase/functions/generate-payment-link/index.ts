@@ -267,6 +267,13 @@ serve(async (req) => {
     const subscriptionResult = await subscriptionResponse.json();
     console.log('🔍 [VINDI-DEBUG] Complete subscription response:', JSON.stringify(subscriptionResult, null, 2));
 
+    // Check if there's a bill with URL directly in the response
+    let billFromResponse = null;
+    if (subscriptionResult.bill && subscriptionResult.bill.url) {
+      billFromResponse = subscriptionResult.bill;
+      console.log('✅ [BILL-URL] Found bill URL in response:', billFromResponse.url);
+    }
+
     if (!subscriptionResponse.ok) {
       throw new Error(`Erro ao criar assinatura Vindi: ${JSON.stringify(subscriptionResult)}`);
     }
@@ -348,7 +355,24 @@ serve(async (req) => {
       }
     }
 
+    // ✅ FALLBACK: Use bill URL if no charge print_url found
+    if (!paymentUrl && billFromResponse && billFromResponse.url) {
+      paymentUrl = billFromResponse.url;
+      vindiChargeId = billFromResponse.charges?.[0]?.id || null;
+      dueDate = billFromResponse.due_at;
+      console.log('✅ [BILL-URL-FALLBACK] Using bill URL as payment URL:', {
+        paymentUrl,
+        vindiChargeId,
+        dueDate
+      });
+    }
+
     if (!paymentUrl) {
+      console.log('❌ [ERROR] No payment URL found anywhere:', {
+        subscriptionBills: !!subscriptionResult.subscription.bills,
+        billFromResponse: !!billFromResponse,
+        billUrl: billFromResponse?.url
+      });
       throw new Error('URL de pagamento não retornada pela Vindi');
     }
 
