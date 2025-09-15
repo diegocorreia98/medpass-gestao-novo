@@ -53,9 +53,20 @@ serve(async (req) => {
     const customerData: CustomerRequest = await req.json();
     logStep('Received customer request', { email: customerData.email, name: customerData.name });
 
+    // ✅ DEBUG: Log received data
+    logStep('Received customer data', {
+      name: customerData.name,
+      email: customerData.email,
+      registry_code: customerData.registry_code,
+      phone: customerData.phone,
+      hasName: !!customerData.name,
+      nameLength: customerData.name?.length,
+      nameType: typeof customerData.name
+    });
+
     // Validate required fields
     if (!customerData.name || !customerData.email || !customerData.registry_code) {
-      throw new Error('Nome, email e documento são obrigatórios');
+      throw new Error(`Nome, email e documento são obrigatórios. Recebido: name=${customerData.name}, email=${customerData.email}, doc=${customerData.registry_code}`);
     }
 
     // Get API URL based on environment

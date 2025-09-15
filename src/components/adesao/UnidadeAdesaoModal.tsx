@@ -100,26 +100,19 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
         console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
 
         // ✅ STEP 2: Generate checkout link (optional - if fails, beneficiary is still saved)
+        let checkoutUrl = null; // Declare outside try block
+        
         try {
+          // ✅ CORREÇÃO: Para gerar link, usar bank_slip (não exige gateway_token)
           const subscriptionRequest = {
-            customer: {
-              name: values.nome,
-              email: values.email || '',
-              document: values.cpf,
-              phone: values.telefone || '',
-              birth_date: values.data_nascimento || null,
-              address: {
-                street: values.endereco || '',
-                city: values.cidade || '',
-                state: values.estado || '',
-                zipcode: values.cep || ''
-              }
-            },
+            customer_name: values.nome,
+            customer_email: values.email || '',
+            customer_document: values.cpf,
+            customer_phone: values.telefone || '',
             plan_id: values.plano_id,
-            unidade_id: minhaUnidade?.id || null,
-            empresa_id: values.empresa_id || null,
-            payment_method: 'credit_card',
-            installments: 1
+            payment_method: 'bank_slip', // ✅ Não exige token, só gera link
+            installments: 1,
+            environment: 'production'
           };
 
           console.log('🔄 [UNIDADE-ADESAO] Gerando link de checkout:', subscriptionRequest);
@@ -132,10 +125,7 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
           if (vindiError) {
             console.warn('⚠️ [UNIDADE-ADESAO] Erro ao gerar link de pagamento:', vindiError.message);
             // Don't throw error here, beneficiary is already saved
-          }
-
-          let checkoutUrl = null;
-          if (vindiData?.checkout_url) {
+          } else if (vindiData?.checkout_url) {
             checkoutUrl = vindiData.checkout_url;
             
             // Update beneficiary with checkout link
