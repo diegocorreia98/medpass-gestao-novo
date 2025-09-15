@@ -105,8 +105,8 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
         try {
           console.log('🔄 [UNIDADE-ADESAO] Gerando subscription checkout via Edge Function');
 
-          // ✅ USAR EDGE FUNCTION generate-payment-link
-          const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+          // ✅ USAR EDGE FUNCTION generate-payment-link-v2 (versão que funciona no painel matriz)
+          const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
             body: {
               beneficiario_id: beneficiarioData.id,
               payment_method: 'bank_slip'

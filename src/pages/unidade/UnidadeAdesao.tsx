@@ -106,7 +106,7 @@ export default function UnidadeAdesao() {
       console.log('✅ [QUICK-LINK] Beneficiário encontrado:', beneficiario.nome);
       
       // Gerar link via Edge Function
-      const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+      const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
         body: { 
           beneficiario_id: beneficiario.id,
           payment_method: 'bank_slip'
@@ -278,7 +278,7 @@ function QuickVindiLinkModal({ open, onClose, onSuccess }: QuickVindiLinkModalPr
       console.log('✅ [QUICK-VINDI] Beneficiário encontrado:', beneficiario.nome);
       
       // Gerar link via Edge Function
-      const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+      const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
         body: { 
           beneficiario_id: beneficiario.id,
           payment_method: 'bank_slip'
