@@ -261,16 +261,6 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     }
   };
 
-  const copyPixCode = useCallback(() => {
-    if (paymentResult?.pix_code) {
-      navigator.clipboard.writeText(paymentResult.pix_code).then(() => {
-        toast({
-          title: "Código copiado!",
-          description: "O código PIX foi copiado para a área de transferência.",
-        });
-      });
-    }
-  }, [paymentResult?.pix_code]);
 
   const formatTime = useCallback((seconds: number) => {
     const minutes = Math.floor(seconds / 60);
