@@ -291,21 +291,38 @@ async function processPIXSubscription(customer: any, planData: any, affiliateIds
   console.log('[VINDI-PIX] PIX Charge structure:', JSON.stringify(pixCharge, null, 2));
   console.log('[VINDI-PIX] First bill structure:', JSON.stringify(firstBill, null, 2));
 
-  // Try different possible field names for PIX EMV code from Vindi
-  const pixCode = pixCharge.qr_code || 
-                  pixCharge.pix_code || 
-                  pixCharge.emv_code || 
-                  pixCharge.code ||
-                  pixCharge.payment_method?.pix_code ||
-                  pixCharge.payment_method?.qr_code ||
-                  pixCharge.last_transaction?.gateway_response_fields?.pix_code ||
-                  pixCharge.last_transaction?.gateway_response_fields?.qr_code;
+  // ✅ EXTRAIR DADOS PIX COMPLETOS (incluindo SVG)
+  const gatewayFields = pixCharge.last_transaction?.gateway_response_fields || {};
+  
+  const pixCode = gatewayFields.qr_code_text || 
+                  gatewayFields.emv ||
+                  gatewayFields.copy_paste ||
+                  gatewayFields.pix_code ||
+                  pixCharge.qr_code || 
+                  pixCharge.pix_code;
+  
+  const qrCodeUrl = gatewayFields.qr_code_url || 
+                    gatewayFields.qr_code_image_url;
+  
+  const qrCodeBase64 = gatewayFields.qr_code_base64 || 
+                       gatewayFields.qrcode_base64;
+  
+  // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
+  const qrcodeSvg = gatewayFields.qrcode_path;
 
-  console.log('[VINDI-PIX] Extracted PIX code:', pixCode ? pixCode.substring(0, 50) + '...' : 'NOT FOUND');
+  console.log('[VINDI-PIX] PIX data extraction results:', {
+    hasPixCode: !!pixCode,
+    hasQrCodeUrl: !!qrCodeUrl,
+    hasQrCodeBase64: !!qrCodeBase64,
+    hasQrcodeSvg: !!qrcodeSvg,
+    pixCodeLength: pixCode?.length,
+    svgLength: qrcodeSvg?.length
+  });
 
-  if (!pixCode) {
-    console.error('[VINDI-PIX] PIX code not found in any expected fields');
-    throw new Error('PIX code not found in Vindi response');
+  if (!pixCode && !qrcodeSvg) {
+    console.error('[VINDI-PIX] Neither PIX code nor QR SVG found in response');
+    console.error('[VINDI-PIX] Available gateway fields:', Object.keys(gatewayFields));
+    throw new Error('PIX data not found in Vindi response');
   }
 
   return {
@@ -314,7 +331,10 @@ async function processPIXSubscription(customer: any, planData: any, affiliateIds
     subscription: subscription,
     pix_data: {
       qr_code: pixCode,
-      pix_code: pixCode, // Provide both for compatibility
+      pix_code: pixCode, // Compatibility
+      qr_code_url: qrCodeUrl,
+      qr_code_base64: qrCodeBase64,
+      qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi
       expires_at: firstBill.due_at,
       amount: pixCharge.amount,
       charge_id: pixCharge.id

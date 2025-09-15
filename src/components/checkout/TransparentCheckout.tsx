@@ -590,16 +590,31 @@ export function TransparentCheckout({ preSelectedPlan, onSuccess, onCancel }: Tr
             {transactionResult?.pix && (
               <Card className="p-6">
                 <div className="space-y-4">
-                  {/* QR Code Image */}
-                  {transactionResult.pix.qr_code_url && (
-                    <div className="flex justify-center">
+                  {/* QR Code Display - Priority: SVG > URL > Base64 */}
+                  <div className="flex justify-center">
+                    {transactionResult.pix.qr_code_svg ? (
+                      // 🎯 PRIORIDADE: SVG QR Code da Vindi (mais preciso)
+                      <div 
+                        className="w-48 h-48 p-2 bg-white border rounded-lg flex items-center justify-center"
+                        dangerouslySetInnerHTML={{ __html: transactionResult.pix.qr_code_svg }}
+                      />
+                    ) : transactionResult.pix.qr_code_url ? (
                       <img 
                         src={transactionResult.pix.qr_code_url} 
                         alt="QR Code PIX" 
                         className="w-48 h-48 border rounded-lg"
                       />
-                    </div>
-                  )}
+                    ) : transactionResult.pix.qr_code_base64 ? (
+                      <img 
+                        src={transactionResult.pix.qr_code_base64.startsWith('data:') 
+                          ? transactionResult.pix.qr_code_base64 
+                          : `data:image/png;base64,${transactionResult.pix.qr_code_base64}`
+                        } 
+                        alt="QR Code PIX" 
+                        className="w-48 h-48 border rounded-lg"
+                      />
+                    ) : null}
+                  </div>
                   
                   {/* PIX Code */}
                   <div className="space-y-2">

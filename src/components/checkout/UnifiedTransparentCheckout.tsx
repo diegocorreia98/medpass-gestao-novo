@@ -787,9 +787,21 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, onSuccess, onCance
                       <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
                       <span className="text-sm text-muted-foreground">Gerando QR Code...</span>
                     </div>
+                  ) : transactionResult.pix.qr_code_svg ? (
+                    // 🎯 PRIORIDADE: SVG QR Code da Vindi (mais preciso)
+                    <div 
+                      className="w-48 h-48 flex items-center justify-center"
+                      dangerouslySetInnerHTML={{ __html: transactionResult.pix.qr_code_svg }}
+                    />
                   ) : qrCodeDataURL ? (
                     <img 
                       src={qrCodeDataURL} 
+                      alt="QR Code PIX" 
+                      className="w-48 h-48 object-contain"
+                    />
+                  ) : transactionResult.pix.qr_code_url ? (
+                    <img 
+                      src={transactionResult.pix.qr_code_url} 
                       alt="QR Code PIX" 
                       className="w-48 h-48 object-contain"
                     />

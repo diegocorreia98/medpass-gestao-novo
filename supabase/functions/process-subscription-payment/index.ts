@@ -62,7 +62,19 @@ serve(async (req) => {
     }
 
     const vindiApiKey = Deno.env.get("VINDI_API_KEY");
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
+    
     if (!vindiApiKey) throw new Error("VINDI_API_KEY is not set");
+    
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    logStep(`Using Vindi ${vindiEnvironment} environment`, { url: vindiApiUrl });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -142,7 +154,7 @@ serve(async (req) => {
         installments: subscription.installments || 1,
       };
       
-      const vindiSubscriptionResponse = await fetch("https://app.vindi.com.br/api/v1/subscriptions", {
+      const vindiSubscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -200,7 +212,7 @@ serve(async (req) => {
         payment_method_code: "credit_card",
       };
 
-      const vindiProfileResponse = await fetch("https://app.vindi.com.br/api/v1/payment_profiles", {
+      const vindiProfileResponse = await fetch(`${vindiApiUrl}/payment_profiles`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -245,7 +257,7 @@ serve(async (req) => {
       logStep("Checking for existing bills for subscription", { vindiSubscriptionId });
       
       try {
-        const existingBillsResponse = await fetch(`https://app.vindi.com.br/api/v1/bills?query=subscription_id:${vindiSubscriptionId}+status:pending`, {
+        const existingBillsResponse = await fetch(`${vindiApiUrl}/bills?query=subscription_id:${vindiSubscriptionId}+status:pending`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -265,7 +277,7 @@ serve(async (req) => {
             if (paymentData.paymentMethod === 'credit_card' && paymentProfileId) {
               logStep("Updating existing bill with new payment profile", { billId: pendingBill.id, paymentProfileId });
               
-              const updateBillResponse = await fetch(`https://app.vindi.com.br/api/v1/bills/${pendingBill.id}`, {
+              const updateBillResponse = await fetch(`${vindiApiUrl}/bills/${pendingBill.id}`, {
                 method: "PUT",
                 headers: {
                   "Content-Type": "application/json",
@@ -329,7 +341,7 @@ serve(async (req) => {
 
       logStep("Creating new bill in Vindi", { billPayload });
 
-      const vindiBillResponse = await fetch("https://app.vindi.com.br/api/v1/bills", {
+      const vindiBillResponse = await fetch(`${vindiApiUrl}/bills`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -368,7 +380,7 @@ serve(async (req) => {
 
      // Ensure we have full bill details (including PIX fields) by fetching the bill by ID
      try {
-       const billDetailsResp = await fetch(`https://app.vindi.com.br/api/v1/bills/${billData.bill.id}` , {
+       const billDetailsResp = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}` , {
          method: "GET",
          headers: {
            "Content-Type": "application/json",
@@ -395,7 +407,7 @@ serve(async (req) => {
        
        try {
          // Correct endpoint for processing/attempting a charge
-         const processChargeResponse = await fetch(`https://app.vindi.com.br/api/v1/charges/${chargeId}/charge`, {
+         const processChargeResponse = await fetch(`${vindiApiUrl}/charges/${chargeId}/charge`, {
            method: "POST",
            headers: {
              "Content-Type": "application/json",
@@ -486,12 +498,31 @@ serve(async (req) => {
       const qrUrl = gwFields.qr_code_url || gwFields.qr_code_image_url || gwFields.pix_qr_code_url;
       const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
       const pixCode = gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
+      
+      // 🎯 NOVO: SVG QR Code da Vindi (campo correto que retorna SVG)
+      const qrcodeSvg = gwFields.qrcode_path;
 
       if (qrUrl) responseData.pix_qr_code_url = qrUrl;
       if (qrBase64) responseData.pix_qr_code = qrBase64;
       if (pixCode) responseData.pix_code = pixCode;
+      
+      // ✅ ADICIONAR SVG QR CODE AO RESPONSE
+      if (qrcodeSvg) {
+        responseData.pix_qr_svg = qrcodeSvg;
+        logStep('SVG QR Code found and included', { 
+          svgLength: qrcodeSvg.length,
+          svgStart: qrcodeSvg.substring(0, 50) + '...'
+        });
+      }
 
       responseData.due_at = billData.bill?.due_at || gwFields.expires_at || gwFields.expiration_date || gwFields.expiration_time;
+      
+      logStep('PIX response prepared', {
+        hasPixCode: !!pixCode,
+        hasQrUrl: !!qrUrl,
+        hasQrBase64: !!qrBase64,
+        hasQrSvg: !!qrcodeSvg
+      });
     }
 
     logStep("Payment processed successfully", { billId: billData.bill.id, status: billData.bill.status });

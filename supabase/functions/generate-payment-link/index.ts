@@ -99,12 +99,23 @@ serve(async (req) => {
       vindi_plan_id: vindiPlanId
     });
 
-    // Get Vindi API key from secrets
+    // Get Vindi API configuration
     const vindiApiKey = Deno.env.get('VINDI_API_KEY');
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
 
     if (!vindiApiKey) {
       throw new Error('Chave API Vindi não configurada');
     }
+
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    console.log(`🔧 Using Vindi ${vindiEnvironment} environment:`, vindiApiUrl);
 
     // Check if there's already an active subscription
     const { data: existingSubscriptions } = await supabaseService
@@ -119,7 +130,7 @@ serve(async (req) => {
       
       if (subscriptionId) {
         console.log('Found existing subscription, checking for pending bills...');
-        const billsResponse = await fetch(`https://app.vindi.com.br/api/v1/bills?query=subscription_id:${subscriptionId} AND status:pending`, {
+        const billsResponse = await fetch(`${vindiApiUrl}/bills?query=subscription_id:${subscriptionId} AND status:pending`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -156,7 +167,7 @@ serve(async (req) => {
     let vindiCustomerId: number;
     
     console.log('Searching for existing Vindi customer...');
-    const customerSearchResponse = await fetch('https://app.vindi.com.br/api/v1/customers', {
+    const customerSearchResponse = await fetch(`${vindiApiUrl}/customers`, {
       method: 'GET',
       headers: {
         'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -195,7 +206,7 @@ serve(async (req) => {
 
       console.log('Customer data:', customerData);
 
-      const customerResponse = await fetch('https://app.vindi.com.br/api/v1/customers', {
+      const customerResponse = await fetch(`${vindiApiUrl}/customers`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -234,7 +245,7 @@ serve(async (req) => {
 
     console.log('Creating subscription with data:', JSON.stringify(subscriptionData, null, 2));
 
-    const subscriptionResponse = await fetch('https://app.vindi.com.br/api/v1/subscriptions', {
+    const subscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
       method: 'POST',
       headers: {
         'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -274,7 +285,7 @@ serve(async (req) => {
     if (!paymentUrl) {
       // Try to fetch the bills for this subscription
       console.log('No bill found in subscription response, fetching bills...');
-      const billsResponse = await fetch(`https://app.vindi.com.br/api/v1/bills?query=subscription_id:${vindiSubscriptionId}`, {
+      const billsResponse = await fetch(`${vindiApiUrl}/bills?query=subscription_id:${vindiSubscriptionId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -305,8 +316,8 @@ serve(async (req) => {
 
     console.log('Payment link generated successfully from subscription:', paymentUrl);
 
-    // Save subscription to database
-    const { error: subscriptionError } = await supabaseService
+    // ✅ STEP 1: Save subscription to database
+    const { data: subscriptionData, error: subscriptionError } = await supabaseService
       .from('subscriptions')
       .insert({
         user_id: userData.user.id,
@@ -315,19 +326,46 @@ serve(async (req) => {
         customer_document: beneficiario.cpf,
         plan_id: beneficiario.plano.id,
         payment_method: payment_method,
-        status: 'active',
+        status: 'pending_payment', // Pending until payment is confirmed
         vindi_subscription_id: vindiSubscriptionId,
         vindi_plan_id: Number(vindiPlanId),
         start_date: new Date().toISOString().split('T')[0],
+        installments: 1,
         metadata: {
           plan_name: beneficiario.plano.nome,
-          plan_price: beneficiario.valor_plano
+          plan_price: beneficiario.valor_plano,
+          generated_from: 'generate-payment-link'
         }
-      });
+      })
+      .select()
+      .single();
 
     if (subscriptionError) {
-      console.error('Error saving subscription:', subscriptionError);
+      console.error('❌ Error saving subscription:', subscriptionError);
+      throw new Error('Erro ao salvar assinatura: ' + subscriptionError.message);
     }
+
+    console.log('✅ Subscription saved with ID:', subscriptionData.id);
+
+    // ✅ STEP 2: Generate and save checkout link token
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const { error: linkError } = await supabaseService
+      .from('subscription_checkout_links')
+      .insert({
+        subscription_id: subscriptionData.id,
+        token: token,
+        expires_at: expiresAt.toISOString(),
+        is_used: false
+      });
+
+    if (linkError) {
+      console.error('❌ Error saving checkout link:', linkError);
+      throw new Error('Erro ao salvar link de checkout: ' + linkError.message);
+    }
+
+    console.log('✅ Checkout link saved with token:', token);
 
     // Save transaction for the bill generated by the subscription
     if (vindiChargeId) {
@@ -368,13 +406,37 @@ serve(async (req) => {
       console.error('Error updating beneficiary:', updateError);
     }
 
+    // ✅ STEP 3: Create checkout URL for the client
+    const baseUrl = req.headers.get('origin') || 'https://www.medpassbeneficios.com.br';
+    const checkoutUrl = `${baseUrl}/checkout/subscription/${token}`;
+
+    // ✅ STEP 4: Update beneficiary with both URLs
+    const { error: finalUpdateError } = await supabaseService
+      .from('beneficiarios')
+      .update({ 
+        checkout_link: checkoutUrl,
+        vindi_payment_url: paymentUrl // Backup direct Vindi URL
+      })
+      .eq('id', beneficiario_id);
+
+    if (finalUpdateError) {
+      console.warn('⚠️ Error updating beneficiary with URLs:', finalUpdateError);
+    }
+
+    console.log('✅ Payment link generation completed successfully');
+
     return new Response(JSON.stringify({
       success: true,
-      payment_url: paymentUrl,
+      payment_url: paymentUrl, // Direct Vindi URL
+      checkout_url: checkoutUrl, // Our checkout page URL
+      checkout_token: token, // Token for checkout validation
       vindi_charge_id: vindiChargeId,
       vindi_subscription_id: vindiSubscriptionId,
+      subscription_id: subscriptionData.id,
       due_date: dueDate,
-      subscription_created: true
+      expires_at: expiresAt.toISOString(),
+      subscription_created: true,
+      checkout_link_created: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,

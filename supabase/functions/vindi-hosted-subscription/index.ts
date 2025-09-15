@@ -192,8 +192,8 @@ serve(async (req) => {
 
     logStep('Bill created', { id: billResult.bill?.id });
 
-    // Save subscription to database
-    const { error: subscriptionError } = await supabaseClient
+    // ✅ Save subscription to database with checkout link support
+    const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
       .insert({
         customer_name: requestData.customer_name,
@@ -201,7 +201,7 @@ serve(async (req) => {
         customer_document: requestData.customer_document,
         plan_id: requestData.plan_id,
         payment_method: requestData.payment_method,
-        status: 'active',
+        status: 'pending_payment', // Pending until payment confirmation
         vindi_subscription_id: vindiSubscriptionId,
         vindi_plan_id: Number(planData.vindi_plan_id),
         start_date: new Date().toISOString().split('T')[0],
@@ -210,12 +210,37 @@ serve(async (req) => {
           plan_name: planData.nome,
           plan_price: planData.valor,
           vindi_customer_id: vindiCustomerId,
-          vindi_product_id: planData.vindi_product_id
+          vindi_product_id: planData.vindi_product_id,
+          created_from: 'vindi-hosted-subscription'
         }
-      });
+      })
+      .select()
+      .single();
 
     if (subscriptionError) {
-      logStep('Warning: Failed to save subscription', { error: subscriptionError });
+      logStep('Error: Failed to save subscription', { error: subscriptionError });
+      throw new Error('Erro ao salvar assinatura: ' + subscriptionError.message);
+    }
+
+    logStep('Subscription saved successfully', { id: subscriptionData.id });
+
+    // ✅ Create checkout link token
+    const checkoutToken = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    const { error: linkError } = await supabaseClient
+      .from('subscription_checkout_links')
+      .insert({
+        subscription_id: subscriptionData.id,
+        token: checkoutToken,
+        expires_at: expiresAt.toISOString(),
+        is_used: false
+      });
+
+    if (linkError) {
+      logStep('Warning: Failed to save checkout link', { error: linkError });
+    } else {
+      logStep('Checkout link created successfully', { token: checkoutToken });
     }
 
     // Save transaction
@@ -264,15 +289,24 @@ serve(async (req) => {
       });
     }
 
-    // Prepare response
+    // ✅ Prepare response with checkout URL
+    const baseUrl = req.headers.get('origin') || 'https://www.medpassbeneficios.com.br';
+    const checkoutUrl = linkError ? null : `${baseUrl}/checkout/subscription/${checkoutToken}`;
+    
     const response: any = {
       success: true,
       subscription_id: vindiSubscriptionId,
+      subscription_record_id: subscriptionData.id,
       customer_id: vindiCustomerId,
       plan_name: planData.nome,
       plan_price: planData.valor,
       payment_method: requestData.payment_method,
-      status: requestData.payment_method === 'credit_card' ? 'processing' : 'pending'
+      status: requestData.payment_method === 'credit_card' ? 'processing' : 'pending',
+      // ✅ NEW: Checkout information
+      checkout_url: checkoutUrl,
+      checkout_token: linkError ? null : checkoutToken,
+      expires_at: linkError ? null : expiresAt.toISOString(),
+      checkout_link_created: !linkError
     };
 
     // Add payment-specific details

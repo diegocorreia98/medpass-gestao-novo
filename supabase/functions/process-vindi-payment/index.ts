@@ -67,12 +67,22 @@ serve(async (req) => {
     console.log('Processing payment for:', customerData.email, 'Plan:', planData.name);
 
     const vindiApiKey = Deno.env.get('VINDI_API_KEY');
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
+    
     if (!vindiApiKey) {
       throw new Error('Vindi API key not configured');
     }
 
-    const vindiBaseUrl = 'https://app.vindi.com.br/api/v1';
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiBaseUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
     const authHeader = `Basic ${btoa(vindiApiKey + ':')}`;
+    
+    console.log(`🔧 Using Vindi ${vindiEnvironment} environment:`, vindiBaseUrl);
 
     // 1. Check if customer already exists in Vindi
     let vindiCustomer;

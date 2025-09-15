@@ -353,8 +353,14 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
                   </div>
                 )}
 
-                {paymentResult.pix_qr_code_url ? (
-                  <div className="flex justify-center">
+                <div className="flex justify-center">
+                  {paymentResult.pix_qr_svg ? (
+                    // 🎯 PRIORIDADE: SVG QR Code da Vindi (mais preciso e limpo)
+                    <div 
+                      className="w-48 h-48 p-2 bg-white border rounded-lg flex items-center justify-center"
+                      dangerouslySetInnerHTML={{ __html: paymentResult.pix_qr_svg }}
+                    />
+                  ) : paymentResult.pix_qr_code_url ? (
                     <img 
                       src={paymentResult.pix_qr_code_url} 
                       alt="QR Code PIX" 
@@ -364,16 +370,19 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
                         target.style.display = 'none';
                       }}
                     />
-                  </div>
-                ) : paymentResult.pix_qr_code ? (
-                  <div className="flex justify-center">
+                  ) : paymentResult.pix_qr_code ? (
                     <img
                       src={paymentResult.pix_qr_code.startsWith('data:') ? paymentResult.pix_qr_code : `data:image/png;base64,${paymentResult.pix_qr_code}`}
                       alt="QR Code PIX"
                       className="w-48 h-48 border rounded-lg"
                     />
-                  </div>
-                ) : null}
+                  ) : (
+                    <div className="w-48 h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border">
+                      <QrCode className="h-16 w-16 text-gray-400 mb-2" />
+                      <span className="text-xs text-muted-foreground text-center">QR Code não disponível<br />Use o código PIX abaixo</span>
+                    </div>
+                  )}
+                </div>
 
                 {paymentResult.pix_code && (
                   <div className="space-y-2">

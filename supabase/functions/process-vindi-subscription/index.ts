@@ -62,7 +62,19 @@ serve(async (req) => {
     }
 
     const vindiApiKey = Deno.env.get("VINDI_API_KEY");
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
+    
     if (!vindiApiKey) throw new Error("VINDI_API_KEY is not set");
+    
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    logStep(`Using Vindi ${vindiEnvironment} environment`, { url: vindiApiUrl });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -159,7 +171,7 @@ serve(async (req) => {
           payment_method_code: "credit_card",
         };
 
-        const vindiProfileResponse = await fetch("https://app.vindi.com.br/api/v1/payment_profiles", {
+        const vindiProfileResponse = await fetch(`${vindiApiUrl}/payment_profiles`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -179,7 +191,7 @@ serve(async (req) => {
         logStep("Created payment profile", { paymentProfileId: profileData.payment_profile.id });
       }
       
-      const vindiSubscriptionResponse = await fetch("https://app.vindi.com.br/api/v1/subscriptions", {
+      const vindiSubscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -220,7 +232,7 @@ serve(async (req) => {
     
     // Buscar faturas da assinatura
     const billsResponse = await fetch(
-      `https://app.vindi.com.br/api/v1/subscriptions/${vindiSubscriptionId}/bills`,
+      `${vindiApiUrl}/subscriptions/${vindiSubscriptionId}/bills`,
       {
         method: "GET",
         headers: {
@@ -235,7 +247,7 @@ serve(async (req) => {
       
       // Fallback: tentar buscar bills por query
       const fallbackResponse = await fetch(
-        `https://app.vindi.com.br/api/v1/bills?query=subscription_id:${vindiSubscriptionId}`,
+        `${vindiApiUrl}/bills?query=subscription_id:${vindiSubscriptionId}`,
         {
           method: "GET",
           headers: {
@@ -275,7 +287,7 @@ serve(async (req) => {
       
       // Tentar buscar novamente
       const retryResponse = await fetch(
-        `https://app.vindi.com.br/api/v1/bills?query=subscription_id:${vindiSubscriptionId}`,
+        `${vindiApiUrl}/bills?query=subscription_id:${vindiSubscriptionId}`,
         {
           method: "GET",
           headers: {
@@ -305,7 +317,7 @@ serve(async (req) => {
     logStep("Fetching complete bill details", { billId: billData.bill.id });
     
     const billDetailsResponse = await fetch(
-      `https://app.vindi.com.br/api/v1/bills/${billData.bill.id}`,
+      `${vindiApiUrl}/bills/${billData.bill.id}`,
       {
         method: "GET",
         headers: {
@@ -378,26 +390,49 @@ serve(async (req) => {
           pixQrUrl = charge.metadata.pix_qr_url;
         }
         
-        // Opção 3: Buscar em last_transaction (se existir)
-        if (!pixCode && charge.last_transaction) {
-          const lt = charge.last_transaction;
-          pixCode = lt.pix_qr || 
-                   lt.pix_emv ||
-                   lt.gateway_response_fields?.qr_code_text ||
-                   lt.gateway_response_fields?.emv ||
-                   lt.gateway_response_fields?.pix_copia_e_cola;
+        // ✅ PRINCIPAL: Buscar em last_transaction.gateway_response_fields (campo correto da Vindi)
+        if (charge.last_transaction?.gateway_response_fields) {
+          const gwFields = charge.last_transaction.gateway_response_fields;
           
-          pixQrBase64 = lt.pix_qr_base64 ||
-                       lt.gateway_response_fields?.qr_code_base64;
+          // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
+          const qrcodeSvg = gwFields.qrcode_path;
           
-          pixQrUrl = lt.pix_qr_url ||
-                    lt.gateway_response_fields?.qr_code_url;
+          pixCode = gwFields.qr_code_text || 
+                   gwFields.emv ||
+                   gwFields.pix_copia_e_cola ||
+                   gwFields.copy_paste ||
+                   gwFields.pix_code;
+          
+          pixQrBase64 = gwFields.qr_code_base64 ||
+                       gwFields.qr_code_png_base64 ||
+                       gwFields.qrcode_base64;
+          
+          pixQrUrl = gwFields.qr_code_url ||
+                    gwFields.qr_code_image_url ||
+                    gwFields.pix_qr_code_url;
+                    
+          console.log('[VINDI-PIX] Gateway response fields found:', {
+            hasQrcodePath: !!qrcodeSvg,
+            hasPixCode: !!pixCode,
+            hasQrUrl: !!pixQrUrl,
+            hasQrBase64: !!pixQrBase64,
+            qrcodeSvgLength: qrcodeSvg ? qrcodeSvg.length : 0
+          });
+          
+          // Se encontrou o SVG, usar como prioridade
+          if (qrcodeSvg) {
+            pixQrUrl = qrcodeSvg; // SVG vai no campo qr_code_url
+            console.log('[VINDI-PIX] ✅ Using qrcode_path SVG as QR Code');
+          }
         }
         
         // Opção 4: Buscar print_url como alternativa para o QR Code
         if (!pixQrUrl && charge.id) {
           // Construir a URL de impressão manualmente se necessário
-          pixQrUrl = `https://app.vindi.com.br/customer/bills/${billData.bill.id}/charge/${charge.id}/print`;
+          const baseCustomerUrl = vindiEnvironment === 'sandbox' 
+            ? 'https://sandbox-app.vindi.com.br/customer'
+            : 'https://app.vindi.com.br/customer';
+          pixQrUrl = `${baseCustomerUrl}/bills/${billData.bill.id}/charge/${charge.id}/print`;
         }
         
         // Log para debug
@@ -410,11 +445,18 @@ serve(async (req) => {
           chargeStatus: charge.status
         });
         
-        // Adicionar ao response
+        // ✅ ADICIONAR TODOS OS FORMATOS DE QR CODE AO RESPONSE
         if (pixCode) responseData.pix_code = pixCode;
         if (pixQrBase64) responseData.pix_qr_code = pixQrBase64;
         if (pixQrUrl) responseData.pix_qr_code_url = pixQrUrl;
         if (pixExpiration) responseData.due_at = pixExpiration;
+        
+        // 🎯 NOVO: SVG QR Code da Vindi (campo correto)
+        const qrcodeSvg = charge.last_transaction?.gateway_response_fields?.qrcode_path;
+        if (qrcodeSvg) {
+          responseData.pix_qr_svg = qrcodeSvg;
+          console.log('[VINDI-PIX] ✅ SVG QR Code found and included:', qrcodeSvg.substring(0, 100) + '...');
+        }
         
         // Se ainda não encontrou o PIX, fazer uma chamada adicional específica
         if (!pixCode && !pixQrBase64) {
@@ -422,7 +464,7 @@ serve(async (req) => {
           
           try {
             const chargeDetailsResponse = await fetch(
-              `https://app.vindi.com.br/api/v1/charges/${charge.id}`,
+              `${vindiApiUrl}/charges/${charge.id}`,
               {
                 method: "GET",
                 headers: {

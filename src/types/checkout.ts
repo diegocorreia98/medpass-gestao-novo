@@ -56,6 +56,8 @@ export interface TransactionResult {
   pix?: {
     qr_code?: string;
     qr_code_url?: string;
+    qr_code_base64?: string;
+    qr_code_svg?: string; // ✅ SVG QR Code da Vindi (campo qrcode_path)
     expires_at?: string;
   };
   boleto?: {

@@ -69,17 +69,28 @@ serve(async (req) => {
 
     // Get Vindi API settings from environment
     const vindiApiKey = Deno.env.get('VINDI_API_KEY');
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
 
     if (!vindiApiKey) {
       throw new Error('Vindi API key not configured');
     }
+    
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    console.log(`🔧 Refreshing payment statuses using Vindi ${vindiEnvironment}:`, vindiApiUrl);
 
     const updates: any[] = [];
 
     // Check each transaction status with Vindi
     for (const transaction of transactions) {
       try {
-        const chargeResponse = await fetch(`https://app.vindi.com.br/api/v1/charges/${transaction.vindi_charge_id}`, {
+        const chargeResponse = await fetch(`${vindiApiUrl}/charges/${transaction.vindi_charge_id}`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,

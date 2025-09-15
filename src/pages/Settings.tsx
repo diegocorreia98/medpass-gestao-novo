@@ -864,7 +864,15 @@ export default function Settings() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => window.open('https://app.vindi.com.br/configuracoes/webhooks', '_blank')}
+                    onClick={() => {
+                      // ✅ SANDBOX SUPPORT: Dynamic URL based on environment
+                      const environment = import.meta.env.VITE_VINDI_ENVIRONMENT || 'production';
+                      const vindiUrl = environment === 'sandbox' 
+                        ? 'https://sandbox-app.vindi.com.br/configuracoes/webhooks'
+                        : 'https://app.vindi.com.br/configuracoes/webhooks';
+                      console.log(`🔗 Opening Vindi ${environment} dashboard:`, vindiUrl);
+                      window.open(vindiUrl, '_blank');
+                    }}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Configurar na Vindi

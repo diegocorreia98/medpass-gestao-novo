@@ -55,57 +55,131 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
           throw new Error('Usuário ou unidade não encontrada');
         }
         
-        // Prepare subscription request for new Vindi flow
-        const subscriptionRequest = {
-          customer: {
-            name: values.nome,
-            email: values.email || '',
-            document: values.cpf,
-            phone: values.telefone || '',
-            birth_date: values.data_nascimento || null,
-            address: {
-              street: values.endereco || '',
-              city: values.cidade || '',
-              state: values.estado || '',
-              zipcode: values.cep || ''
-            }
-          },
-          plan_id: values.plano_id,
-          unidade_id: minhaUnidade?.id || null,
-          empresa_id: values.empresa_id || null,
-          payment_method: 'credit_card', // Default payment method
-          installments: 1
-        };
-
-        console.log('Creating Vindi subscription for new adesao flow:', subscriptionRequest);
-
-        // Call process-vindi-subscription to create pending adesao
-        const { data, error } = await supabase.functions.invoke('process-vindi-subscription', {
-          body: subscriptionRequest
-        });
-
-        if (error) {
-          throw new Error(error.message || 'Erro ao processar adesão');
+        // Get plan details for price
+        const planoSelecionado = planos.find(p => p.id === values.plano_id);
+        if (!planoSelecionado) {
+          throw new Error('Plano não encontrado');
         }
 
-        console.log('Vindi subscription created:', data);
+        console.log('🔄 [UNIDADE-ADESAO] Iniciando criação de adesão', {
+          unidade: minhaUnidade?.nome,
+          cliente: values.nome,
+          plano: planoSelecionado.nome
+        });
+
+        // ✅ STEP 1: Save beneficiary FIRST to ensure data persistence
+        const { data: beneficiarioData, error: beneficiarioError } = await supabase
+          .from('beneficiarios')
+          .insert({
+            user_id: user?.id,
+            unidade_id: minhaUnidade?.id || null,
+            empresa_id: values.empresa_id || null,
+            plano_id: values.plano_id,
+            nome: values.nome,
+            cpf: values.cpf,
+            email: values.email || null,
+            telefone: values.telefone || null,
+            data_nascimento: values.data_nascimento || null,
+            endereco: values.endereco || null,
+            cidade: values.cidade || null,
+            estado: values.estado || null,
+            cep: values.cep || null,
+            valor_plano: planoSelecionado.valor,
+            observacoes: values.observacoes || null,
+            status: 'pendente', // Status pendente até confirmação do pagamento
+            payment_status: 'payment_requested' // Status válido conforme constraint
+          })
+          .select()
+          .single();
+
+        if (beneficiarioError) {
+          console.error('❌ [UNIDADE-ADESAO] Erro ao salvar beneficiário:', beneficiarioError);
+          throw new Error('Erro ao salvar beneficiário: ' + beneficiarioError.message);
+        }
+
+        console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
+
+        // ✅ STEP 2: Generate checkout link (optional - if fails, beneficiary is still saved)
+        try {
+          const subscriptionRequest = {
+            customer: {
+              name: values.nome,
+              email: values.email || '',
+              document: values.cpf,
+              phone: values.telefone || '',
+              birth_date: values.data_nascimento || null,
+              address: {
+                street: values.endereco || '',
+                city: values.cidade || '',
+                state: values.estado || '',
+                zipcode: values.cep || ''
+              }
+            },
+            plan_id: values.plano_id,
+            unidade_id: minhaUnidade?.id || null,
+            empresa_id: values.empresa_id || null,
+            payment_method: 'credit_card',
+            installments: 1
+          };
+
+          console.log('🔄 [UNIDADE-ADESAO] Gerando link de checkout:', subscriptionRequest);
+
+          // Call vindi-hosted-subscription to create subscription and generate link
+          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('vindi-hosted-subscription', {
+            body: subscriptionRequest
+          });
+
+          if (vindiError) {
+            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao gerar link de pagamento:', vindiError.message);
+            // Don't throw error here, beneficiary is already saved
+          }
+
+          let checkoutUrl = null;
+          if (vindiData?.checkout_url) {
+            checkoutUrl = vindiData.checkout_url;
+            
+            // Update beneficiary with checkout link
+            const { error: updateError } = await supabase
+              .from('beneficiarios')
+              .update({ checkout_link: checkoutUrl })
+              .eq('id', beneficiarioData.id);
+
+            if (updateError) {
+              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError.message);
+            } else {
+              console.log('✅ [UNIDADE-ADESAO] Link de checkout salvo:', checkoutUrl);
+            }
+          }
+
+        } catch (vindiError) {
+          console.warn('⚠️ [UNIDADE-ADESAO] Falha na geração de link, mas beneficiário já foi salvo:', vindiError);
+        }
+
+        console.log('✅ [UNIDADE-ADESAO] Processo concluído com sucesso');
         
+        // Show success message based on whether checkout link was generated
         toast({
-          title: "Adesão iniciada com sucesso",
-          description: "Link de pagamento foi gerado. O beneficiário será criado após confirmação do pagamento."
+          title: "Adesão criada com sucesso! 🎉",
+          description: checkoutUrl 
+            ? "Beneficiário salvo e link de pagamento gerado."
+            : "Beneficiário salvo. Link de pagamento pode ser gerado posteriormente.",
+          variant: "default"
         });
 
         // Show payment link if available
-        if (data.checkout_url) {
+        if (checkoutUrl) {
           toast({
-            title: "Link de pagamento gerado",
+            title: "Link de pagamento disponível 🔗",
             description: "Compartilhe o link com o cliente para efetuar o pagamento",
             action: (
               <Button
                 size="sm"
-                onClick={() => window.open(data.checkout_url, '_blank')}
+                onClick={() => {
+                  navigator.clipboard.writeText(checkoutUrl);
+                  toast({ title: "Link copiado!", description: "Link copiado para a área de transferência" });
+                }}
               >
-                Abrir Link
+                Copiar Link
               </Button>
             )
           });

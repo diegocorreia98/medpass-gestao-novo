@@ -12,17 +12,26 @@ serve(async (req) => {
   }
 
   try {
-    // Get Vindi API key from environment
+    // Get Vindi API configuration
     const vindiApiKey = Deno.env.get('VINDI_API_KEY');
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
 
     if (!vindiApiKey) {
       throw new Error('Vindi API key not configured');
     }
-
-    console.log('Testing Vindi API connection...');
+    
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    console.log(`🗺 Testing Vindi ${vindiEnvironment} connection:`, vindiApiUrl);
 
     // Test basic API connectivity by fetching merchant info
-    const response = await fetch('https://app.vindi.com.br/api/v1/merchant', {
+    const response = await fetch(`${vindiApiUrl}/merchant`, {
       method: 'GET',
       headers: {
         'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,

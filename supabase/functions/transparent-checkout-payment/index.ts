@@ -42,7 +42,19 @@ serve(async (req) => {
     logStep("User authenticated", { user_id });
 
     const vindiApiKey = Deno.env.get("VINDI_API_KEY");
+    const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
+    
     if (!vindiApiKey) throw new Error("VINDI_API_KEY is not set");
+    
+    // ✅ SANDBOX SUPPORT: Dynamic API URLs
+    const VINDI_API_URLS = {
+      sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+      production: 'https://app.vindi.com.br/api/v1'
+    };
+    
+    const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+    
+    logStep(`Using Vindi ${vindiEnvironment} environment`, { url: vindiApiUrl });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -75,7 +87,7 @@ serve(async (req) => {
     logStep("Creating/finding Vindi customer");
     
     // First, try to find existing customer
-    const searchCustomerResponse = await fetch(`https://app.vindi.com.br/api/v1/customers?query=email:${encodeURIComponent(paymentData.customer_email)}`, {
+    const searchCustomerResponse = await fetch(`${vindiApiUrl}/customers?query=email:${encodeURIComponent(paymentData.customer_email)}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -107,7 +119,7 @@ serve(async (req) => {
         phone: paymentData.customer_phone,
       };
 
-      const vindiCustomerResponse = await fetch("https://app.vindi.com.br/api/v1/customers", {
+      const vindiCustomerResponse = await fetch(`${vindiApiUrl}/customers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -152,7 +164,7 @@ serve(async (req) => {
       installments: 1,
     };
     
-    const vindiSubscriptionResponse = await fetch("https://app.vindi.com.br/api/v1/subscriptions", {
+    const vindiSubscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -202,7 +214,7 @@ serve(async (req) => {
       installments: 1,
     };
 
-    const vindiBillResponse = await fetch("https://app.vindi.com.br/api/v1/bills", {
+    const vindiBillResponse = await fetch(`${vindiApiUrl}/bills`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -309,15 +321,23 @@ serve(async (req) => {
       const gatewayFields = charge.last_transaction?.gateway_response_fields;
       
       if (gatewayFields) {
+        // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
+        const qrcodeSvg = gatewayFields.qrcode_path;
+        
         responseData.pix = {
-          qr_code: gatewayFields.qr_code,
-          qr_code_url: gatewayFields.qr_code_url,
+          qr_code: gatewayFields.qr_code_text || gatewayFields.emv || gatewayFields.copy_paste,
+          qr_code_url: gatewayFields.qr_code_url || gatewayFields.qr_code_image_url,
+          qr_code_base64: gatewayFields.qr_code_base64 || gatewayFields.qrcode_base64,
+          qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi
           expires_at: gatewayFields.expires_at || charge.due_at
         };
         
         logStep("PIX data extracted successfully", { 
-          hasQrCode: !!gatewayFields.qr_code,
-          hasQrCodeUrl: !!gatewayFields.qr_code_url
+          hasQrCode: !!responseData.pix.qr_code,
+          hasQrCodeUrl: !!responseData.pix.qr_code_url,
+          hasQrCodeBase64: !!responseData.pix.qr_code_base64,
+          hasQrCodeSvg: !!responseData.pix.qr_code_svg,
+          qrcodeSvgLength: qrcodeSvg ? qrcodeSvg.length : 0
         });
       } else {
         logStep("Warning: PIX data not found in Vindi response", { 

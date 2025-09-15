@@ -652,9 +652,18 @@ serve(async (req) => {
         console.error('❌', errorMsg);
         throw new Error(errorMsg);
       }
+      
+      // ✅ SANDBOX SUPPORT: Get environment
+      const vindiEnvironment = Deno.env.get('VINDI_ENVIRONMENT') || 'production';
+      const VINDI_API_URLS = {
+        sandbox: 'https://sandbox-app.vindi.com.br/api/v1',
+        production: 'https://app.vindi.com.br/api/v1'
+      };
+      const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
+      console.log(`🔧 Testing Vindi ${vindiEnvironment}:`, vindiApiUrl);
 
       try {
-        const response = await fetch('https://app.vindi.com.br/api/v1/customers?limit=1', {
+        const response = await fetch(`${vindiApiUrl}/customers?limit=1`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -715,7 +724,7 @@ serve(async (req) => {
       };
 
       try {
-        const response = await fetch('https://app.vindi.com.br/api/v1/customers', {
+        const response = await fetch(`${vindiApiUrl}/customers`, {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -780,7 +789,7 @@ serve(async (req) => {
       console.log('Bill items preparado:', requestData.bill_items);
 
       try {
-        const response = await fetch('https://app.vindi.com.br/api/v1/bills', {
+        const response = await fetch(`${vindiApiUrl}/bills`, {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
@@ -837,7 +846,7 @@ serve(async (req) => {
       console.log('Dados da assinatura preparados:', requestData);
 
       try {
-        const response = await fetch('https://app.vindi.com.br/api/v1/subscriptions', {
+        const response = await fetch(`${vindiApiUrl}/subscriptions`, {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
