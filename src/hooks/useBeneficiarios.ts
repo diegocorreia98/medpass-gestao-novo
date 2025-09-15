@@ -70,6 +70,31 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
       console.log('[USE-BENEFICIARIOS] Data count:', data?.length || 0);
       console.log('[USE-BENEFICIARIOS] Data sample:', data?.slice(0, 2));
       
+      // ✅ DEBUG ADICIONAL: Verificar se existe Diego Beu Correia
+      if (data && data.length === 0 && filters?.unidadeId) {
+        console.log('🔍 [DEBUG] Query retornou vazia, verificando beneficiários da unidade...');
+        
+        // Query sem filtros para debug
+        const { data: debugData, error: debugError } = await supabase
+          .from('beneficiarios')
+          .select('id, nome, unidade_id, user_id, status')
+          .eq('unidade_id', filters.unidadeId)
+          .limit(5);
+          
+        console.log('🔍 [DEBUG] Beneficiários na unidade:', debugData);
+        console.log('🔍 [DEBUG] Error na query debug:', debugError);
+        
+        // Query de todos os beneficiários do usuário
+        const { data: userBenef, error: userError } = await supabase
+          .from('beneficiarios')
+          .select('id, nome, unidade_id, user_id, status')
+          .eq('user_id', user?.id)
+          .limit(5);
+          
+        console.log('🔍 [DEBUG] Beneficiários do usuário:', userBenef);
+        console.log('🔍 [DEBUG] Error user query:', userError);
+      }
+      
       if (error) {
         console.error('[USE-BENEFICIARIOS] Erro na query:', error);
         throw error;
