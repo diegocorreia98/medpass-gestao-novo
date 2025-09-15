@@ -98,7 +98,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
     try {
       console.log('🔗 [VINDI-LINK] Gerando link para:', beneficiario.nome);
       
-      const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+      const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
         body: { 
           beneficiario_id: beneficiarioId,
           payment_method: 'bank_slip' // Gera boleto/PIX
