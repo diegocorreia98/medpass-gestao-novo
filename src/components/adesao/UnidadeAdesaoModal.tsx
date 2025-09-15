@@ -99,43 +99,61 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
         console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
 
-        // ✅ STEP 2: Gerar SUBSCRIPTION CHECKOUT via Edge Function
+        // ✅ STEP 2: USAR MESMA LÓGICA DO PAINEL MATRIZ - process-vindi-subscription
         let checkoutUrl = null;
 
-        try {
-          console.log('🔄 [UNIDADE-ADESAO] Gerando subscription checkout via Edge Function');
-
-          // ✅ USAR EDGE FUNCTION generate-payment-link-v2 (versão que funciona no painel matriz)
-          const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
-            body: {
-              beneficiario_id: beneficiarioData.id,
-              payment_method: 'bank_slip'
+        // Prepare subscription request (IGUAL AO PAINEL MATRIZ)
+        const subscriptionRequest = {
+          customer: {
+            name: values.nome,
+            email: values.email || '',
+            document: values.cpf,
+            phone: values.telefone || '',
+            birth_date: values.data_nascimento || null,
+            address: {
+              street: values.endereco || '',
+              city: values.cidade || '',
+              state: values.estado || '',
+              zipcode: values.cep || ''
             }
+          },
+          plan_id: values.plano_id,
+          unidade_id: minhaUnidade?.id || null,
+          empresa_id: values.empresa_id || null,
+          payment_method: 'bank_slip', // Boleto/PIX
+          installments: 1
+        };
+
+        console.log('🔄 [UNIDADE-ADESAO] Creating Vindi subscription for checkout link:', subscriptionRequest);
+
+        try {
+          // Call process-vindi-subscription to create checkout link (IGUAL AO PAINEL MATRIZ)
+          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('process-vindi-subscription', {
+            body: subscriptionRequest
           });
 
-          if (error) throw error;
-          if (data.error) throw new Error(data.error);
+          if (vindiError) {
+            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao gerar link de pagamento:', vindiError.message);
+            // Don't throw error here, beneficiary is already saved
+          }
 
-          console.log('✅ [UNIDADE-ADESAO] Subscription checkout gerado:', data);
+          if (vindiData?.checkout_url) {
+            checkoutUrl = vindiData.checkout_url;
+            console.log('✅ [UNIDADE-ADESAO] Checkout URL gerada:', checkoutUrl);
 
-          // Usar checkout_url da Edge Function
-          checkoutUrl = data.checkout_url || data.payment_url;
-
-          if (checkoutUrl) {
-            console.log('✅ [UNIDADE-ADESAO] Subscription checkout URL:', checkoutUrl);
-
-            // Link já é salvo pela Edge Function, mas vamos atualizar o status
+            // Update beneficiary with checkout link (IGUAL AO PAINEL MATRIZ)
             const { error: updateError } = await supabase
               .from('beneficiarios')
               .update({
-                payment_status: 'payment_requested' // Status atualizado pela Edge Function
+                checkout_link: checkoutUrl,
+                payment_status: 'payment_requested'
               })
               .eq('id', beneficiarioData.id);
 
             if (updateError) {
-              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao atualizar status:', updateError.message);
+              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError.message);
             } else {
-              console.log('✅ [UNIDADE-ADESAO] Status atualizado para payment_requested');
+              console.log('✅ [UNIDADE-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
             }
           }
 
