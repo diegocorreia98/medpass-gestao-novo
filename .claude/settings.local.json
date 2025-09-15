@@ -10,7 +10,9 @@
       "Bash(curl:*)",
       "Bash(npx typescript:*)",
       "Bash(psql:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(supabase link:*)",
+      "Bash(supabase functions deploy:*)"
     ],
     "deny": [],
     "ask": []

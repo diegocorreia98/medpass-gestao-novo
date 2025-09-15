@@ -378,8 +378,47 @@ serve(async (req) => {
     }
      logStep(isExistingBill ? "Reused existing bill" : "Bill created successfully", { billId: billData.bill.id });
 
+     // 🔍 DEBUG: Log complete bill structure for analysis
+     logStep("🔍 COMPLETE BILL DATA STRUCTURE", {
+       billId: billData.bill.id,
+       billStatus: billData.bill.status,
+       chargesCount: billData.bill.charges?.length || 0,
+       hasCharges: !!(billData.bill.charges && billData.bill.charges.length > 0)
+     });
+
+     if (billData.bill.charges && billData.bill.charges.length > 0) {
+       const charge = billData.bill.charges[0];
+       logStep("🔍 CHARGE STRUCTURE", {
+         chargeId: charge.id,
+         chargeStatus: charge.status,
+         hasLastTransaction: !!charge.last_transaction,
+         transactionId: charge.last_transaction?.id
+       });
+
+       if (charge.last_transaction) {
+         logStep("🔍 TRANSACTION STRUCTURE", {
+           transactionId: charge.last_transaction.id,
+           transactionStatus: charge.last_transaction.status,
+           hasGatewayResponseFields: !!charge.last_transaction.gateway_response_fields
+         });
+
+         if (charge.last_transaction.gateway_response_fields) {
+           const gwFields = charge.last_transaction.gateway_response_fields;
+           logStep("🔍 GATEWAY RESPONSE FIELDS (PIX DATA)", {
+             availableFields: Object.keys(gwFields),
+             hasQrCodePath: !!gwFields.qrcode_path,
+             hasQrCodeOriginalPath: !!gwFields.qrcode_original_path,
+             hasQrCodeUrl: !!(gwFields.qr_code_url || gwFields.qr_code_image_url),
+             hasQrCodeBase64: !!(gwFields.qr_code_base64 || gwFields.qr_code_png_base64),
+             hasPixCode: !!(gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste)
+           });
+         }
+       }
+     }
+
      // Ensure we have full bill details (including PIX fields) by fetching the bill by ID
      try {
+       logStep("🔄 Fetching complete bill details from Vindi API");
        const billDetailsResp = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}` , {
          method: "GET",
          headers: {
@@ -391,13 +430,28 @@ serve(async (req) => {
          const fullBill = await billDetailsResp.json();
          if (fullBill?.bill?.id) {
            billData = fullBill; // overwrite with detailed bill payload
-           logStep("Fetched full bill details", { billId: billData.bill.id });
+           logStep("✅ Fetched full bill details successfully", { billId: billData.bill.id });
+
+           // 🔍 DEBUG: Log the updated bill structure after fetching details
+           if (billData.bill.charges && billData.bill.charges.length > 0) {
+             const charge = billData.bill.charges[0];
+             if (charge.last_transaction?.gateway_response_fields) {
+               const gwFields = charge.last_transaction.gateway_response_fields;
+               logStep("🔍 UPDATED GATEWAY RESPONSE FIELDS", {
+                 availableFieldsAfterFetch: Object.keys(gwFields),
+                 qrcodePath: gwFields.qrcode_path ? 'PRESENT' : 'MISSING',
+                 qrcodeOriginalPath: gwFields.qrcode_original_path ? 'PRESENT' : 'MISSING',
+                 qrCodeUrl: gwFields.qr_code_url || gwFields.qr_code_image_url ? 'PRESENT' : 'MISSING',
+                 qrCodeBase64: gwFields.qr_code_base64 || gwFields.qr_code_png_base64 ? 'PRESENT' : 'MISSING'
+               });
+             }
+           }
          }
        } else {
-         logStep("Failed to fetch full bill details", { status: billDetailsResp.status });
+         logStep("❌ Failed to fetch full bill details", { status: billDetailsResp.status });
        }
      } catch (e) {
-       logStep("Error fetching full bill details", { error: (e as any)?.message });
+       logStep("❌ Error fetching full bill details", { error: (e as any)?.message });
      }
 
      // For credit card payments, try to process the charge immediately if it's still pending

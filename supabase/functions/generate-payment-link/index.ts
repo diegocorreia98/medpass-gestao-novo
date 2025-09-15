@@ -417,8 +417,8 @@ serve(async (req) => {
     }
 
     // ✅ STEP 3: Create checkout URL for the client
-    const baseUrl = req.headers.get('origin') || 'https://www.medpassbeneficios.com.br';
-    const checkoutUrl = `${baseUrl}/checkout/subscription/${checkoutToken}`;
+    const baseUrl = req.headers.get('origin') || 'http://localhost:8082';
+    const checkoutUrl = `${baseUrl}/subscription-checkout/${checkoutToken}`;
 
     // ✅ STEP 4: Update beneficiary with both URLs
     const { error: finalUpdateError } = await supabaseService

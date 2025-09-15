@@ -163,11 +163,11 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       const processedData = {
         id: checkoutData.id,
         customer_name: checkoutData.customer_name, // Já mascarado pela função
-        customer_email: checkoutData.customer_email, // Já mascarado pela função  
+        customer_email: checkoutData.customer_email, // Já mascarado pela função
         customer_document: checkoutData.customer_document, // Sempre mascarado
         plan_id: '', // Não expostos no checkout por segurança
         plan_price: checkoutData.plan_price,
-        payment_method: checkoutData.payment_method,
+        // payment_method: checkoutData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
         status: checkoutData.status,
         planos: {
           nome: checkoutData.plan_name,

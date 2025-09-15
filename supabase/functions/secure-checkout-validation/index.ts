@@ -54,6 +54,7 @@ serve(async (req) => {
     });
 
     // Retornar dados mascarados e seguros para o frontend + IDs da Vindi
+    // ❌ NÃO retornar payment_method fixo - usuário escolhe no checkout
     return new Response(JSON.stringify({
       success: true,
       data: {
@@ -62,7 +63,7 @@ serve(async (req) => {
         customer_email: subscriptionData.customer_email_masked,
         customer_document: '***.***.***-**', // Sempre mascarado
         plan_price: subscriptionData.plan_price,
-        payment_method: subscriptionData.payment_method,
+        // payment_method: subscriptionData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
         status: subscriptionData.status,
         plan_name: subscriptionData.plan_name,
         // IDs da Vindi necessários para o checkout

@@ -99,53 +99,48 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
         console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
 
-        // ✅ STEP 2: Gerar CHECKOUT TRANSPARENTE (conforme especificação)
+        // ✅ STEP 2: Gerar SUBSCRIPTION CHECKOUT via Edge Function
         let checkoutUrl = null;
-        
-        try {
-          console.log('🔄 [UNIDADE-ADESAO] Gerando checkout transparente');
-          
-          // ✅ CORREÇÃO: Gerar link para CHECKOUT TRANSPARENTE onde cliente escolhe método
-          const baseUrl = window.location.origin;
-          const checkoutParams = new URLSearchParams({
-            plan_id: values.plano_id,
-            customer_name: values.nome,
-            customer_email: values.email || '',
-            customer_document: values.cpf,
-            customer_phone: values.telefone || '',
-            // Adicionar dados de endereço se disponível
-            customer_address: values.endereco || '',
-            customer_city: values.cidade || '',
-            customer_state: values.estado || '',
-            customer_zipcode: values.cep || '',
-            // Metadata da adesão
-            unidade_id: minhaUnidade?.id || '',
-            empresa_id: values.empresa_id || '',
-            beneficiario_id: beneficiarioData.id
-          });
-          
-          // ✅ LINK PARA CHECKOUT TRANSPARENTE (cliente escolhe método)
-          checkoutUrl = `${baseUrl}/checkout/transparent?${checkoutParams.toString()}`;
-          
-          console.log('✅ [UNIDADE-ADESAO] Checkout transparente URL gerada:', checkoutUrl);
-          
-          // Salvar link no beneficiário
-          const { error: updateError } = await supabase
-            .from('beneficiarios')
-            .update({ 
-              checkout_link: checkoutUrl,
-              payment_status: 'link_generated' // Status indicando que link foi gerado
-            })
-            .eq('id', beneficiarioData.id);
 
-          if (updateError) {
-            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link:', updateError.message);
-          } else {
-            console.log('✅ [UNIDADE-ADESAO] Link de checkout transparente salvo');
+        try {
+          console.log('🔄 [UNIDADE-ADESAO] Gerando subscription checkout via Edge Function');
+
+          // ✅ USAR EDGE FUNCTION generate-payment-link
+          const { data, error } = await supabase.functions.invoke('generate-payment-link', {
+            body: {
+              beneficiario_id: beneficiarioData.id,
+              payment_method: 'bank_slip'
+            }
+          });
+
+          if (error) throw error;
+          if (data.error) throw new Error(data.error);
+
+          console.log('✅ [UNIDADE-ADESAO] Subscription checkout gerado:', data);
+
+          // Usar checkout_url da Edge Function
+          checkoutUrl = data.checkout_url || data.payment_url;
+
+          if (checkoutUrl) {
+            console.log('✅ [UNIDADE-ADESAO] Subscription checkout URL:', checkoutUrl);
+
+            // Link já é salvo pela Edge Function, mas vamos atualizar o status
+            const { error: updateError } = await supabase
+              .from('beneficiarios')
+              .update({
+                payment_status: 'payment_requested' // Status atualizado pela Edge Function
+              })
+              .eq('id', beneficiarioData.id);
+
+            if (updateError) {
+              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao atualizar status:', updateError.message);
+            } else {
+              console.log('✅ [UNIDADE-ADESAO] Status atualizado para payment_requested');
+            }
           }
 
         } catch (linkError) {
-          console.warn('⚠️ [UNIDADE-ADESAO] Erro na geração de link transparente:', linkError);
+          console.warn('⚠️ [UNIDADE-ADESAO] Erro na geração de subscription checkout:', linkError);
           // Beneficiário já foi salvo, não é erro crítico
         }
 
