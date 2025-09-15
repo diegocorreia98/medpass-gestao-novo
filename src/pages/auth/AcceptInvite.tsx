@@ -148,25 +148,47 @@ export function AcceptInvite() {
       
       let userId: string
 
-      // 1. Verificar se é um usuário convidado (invited) que precisa confirmar
+      // 1. Try to authenticate the invited user
       try {
-        console.log('Tentando aceitar convite via signInWithPassword...')
-        
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        console.log('Processing invite - attempting to authenticate user')
+
+        // For invited users, try to confirm their signup with the provided password
+        const { data: authData, error: authError } = await supabase.auth.verifyOtp({
           email: data.email,
-          password: data.password
+          token: token,
+          type: 'invite'
         })
 
         if (authData.user) {
+          // User verified successfully via invite token
           userId = authData.user.id
-          console.log('Login/Confirmação realizada com sucesso:', userId)
+          console.log('User verified via invite token:', userId)
+
+          // Update user password
+          const { error: updateError } = await supabase.auth.updateUser({
+            password: data.password
+          })
+
+          if (updateError) {
+            console.error('Error updating password:', updateError)
+            throw new Error('Falha ao configurar senha')
+          }
+
         } else if (authError) {
-          // Se falhou login, pode ser que precise criar conta
-          if (authError.message.includes('Invalid login credentials') || 
-              authError.message.includes('Email not confirmed')) {
-            
-            console.log('Login falhou, tentando criar conta...')
-            
+          // If invite verification fails, try traditional flow
+          console.log('Invite verification failed, trying traditional authentication...')
+
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: data.email,
+            password: data.password
+          })
+
+          if (signInData.user) {
+            userId = signInData.user.id
+            console.log('Traditional sign in successful:', userId)
+          } else if (signInError?.message.includes('Invalid login credentials')) {
+            // Try to create account
+            console.log('Creating new account...')
             const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
               email: data.email,
               password: data.password,
@@ -179,13 +201,10 @@ export function AcceptInvite() {
             })
 
             if (signUpError) {
-              console.error('Erro ao criar conta:', signUpError)
-              
               if (signUpError.message.includes('already been registered')) {
-                // Usuário existe mas senha está errada
                 toast({
                   title: "Credenciais inválidas",
-                  description: "Este email já está cadastrado. Verifique sua senha ou use 'Esqueci minha senha'.",
+                  description: "Este email já está cadastrado. Verifique sua senha.",
                   variant: "destructive"
                 })
                 return
@@ -198,9 +217,9 @@ export function AcceptInvite() {
             }
 
             userId = signUpData.user.id
-            console.log('Conta criada com sucesso:', userId)
+            console.log('New account created:', userId)
           } else {
-            throw authError
+            throw signInError
           }
         }
       } catch (error: any) {

@@ -1,6 +1,13 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.51.0';
 
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -52,7 +59,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log('Creating unit with user:', { unidade: unidade.nome, email: responsavel.email });
 
-    // 1. Create user in auth.users with invited status
+    // 1. Create user in auth.users using invite flow
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       responsavel.email,
       {
@@ -60,8 +67,7 @@ const handler = async (req: Request): Promise<Response> => {
           user_type: 'unidade',
           full_name: responsavel.nome,
           telefone: responsavel.telefone
-        },
-        redirectTo: `${new URL(req.url).origin}/convite-aceito`
+        }
       }
     );
 
