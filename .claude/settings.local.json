@@ -6,7 +6,8 @@
       "Bash(npm search:*)",
       "Bash(npm run dev:*)",
       "Bash(npm run lint:*)",
-      "Bash(npm run build:dev:*)"
+      "Bash(npm run build:dev:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,19 +1,21 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 interface CustomerData {
   name: string;
   email: string;
   document: string;
+  documentType?: 'cpf' | 'cnpj';
   phone?: string;
   address?: {
     street: string;
     number: string;
+    neighborhood?: string;
     city: string;
     state: string;
     zipcode: string;
@@ -22,22 +24,24 @@ interface CustomerData {
 
 interface CardData {
   holder_name: string;
-  number: string; // This will contain the gateway_token from frontend tokenization
+  number: string; // gateway_token from frontend tokenization
   cvv: string;
   expiry_month: string;
   expiry_year: string;
 }
 
+interface PlanData {
+  id: string;
+  name: string;
+  price: number;
+  vindi_plan_id?: number;
+  vindi_product_id?: string;
+}
+
 interface CheckoutRequest {
   clinicData: CustomerData;
-  planData: {
-    id: string;
-    name: string;
-    price: number;
-    vindi_plan_id?: number;
-    vindi_product_id?: string;
-  };
-  paymentMethod: 'credit_card' | 'pix' | 'boleto';
+  planData: PlanData;
+  paymentMethod: 'credit_card' | 'pix' | 'boleto' | 'bolepix';
   cardData?: CardData;
   installments?: number;
 }
@@ -52,606 +56,364 @@ const VINDI_API_URLS = {
 
 const VINDI_API_URL = VINDI_API_URLS[VINDI_ENVIRONMENT as keyof typeof VINDI_API_URLS];
 
-async function createOrUpdateCustomer(customerData: CustomerData) {
-  console.log('[VINDI] Creating/updating customer:', customerData.email);
-  
+console.log(`🔧 Using Vindi ${VINDI_ENVIRONMENT} environment: ${VINDI_API_URL}`);
+
+/**
+ * 1. CONSULTAR OU CRIAR CLIENTE
+ * Seguindo documentação Vindi: GET /customers?query[email] ou POST /customers
+ */
+async function createOrGetCustomer(customerData: CustomerData) {
+  console.log(`🔍 [VINDI-STEP-1] Buscando cliente: ${customerData.email}`);
+
+  // 1.1 Consultar cliente existente
+  const searchUrl = `${VINDI_API_URL}/customers?query[email]=${encodeURIComponent(customerData.email)}`;
+
+  const searchResponse = await fetch(searchUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'MedPass-Sistema/1.0'
+    }
+  });
+
+  if (!searchResponse.ok) {
+    const errorText = await searchResponse.text();
+    throw new Error(`Erro ao buscar cliente: ${searchResponse.status} - ${errorText}`);
+  }
+
+  const searchResult = await searchResponse.json();
+
+  // 1.2 Se cliente existe, retornar
+  if (searchResult.customers && searchResult.customers.length > 0) {
+    const existingCustomer = searchResult.customers[0];
+    console.log(`✅ [VINDI-STEP-1] Cliente encontrado: ${existingCustomer.id}`);
+    return existingCustomer;
+  }
+
+  // 1.3 Se não existe, criar novo cliente
+  console.log(`🆕 [VINDI-STEP-1] Criando novo cliente`);
+
   const customerPayload = {
     name: customerData.name,
     email: customerData.email,
-    registry_code: customerData.document.replace(/[^\d]/g, ''),
+    registry_code: customerData.document.replace(/[^\d]/g, ''), // CPF/CNPJ apenas números
     phone: customerData.phone?.replace(/[^\d]/g, ''),
     address: customerData.address ? {
       street: customerData.address.street,
       number: customerData.address.number,
+      zipcode: customerData.address.zipcode.replace(/[^\d]/g, ''),
       city: customerData.address.city,
       state: customerData.address.state,
-      zipcode: customerData.address.zipcode.replace(/[^\d]/g, ''),
       country: 'BR'
     } : undefined
   };
 
-  // Check if customer exists first
-  const searchResponse = await fetch(`${VINDI_API_URL}/customers?query=email:${customerData.email}`, {
-    method: 'GET',
+  const createResponse = await fetch(`${VINDI_API_URL}/customers`, {
+    method: 'POST',
     headers: {
       'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
-    }
+      'Content-Type': 'application/json',
+      'User-Agent': 'MedPass-Sistema/1.0'
+    },
+    body: JSON.stringify(customerPayload)
   });
 
-  const searchResult = await searchResponse.json();
-  
-  if (searchResult.customers && searchResult.customers.length > 0) {
-    // Update existing customer
-    const customerId = searchResult.customers[0].id;
-    console.log('[VINDI] Updating existing customer:', customerId);
-    
-    const updateResponse = await fetch(`${VINDI_API_URL}/customers/${customerId}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(customerPayload)
-    });
-
-    const updateResult = await updateResponse.json();
-    return updateResult.customer;
-  } else {
-    // Create new customer
-    console.log('[VINDI] Creating new customer');
-    
-    const createResponse = await fetch(`${VINDI_API_URL}/customers`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(customerPayload)
-    });
-
-    const createResult = await createResponse.json();
-    return createResult.customer;
+  if (!createResponse.ok) {
+    const errorText = await createResponse.text();
+    throw new Error(`Erro ao criar cliente: ${createResponse.status} - ${errorText}`);
   }
+
+  const createResult = await createResponse.json();
+
+  if (!createResult.customer) {
+    throw new Error('Cliente não foi criado corretamente');
+  }
+
+  console.log(`✅ [VINDI-STEP-1] Cliente criado: ${createResult.customer.id}`);
+  return createResult.customer;
 }
 
-async function createPaymentProfile(customer: any, gateway_token: string): Promise<any> {
-  console.log('[VINDI] Creating payment profile for customer:', customer.id);
-  
+/**
+ * 2. CRIAR PAYMENT PROFILE (opcional, apenas para cartão)
+ * Seguindo documentação Vindi: POST /payment_profiles
+ */
+async function createPaymentProfile(customer: any, cardData: CardData): Promise<any> {
+  console.log(`💳 [VINDI-STEP-2] Criando payment profile para cliente: ${customer.id}`);
+
   const paymentProfilePayload = {
+    holder_name: cardData.holder_name,
+    card_expiration: `${cardData.expiry_month}/${cardData.expiry_year}`,
+    card_number_token: cardData.number, // gateway_token da tokenização frontend
     customer_id: customer.id,
-    gateway_token: gateway_token
+    payment_method_code: 'credit_card'
   };
 
   const response = await fetch(`${VINDI_API_URL}/payment_profiles`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'User-Agent': 'MedPass-Sistema/1.0'
     },
     body: JSON.stringify(paymentProfilePayload)
   });
 
-  const result = await response.json();
-  
   if (!response.ok) {
-    throw new Error(`Vindi payment profile error: ${result.errors?.[0]?.message || 'Unknown error'}`);
+    const errorText = await response.text();
+    throw new Error(`Erro ao criar payment profile: ${response.status} - ${errorText}`);
   }
 
+  const result = await response.json();
+
+  if (!result.payment_profile) {
+    throw new Error('Payment profile não foi criado corretamente');
+  }
+
+  console.log(`✅ [VINDI-STEP-2] Payment profile criado: ${result.payment_profile.id}`);
   return result.payment_profile;
 }
 
 /**
- * Gestão de afiliados conforme especificação do checkout transparente
- * Retorna afiliado apenas se a conta estiver criada e verificada na Vindi Pagamentos
+ * 3. CRIAR ASSINATURA
+ * Seguindo documentação Vindi: POST /subscriptions
  */
-async function processAffiliates(customerData: any, planData: any): Promise<number[] | null> {
-  console.log('[VINDI] Processing affiliates for customer:', customerData.email);
-  
-  try {
-    // 1. Consultar afiliados existentes
-    const searchResponse = await fetch(`${VINDI_API_URL}/affiliates?query=email:${customerData.email}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-        'Content-Type': 'application/json'
-      }
-    });
+async function createSubscription(
+  customer: any,
+  planData: PlanData,
+  paymentMethod: string,
+  paymentProfile?: any,
+  cardData?: CardData
+) {
+  console.log(`📝 [VINDI-STEP-3] Criando assinatura para plano: ${planData.vindi_plan_id}`);
 
-    if (!searchResponse.ok) {
-      console.log('[VINDI] Affiliate search failed, continuing without split');
-      return null;
-    }
-
-    const searchResult = await searchResponse.json();
-    const existingAffiliates = searchResult.affiliates || [];
-    
-    if (existingAffiliates.length > 0) {
-      // Verificar se afiliados estão ativos e verificados
-      const activeAffiliateIds = existingAffiliates
-        .filter((affiliate: any) => affiliate.status === 'active' && affiliate.verified)
-        .map((affiliate: any) => affiliate.id);
-        
-      if (activeAffiliateIds.length > 0) {
-        console.log('[VINDI] Found active verified affiliates:', activeAffiliateIds);
-        return activeAffiliateIds;
-      }
-    }
-
-    // 2. Se não encontrou afiliados ativos, tentar criar/ativar
-    // Só criar se tivermos dados específicos de afiliação
-    const affiliateData = extractAffiliateData(customerData, planData);
-    
-    if (!affiliateData) {
-      console.log('[VINDI] No affiliate data found, continuing without split');
-      return null;
-    }
-
-    console.log('[VINDI] Creating new affiliate');
-    const createResponse = await fetch(`${VINDI_API_URL}/affiliates`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(affiliateData)
-    });
-
-    if (!createResponse.ok) {
-      console.log('[VINDI] Affiliate creation failed, continuing without split');
-      return null;
-    }
-
-    const createResult = await createResponse.json();
-    const newAffiliate = createResult.affiliate;
-    
-    if (newAffiliate && newAffiliate.id) {
-      console.log('[VINDI] Created affiliate:', newAffiliate.id);
-      return [newAffiliate.id];
-    }
-    
-    return null;
-    
-  } catch (error) {
-    console.log('[VINDI] Error processing affiliates, continuing without split:', error);
-    return null;
+  if (!planData.vindi_plan_id) {
+    throw new Error('vindi_plan_id não encontrado no plano selecionado');
   }
+
+  // Preparar payload base da assinatura
+  const subscriptionPayload: any = {
+    plan_id: planData.vindi_plan_id,
+    customer_id: customer.id,
+    payment_method_code: paymentMethod,
+    code: `medpass_${customer.id}_${Date.now()}`, // código único
+    metadata: {
+      origem: 'checkout_transparente',
+      sistema: 'medpass',
+      plano_interno_id: planData.id
+    }
+  };
+
+  // Adicionar método de pagamento específico
+  if (paymentMethod === 'credit_card') {
+    if (paymentProfile) {
+      subscriptionPayload.payment_profile_id = paymentProfile.id;
+    } else if (cardData) {
+      // Usar gateway_token diretamente (alternativa ao payment_profile)
+      subscriptionPayload.gateway_token = cardData.number;
+    } else {
+      throw new Error('Payment profile ou gateway_token obrigatório para cartão de crédito');
+    }
+  }
+  // Para PIX, Boleto, BoletoPIX não precisa de dados adicionais
+
+  console.log(`📤 [VINDI-STEP-3] Enviando payload:`, {
+    ...subscriptionPayload,
+    gateway_token: subscriptionPayload.gateway_token ? '[HIDDEN]' : undefined
+  });
+
+  const response = await fetch(`${VINDI_API_URL}/subscriptions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'MedPass-Sistema/1.0'
+    },
+    body: JSON.stringify(subscriptionPayload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`❌ [VINDI-STEP-3] Erro na criação da assinatura: ${response.status}`);
+    throw new Error(`Erro ao criar assinatura: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+
+  if (!result.subscription) {
+    throw new Error('Assinatura não foi criada corretamente');
+  }
+
+  console.log(`✅ [VINDI-STEP-3] Assinatura criada: ${result.subscription.id}`);
+  console.log(`📄 [VINDI-STEP-3] Fatura: ${result.bill?.id}, Status: ${result.bill?.status}`);
+
+  return result;
 }
 
 /**
- * Extrai dados de afiliação do customer/plan
- * Retorna null se não for um caso de afiliação
+ * 4. PROCESSAR DADOS DE PAGAMENTO
+ * Extrair informações de PIX/Boleto das charges
  */
-function extractAffiliateData(customerData: any, planData: any): any | null {
-  // Implementar lógica específica do negócio para determinar se é afiliação
-  // Por exemplo: se é uma unidade/franquia, usar dados do responsável
-  
-  // Exemplo básico - ajustar conforme regras do negócio
-  if (customerData.affiliate_code || customerData.referrer_code) {
+function processPaymentData(subscriptionResult: any) {
+  console.log(`🔍 [VINDI-STEP-4] Processando dados de pagamento`);
+
+  const bill = subscriptionResult.bill;
+  if (!bill || !bill.charges || bill.charges.length === 0) {
+    console.warn(`⚠️ [VINDI-STEP-4] Nenhuma charge encontrada na fatura`);
+    return null;
+  }
+
+  const charge = bill.charges[0];
+  const lastTransaction = charge.last_transaction;
+
+  if (!lastTransaction) {
+    console.warn(`⚠️ [VINDI-STEP-4] Nenhuma transação encontrada na charge`);
+    return null;
+  }
+
+  const gatewayFields = lastTransaction.gateway_response_fields;
+
+  // Processar dados PIX
+  if (gatewayFields?.qrcode_original_path || gatewayFields?.qrcode_path) {
+    console.log(`✅ [VINDI-STEP-4] Dados PIX encontrados`);
+
     return {
-      name: customerData.affiliate_name || customerData.name,
-      email: customerData.affiliate_email || customerData.email,
-      registry_code: customerData.affiliate_document || customerData.document,
-      percentage: customerData.affiliate_percentage || 10, // 10% padrão
-      status: 'pending' // Será ativado após verificação manual
+      type: 'pix',
+      qr_code: gatewayFields.qrcode_original_path, // Código PIX para cópia
+      qr_code_url: gatewayFields.qrcode_path, // URL da imagem QR Code
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
+      pix_copia_cola: gatewayFields.qrcode_original_path // Código copia e cola
     };
   }
-  
+
+  // Processar dados Boleto
+  if (gatewayFields?.barcode || gatewayFields?.bank_slip_url) {
+    console.log(`✅ [VINDI-STEP-4] Dados Boleto encontrados`);
+
+    return {
+      type: 'boleto',
+      barcode: gatewayFields.barcode,
+      bank_slip_url: gatewayFields.bank_slip_url,
+      expires_at: gatewayFields.due_date
+    };
+  }
+
+  console.log(`ℹ️ [VINDI-STEP-4] Pagamento por cartão - dados não necessários`);
   return null;
 }
 
-async function processPIXSubscription(customer: any, planData: any, affiliateIds?: number[] | null) {
-  console.log('[VINDI] Creating PIX subscription for customer:', customer.id);
-  
-  const subscriptionPayload: any = {
-    customer_id: customer.id,
-    plan_id: planData.vindi_plan_id || planData.id,
-    payment_method_code: 'pix',
-    code: `medpass-pix-${Date.now()}`,
-    metadata: {
-      checkout_type: 'transparent',
-      created_by: 'medpass',
-      plan_name: planData.name
-    }
-  };
-  
-  // Adicionar split/afiliados se disponível
-  if (affiliateIds && affiliateIds.length > 0) {
-    subscriptionPayload.split_rules = affiliateIds.map(id => ({
-      affiliate_id: id,
-      percentage: 10 // Configurável conforme regra do negócio
-    }));
-    console.log('[VINDI] Adding split rules for affiliates:', affiliateIds);
-  }
-
-  const response = await fetch(`${VINDI_API_URL}/subscriptions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(subscriptionPayload)
-  });
-
-  const result = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(`Vindi API error: ${result.errors?.[0]?.message || 'Unknown error'}`);
-  }
-
-  const subscription = result.subscription;
-  const firstBill = subscription.bills?.[0];
-  const pixCharge = firstBill?.charges?.find((c: any) => c.payment_method.code === 'pix');
-
-  if (!pixCharge) {
-    throw new Error('PIX charge not found in subscription');
-  }
-
-  // Debug: Log the actual structure of pixCharge to understand Vindi's response
-  console.log('[VINDI-PIX] PIX Charge structure:', JSON.stringify(pixCharge, null, 2));
-  console.log('[VINDI-PIX] First bill structure:', JSON.stringify(firstBill, null, 2));
-
-  // ✅ EXTRAIR DADOS PIX COMPLETOS (incluindo SVG)
-  const gatewayFields = pixCharge.last_transaction?.gateway_response_fields || {};
-  
-  // 🎯 CAMPOS CORRETOS DA VINDI
-  const qrcodeSvg = gatewayFields.qrcode_path; // SVG do QR Code
-  const pixCopiaCola = gatewayFields.qrcode_original_path; // Código PIX copia e cola
-  
-  const pixCode = pixCopiaCola || // ✅ PRIORIDADE: Código copia e cola correto
-                  gatewayFields.qr_code_text || 
-                  gatewayFields.emv ||
-                  gatewayFields.copy_paste ||
-                  gatewayFields.pix_code ||
-                  pixCharge.qr_code || 
-                  pixCharge.pix_code;
-  
-  const qrCodeUrl = gatewayFields.qr_code_url || 
-                    gatewayFields.qr_code_image_url;
-  
-  const qrCodeBase64 = gatewayFields.qr_code_base64 || 
-                       gatewayFields.qrcode_base64;
-
-  console.log('[VINDI-PIX] PIX data extraction results:', {
-    hasPixCode: !!pixCode,
-    hasQrCodeUrl: !!qrCodeUrl,
-    hasQrCodeBase64: !!qrCodeBase64,
-    hasQrcodeSvg: !!qrcodeSvg,
-    pixCodeLength: pixCode?.length,
-    svgLength: qrcodeSvg?.length
-  });
-
-  if (!pixCode && !qrcodeSvg) {
-    console.error('[VINDI-PIX] Neither PIX code nor QR SVG found in response');
-    console.error('[VINDI-PIX] Available gateway fields:', Object.keys(gatewayFields));
-    throw new Error('PIX data not found in Vindi response');
-  }
-
-  return {
-    success: true,
-    subscription_id: subscription.id,
-    subscription: subscription,
-    pix_data: {
-      qr_code: pixCode,
-      pix_code: pixCode, // Compatibility
-      pix_copia_cola: pixCopiaCola, // ✅ Código PIX copia e cola da Vindi
-      qr_code_url: qrCodeUrl,
-      qr_code_base64: qrCodeBase64,
-      qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi
-      expires_at: firstBill.due_at,
-      amount: pixCharge.amount,
-      charge_id: pixCharge.id
-    },
-    status: 'pending_payment'
-  };
-}
-
-async function processCreditCardSubscription(customer: any, planData: any, cardData: CardData, installments: number, affiliateIds?: number[] | null) {
-  console.log('[VINDI] Creating credit card subscription for customer:', customer.id);
-  
-  // cardData.number now contains the gateway_token from frontend tokenization
-  const gateway_token = cardData.number;
-  
-  // Create payment profile first (optional step as per transparent checkout specification)
-  let payment_profile_id = null;
-  try {
-    const paymentProfile = await createPaymentProfile(customer, gateway_token);
-    payment_profile_id = paymentProfile.id;
-    console.log('[VINDI] Payment profile created:', payment_profile_id);
-  } catch (error) {
-    console.log('[VINDI] Payment profile creation failed, using gateway_token directly:', error);
-  }
-  
-  const subscriptionPayload: any = {
-    customer_id: customer.id,
-    plan_id: planData.vindi_plan_id || planData.id,
-    payment_method_code: 'credit_card',
-    code: `medpass-cc-${Date.now()}`,
-    installments: installments || 1,
-    // Use payment_profile_id if created, otherwise gateway_token directly
-    ...(payment_profile_id ? { payment_profile_id } : { gateway_token }),
-    metadata: {
-      checkout_type: 'transparent',
-      created_by: 'medpass',
-      plan_name: planData.name,
-      installments: installments,
-      payment_profile_id: payment_profile_id || 'direct_token'
-    }
-  };
-  
-  // Adicionar split/afiliados se disponível
-  if (affiliateIds && affiliateIds.length > 0) {
-    subscriptionPayload.split_rules = affiliateIds.map(id => ({
-      affiliate_id: id,
-      percentage: 10 // Configurável conforme regra do negócio
-    }));
-    console.log('[VINDI] Adding split rules for affiliates (credit_card):', affiliateIds);
-  }
-
-  console.log('[VINDI] Creating subscription with payment profile or gateway token');
-
-  const response = await fetch(`${VINDI_API_URL}/subscriptions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(subscriptionPayload)
-  });
-
-  const result = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(`Vindi API error: ${result.errors?.[0]?.message || 'Unknown error'}`);
-  }
-
-  const subscription = result.subscription;
-  const firstBill = subscription.bills?.[0];
-  const creditCardCharge = firstBill?.charges?.find((c: any) => c.payment_method.code === 'credit_card');
-
-  return {
-    success: true,
-    subscription_id: subscription.id,
-    charge_id: creditCardCharge?.id,
-    subscription: subscription,
-    payment_profile_id: payment_profile_id,
-    status: creditCardCharge?.status || 'processing'
-  };
-}
-
-async function processBoletoSubscription(customer: any, planData: any, affiliateIds?: number[] | null) {
-  console.log('[VINDI] Creating Boleto subscription for customer:', customer.id);
-  
-  const subscriptionPayload: any = {
-    customer_id: customer.id,
-    plan_id: planData.vindi_plan_id || planData.id,
-    payment_method_code: 'bank_slip',
-    code: `medpass-boleto-${Date.now()}`,
-    metadata: {
-      checkout_type: 'transparent',
-      created_by: 'medpass',
-      plan_name: planData.name
-    }
-  };
-  
-  // Adicionar split/afiliados se disponível
-  if (affiliateIds && affiliateIds.length > 0) {
-    subscriptionPayload.split_rules = affiliateIds.map(id => ({
-      affiliate_id: id,
-      percentage: 10 // Configurável conforme regra do negócio
-    }));
-    console.log('[VINDI] Adding split rules for affiliates (boleto):', affiliateIds);
-  }
-
-  const response = await fetch(`${VINDI_API_URL}/subscriptions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(subscriptionPayload)
-  });
-
-  const result = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(`Vindi API error: ${result.errors?.[0]?.message || 'Unknown error'}`);
-  }
-
-  const subscription = result.subscription;
-  const firstBill = subscription.bills?.[0];
-  const boletoCharge = firstBill?.charges?.find((c: any) => c.payment_method.code === 'bank_slip');
-
-  if (!boletoCharge) {
-    throw new Error('Boleto charge not found in subscription');
-  }
-
-  console.log('[VINDI-BOLETO] Boleto Charge structure:', JSON.stringify(boletoCharge, null, 2));
-
-  const boletoData = {
-    url: boletoCharge.print_url,
-    barcode: boletoCharge.code,
-    due_date: boletoCharge.due_at
-  };
-
-  console.log('[VINDI-BOLETO] Extracted boleto data:', boletoData);
-
-  return {
-    success: true,
-    subscription_id: subscription.id,
-    customer_id: customer.id,
-    boleto_data: boletoData,
-    status: boletoCharge?.status || 'processing'
-  };
-}
-
-async function processBolepixSubscription(customer: any, planData: any, affiliateIds?: number[] | null) {
-  console.log('[VINDI] Creating Bolepix subscription for customer:', customer.id);
-  
-  // Bolepix é um método híbrido que oferece boleto E PIX na mesma cobrança
-  const subscriptionPayload: any = {
-    customer_id: customer.id,
-    plan_id: planData.vindi_plan_id || planData.id,
-    payment_method_code: 'bolepix', // Método híbrido
-    code: `medpass-bolepix-${Date.now()}`,
-    metadata: {
-      checkout_type: 'transparent',
-      created_by: 'medpass',
-      plan_name: planData.name,
-      payment_type: 'hybrid_bolepix'
-    }
-  };
-  
-  // Adicionar split/afiliados se disponível
-  if (affiliateIds && affiliateIds.length > 0) {
-    subscriptionPayload.split_rules = affiliateIds.map(id => ({
-      affiliate_id: id,
-      percentage: 10 // Configurável conforme regra do negócio
-    }));
-    console.log('[VINDI] Adding split rules for affiliates (bolepix):', affiliateIds);
-  }
-
-  const response = await fetch(`${VINDI_API_URL}/subscriptions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(VINDI_PRIVATE_KEY + ':')}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(subscriptionPayload)
-  });
-
-  const result = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(`Vindi API error: ${result.errors?.[0]?.message || 'Unknown error'}`);
-  }
-
-  const subscription = result.subscription;
-  const firstBill = subscription.bills?.[0];
-  const charges = firstBill?.charges || [];
-
-  console.log('[VINDI-BOLEPIX] All charges:', JSON.stringify(charges, null, 2));
-
-  // Extrair dados tanto do PIX quanto do boleto
-  const bolepixData: any = {};
-  
-  for (const charge of charges) {
-    const paymentMethod = charge.payment_method.code;
-    
-    if (paymentMethod === 'pix') {
-      const pixCode = charge.qr_code || 
-                      charge.pix_code || 
-                      charge.last_transaction?.gateway_response_fields?.qr_code_text;
-      const qrCodeUrl = charge.pix_qr_url || 
-                        charge.last_transaction?.gateway_response_fields?.qr_code_url;
-      
-      bolepixData.pix = {
-        qr_code: pixCode,
-        qr_code_url: qrCodeUrl,
-        expires_at: charge.due_at
-      };
-    } else if (paymentMethod === 'bank_slip') {
-      bolepixData.boleto = {
-        url: charge.print_url,
-        barcode: charge.code,
-        due_date: charge.due_at
-      };
-    }
-  }
-
-  console.log('[VINDI-BOLEPIX] Extracted bolepix data:', bolepixData);
-
-  return {
-    success: true,
-    subscription_id: subscription.id,
-    customer_id: customer.id,
-    bolepix_data: bolepixData,
-    status: charges[0]?.status || 'processing'
-  };
-}
-
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { clinicData, planData, paymentMethod, cardData, installments }: CheckoutRequest = await req.json();
+    console.log(`🚀 [VINDI-CHECKOUT] Iniciando checkout transparente`);
 
-    console.log('[VINDI-CHECKOUT] Processing transparent checkout:', { 
-      paymentMethod, 
-      customerEmail: clinicData.email,
-      planId: planData.id 
+    if (!VINDI_PRIVATE_KEY) {
+      throw new Error('VINDI_PRIVATE_KEY não configurada');
+    }
+
+    const requestBody: CheckoutRequest = await req.json();
+    const { clinicData, planData, paymentMethod, cardData, installments } = requestBody;
+
+    console.log(`📋 [VINDI-CHECKOUT] Dados recebidos:`, {
+      customer: clinicData.email,
+      plan: planData.name,
+      method: paymentMethod,
+      vindi_plan_id: planData.vindi_plan_id
     });
 
-    // Validate required data
-    if (!clinicData.name || !clinicData.email || !clinicData.document) {
-      throw new Error('Dados do cliente incompletos');
+    // Validações básicas
+    if (!clinicData || !planData || !paymentMethod) {
+      throw new Error('Dados obrigatórios ausentes');
     }
 
-    if (!planData.id && !planData.vindi_plan_id) {
-      throw new Error('ID do plano é obrigatório');
+    if (!planData.vindi_plan_id) {
+      throw new Error(`Plano "${planData.name}" não possui vindi_plan_id configurado`);
     }
 
     if (paymentMethod === 'credit_card' && !cardData) {
-      throw new Error('Dados do cartão são obrigatórios para pagamento com cartão');
+      throw new Error('Dados do cartão obrigatórios para pagamento com cartão');
     }
 
-    // Step 1: Create or update customer
-    const customer = await createOrUpdateCustomer(clinicData);
-    if (!customer) {
-      throw new Error('Falha ao criar/atualizar cliente na Vindi');
+    // ===== FLUXO VINDI OFICIAL =====
+
+    // PASSO 1: Consultar ou criar cliente
+    const customer = await createOrGetCustomer(clinicData);
+
+    // PASSO 2: Criar payment profile (apenas para cartão)
+    let paymentProfile = null;
+    if (paymentMethod === 'credit_card' && cardData) {
+      paymentProfile = await createPaymentProfile(customer, cardData);
     }
 
-    console.log('[VINDI-CHECKOUT] Customer processed:', customer.id);
+    // PASSO 3: Criar assinatura
+    const subscriptionResult = await createSubscription(
+      customer,
+      planData,
+      paymentMethod,
+      paymentProfile,
+      cardData
+    );
 
-    // Step 2: Process affiliates/split (opcional conforme especificação)
-    const affiliateIds = await processAffiliates(clinicData, planData);
-    if (affiliateIds) {
-      console.log('[VINDI-CHECKOUT] Affiliates processed:', affiliateIds);
-    }
+    // PASSO 4: Processar dados de pagamento
+    const paymentData = processPaymentData(subscriptionResult);
 
-    // Step 3: Process payment based on method
-    let result;
-    
-    if (paymentMethod === 'pix') {
-      result = await processPIXSubscription(customer, planData, affiliateIds);
-    } else if (paymentMethod === 'boleto') {
-      result = await processBoletoSubscription(customer, planData, affiliateIds);
-    } else if (paymentMethod === 'bolepix') {
-      // Bolepix: híbrido boleto + PIX conforme especificação
-      result = await processBolepixSubscription(customer, planData, affiliateIds);
-    } else if (paymentMethod === 'credit_card') {
-      if (!cardData) {
-        throw new Error('Dados do cartão são obrigatórios');
-      }
-      result = await processCreditCardSubscription(customer, planData, cardData, installments || 1, affiliateIds);
-    } else {
-      throw new Error(`Método de pagamento não suportado: ${paymentMethod}`);
-    }
+    // ===== RESPOSTA FINAL =====
 
-    console.log('[VINDI-CHECKOUT] Checkout completed successfully');
+    const response = {
+      success: true,
+      subscription_id: subscriptionResult.subscription.id,
+      customer_id: customer.id,
+      bill_id: subscriptionResult.bill?.id,
+      charge_id: subscriptionResult.bill?.charges?.[0]?.id,
+      status: subscriptionResult.subscription.status,
+      payment_method: paymentMethod,
+
+      // Dados específicos do método de pagamento
+      pix_data: paymentData?.type === 'pix' ? paymentData : undefined,
+      boleto_data: paymentData?.type === 'boleto' ? paymentData : undefined,
+
+      // Metadados
+      environment: VINDI_ENVIRONMENT,
+      created_at: new Date().toISOString()
+    };
+
+    console.log(`🎉 [VINDI-CHECKOUT] Checkout concluído com sucesso!`);
+    console.log(`📊 [VINDI-CHECKOUT] Resumo:`, {
+      subscription_id: response.subscription_id,
+      customer_id: response.customer_id,
+      status: response.status,
+      payment_method: response.payment_method,
+      has_pix: !!response.pix_data,
+      has_boleto: !!response.boleto_data
+    });
 
     return new Response(
-      JSON.stringify(result),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
+      JSON.stringify(response),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 
   } catch (error) {
-    console.error('[VINDI-CHECKOUT] Error:', error);
-    
+    console.error(`❌ [VINDI-CHECKOUT] Erro no checkout:`, error);
+
+    const errorResponse = {
+      success: false,
+      error: error.message,
+      environment: VINDI_ENVIRONMENT,
+      timestamp: new Date().toISOString()
+    };
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Erro interno do servidor' 
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400 
+      JSON.stringify(errorResponse),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
