@@ -410,7 +410,9 @@ serve(async (req) => {
              hasQrCodeOriginalPath: !!gwFields.qrcode_original_path,
              hasQrCodeUrl: !!(gwFields.qr_code_url || gwFields.qr_code_image_url),
              hasQrCodeBase64: !!(gwFields.qr_code_base64 || gwFields.qr_code_png_base64),
-             hasPixCode: !!(gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste)
+             hasPixCode: !!(gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste),
+            // ✅ LOG COMPLETO DE TODOS OS CAMPOS PARA DEBUG
+            allFieldsDetailed: gwFields
            });
          }
        }
@@ -553,9 +555,9 @@ serve(async (req) => {
       const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
       const pixCode = gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
       
-      // 🎯 CAMPOS CORRETOS DA VINDI
-      const qrcodeSvg = gwFields.qrcode_path; // SVG do QR Code
-      const pixCopiaCola = gwFields.qrcode_original_path; // Código PIX copia e cola
+      // 🎯 CAMPOS CORRETOS DA VINDI - VÁRIAS POSSIBILIDADES
+      const qrcodeSvg = gwFields.qrcode_path || gwFields.qr_code_svg || gwFields.svg || gwFields.qrcode_svg || gwFields.pix_qr_svg; // SVG do QR Code
+      const pixCopiaCola = gwFields.qrcode_original_path || gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code; // Código PIX copia e cola
 
       if (qrUrl) responseData.pix_qr_code_url = qrUrl;
       if (qrBase64) responseData.pix_qr_code = qrBase64;
@@ -564,8 +566,15 @@ serve(async (req) => {
       // ✅ ADICIONAR SVG E COPIA E COLA AO RESPONSE
       if (qrcodeSvg) {
         responseData.pix_qr_svg = qrcodeSvg;
-        logStep('SVG QR Code found and included', { 
-          svgLength: qrcodeSvg.length
+        logStep('SVG QR Code found and included', {
+          svgLength: qrcodeSvg.length,
+          svgPreview: qrcodeSvg.substring(0, 200) + '...'
+        });
+      } else {
+        logStep('❌ SVG QR Code NOT FOUND', {
+          searchedFields: ['qrcode_path', 'qr_code_svg', 'svg', 'qrcode_svg', 'pix_qr_svg'],
+          availableGwFields: Object.keys(gwFields),
+          gwFieldsValues: gwFields
         });
       }
       
