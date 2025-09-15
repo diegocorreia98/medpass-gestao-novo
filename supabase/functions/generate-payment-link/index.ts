@@ -265,8 +265,8 @@ serve(async (req) => {
     });
 
     const subscriptionResult = await subscriptionResponse.json();
-    console.log('Subscription creation response:', subscriptionResult);
-    
+    console.log('🔍 [VINDI-DEBUG] Complete subscription response:', JSON.stringify(subscriptionResult, null, 2));
+
     if (!subscriptionResponse.ok) {
       throw new Error(`Erro ao criar assinatura Vindi: ${JSON.stringify(subscriptionResult)}`);
     }
@@ -283,18 +283,35 @@ serve(async (req) => {
     let vindiChargeId = null;
     let dueDate = null;
 
+    console.log('🔍 [BILL-DEBUG] Checking subscription for bills...');
+    console.log('🔍 [BILL-DEBUG] subscription.bills exists:', !!subscriptionResult.subscription.bills);
+    console.log('🔍 [BILL-DEBUG] subscription.bills length:', subscriptionResult.subscription.bills?.length || 0);
+
     if (subscriptionResult.subscription.bills && subscriptionResult.subscription.bills.length > 0) {
       const firstBill = subscriptionResult.subscription.bills[0];
+      console.log('🔍 [BILL-DEBUG] First bill structure:', JSON.stringify(firstBill, null, 2));
+      console.log('🔍 [BILL-DEBUG] First bill charges exists:', !!firstBill.charges);
+      console.log('🔍 [BILL-DEBUG] First bill charges length:', firstBill.charges?.length || 0);
+
       if (firstBill.charges && firstBill.charges.length > 0) {
-        paymentUrl = firstBill.charges[0].print_url;
-        vindiChargeId = firstBill.charges[0].id;
+        const firstCharge = firstBill.charges[0];
+        console.log('🔍 [BILL-DEBUG] First charge structure:', JSON.stringify(firstCharge, null, 2));
+
+        paymentUrl = firstCharge.print_url;
+        vindiChargeId = firstCharge.id;
         dueDate = firstBill.due_at;
+
+        console.log('🔍 [BILL-DEBUG] Extracted payment data:', {
+          paymentUrl,
+          vindiChargeId,
+          dueDate
+        });
       }
     }
 
     if (!paymentUrl) {
       // Try to fetch the bills for this subscription
-      console.log('No bill found in subscription response, fetching bills...');
+      console.log('🔍 [BILLS-SEARCH] No bill found in subscription response, fetching bills...');
       const billsResponse = await fetch(`${vindiApiUrl}/bills?query=subscription_id:${vindiSubscriptionId}`, {
         method: 'GET',
         headers: {
@@ -302,17 +319,32 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
       });
-      
+
+      console.log('🔍 [BILLS-SEARCH] Bills search response status:', billsResponse.status);
+
       if (billsResponse.ok) {
         const billsData = await billsResponse.json();
+        console.log('🔍 [BILLS-SEARCH] Bills search data:', JSON.stringify(billsData, null, 2));
+        console.log('🔍 [BILLS-SEARCH] Bills found:', billsData.bills?.length || 0);
+
         if (billsData.bills && billsData.bills.length > 0) {
           const latestBill = billsData.bills[0];
+          console.log('🔍 [BILLS-SEARCH] Latest bill structure:', JSON.stringify(latestBill, null, 2));
+
           if (latestBill.charges && latestBill.charges.length > 0) {
             paymentUrl = latestBill.charges[0].print_url;
             vindiChargeId = latestBill.charges[0].id;
             dueDate = latestBill.due_at;
+
+            console.log('🔍 [BILLS-SEARCH] Extracted payment data from search:', {
+              paymentUrl,
+              vindiChargeId,
+              dueDate
+            });
           }
         }
+      } else {
+        console.log('🔍 [BILLS-SEARCH] Bills search failed:', billsResponse.status, billsResponse.statusText);
       }
     }
 
