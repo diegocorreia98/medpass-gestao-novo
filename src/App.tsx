@@ -41,6 +41,7 @@ import { ResetPassword } from "./pages/auth/ResetPassword";
 import { AcceptInvite } from "./pages/auth/AcceptInvite";
 import Franquias from "./pages/Franquias";
 import Checkout from "./pages/Checkout";
+import TransparentCheckout from "./pages/TransparentCheckout";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
               {/* Public Routes */}
               <Route path="/" element={<Index />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/transparent" element={<TransparentCheckout />} />
               <Route path="/subscription-checkout/:token" element={<SubscriptionCheckout />} />
               
               {/* Auth Routes - Public */}

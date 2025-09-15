@@ -31,6 +31,7 @@ import type { Plan, CustomerData, CardData, TransactionResult } from '@/types/ch
 
 interface UnifiedTransparentCheckoutProps {
   preSelectedPlan?: Plan;
+  customerData?: Partial<CustomerData>; // ✅ NOVO: Dados pré-preenchidos do cliente
   onSuccess?: (result: TransactionResult) => void;
   onCancel?: () => void;
 }
@@ -67,7 +68,7 @@ const BRAZILIAN_STATES = [
   { value: 'TO', label: 'Tocantins' }
 ];
 
-export function UnifiedTransparentCheckout({ preSelectedPlan, onSuccess, onCancel }: UnifiedTransparentCheckoutProps) {
+export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preFilledCustomerData, onSuccess, onCancel }: UnifiedTransparentCheckoutProps) {
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('form');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(preSelectedPlan || null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'pix'>('credit_card');
@@ -79,15 +80,27 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, onSuccess, onCance
   const [qrCodeDataURL, setQrCodeDataURL] = useState<string | null>(null);
   const [isGeneratingQRCode, setIsGeneratingQRCode] = useState(false);
   
-  // Form data
+  // Form data - usar dados pré-preenchidos se fornecidos
   const [customerData, setCustomerData] = useState<Partial<CustomerData>>({
-    documentType: 'cpf'
+    documentType: 'cpf',
+    ...preFilledCustomerData // ✅ NOVO: Dados pré-preenchidos da adesão
   });
   const [cardData, setCardData] = useState<Partial<CardData>>({});
   const [installments, setInstallments] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { toast } = useToast();
+
+  // ✅ NOVO: Aplicar dados pré-preenchidos quando fornecidos
+  useEffect(() => {
+    if (preFilledCustomerData) {
+      console.log('🔄 [UNIFIED-CHECKOUT] Aplicando dados pré-preenchidos:', preFilledCustomerData);
+      setCustomerData(prev => ({
+        ...prev,
+        ...preFilledCustomerData
+      }));
+    }
+  }, [preFilledCustomerData]);
 
   // Load plans
   useEffect(() => {

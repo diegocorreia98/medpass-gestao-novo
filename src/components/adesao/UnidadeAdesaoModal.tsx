@@ -99,50 +99,54 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
         console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
 
-        // ✅ STEP 2: Generate checkout link (optional - if fails, beneficiary is still saved)
-        let checkoutUrl = null; // Declare outside try block
+        // ✅ STEP 2: Gerar CHECKOUT TRANSPARENTE (conforme especificação)
+        let checkoutUrl = null;
         
         try {
-          // ✅ CORREÇÃO: Para gerar link, usar bank_slip (não exige gateway_token)
-          const subscriptionRequest = {
+          console.log('🔄 [UNIDADE-ADESAO] Gerando checkout transparente');
+          
+          // ✅ CORREÇÃO: Gerar link para CHECKOUT TRANSPARENTE onde cliente escolhe método
+          const baseUrl = window.location.origin;
+          const checkoutParams = new URLSearchParams({
+            plan_id: values.plano_id,
             customer_name: values.nome,
             customer_email: values.email || '',
             customer_document: values.cpf,
             customer_phone: values.telefone || '',
-            plan_id: values.plano_id,
-            payment_method: 'bank_slip', // ✅ Não exige token, só gera link
-            installments: 1,
-            environment: 'production'
-          };
-
-          console.log('🔄 [UNIDADE-ADESAO] Gerando link de checkout:', subscriptionRequest);
-
-          // Call vindi-hosted-subscription to create subscription and generate link
-          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('vindi-hosted-subscription', {
-            body: subscriptionRequest
+            // Adicionar dados de endereço se disponível
+            customer_address: values.endereco || '',
+            customer_city: values.cidade || '',
+            customer_state: values.estado || '',
+            customer_zipcode: values.cep || '',
+            // Metadata da adesão
+            unidade_id: minhaUnidade?.id || '',
+            empresa_id: values.empresa_id || '',
+            beneficiario_id: beneficiarioData.id
           });
+          
+          // ✅ LINK PARA CHECKOUT TRANSPARENTE (cliente escolhe método)
+          checkoutUrl = `${baseUrl}/checkout/transparent?${checkoutParams.toString()}`;
+          
+          console.log('✅ [UNIDADE-ADESAO] Checkout transparente URL gerada:', checkoutUrl);
+          
+          // Salvar link no beneficiário
+          const { error: updateError } = await supabase
+            .from('beneficiarios')
+            .update({ 
+              checkout_link: checkoutUrl,
+              payment_status: 'link_generated' // Status indicando que link foi gerado
+            })
+            .eq('id', beneficiarioData.id);
 
-          if (vindiError) {
-            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao gerar link de pagamento:', vindiError.message);
-            // Don't throw error here, beneficiary is already saved
-          } else if (vindiData?.checkout_url) {
-            checkoutUrl = vindiData.checkout_url;
-            
-            // Update beneficiary with checkout link
-            const { error: updateError } = await supabase
-              .from('beneficiarios')
-              .update({ checkout_link: checkoutUrl })
-              .eq('id', beneficiarioData.id);
-
-            if (updateError) {
-              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError.message);
-            } else {
-              console.log('✅ [UNIDADE-ADESAO] Link de checkout salvo:', checkoutUrl);
-            }
+          if (updateError) {
+            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link:', updateError.message);
+          } else {
+            console.log('✅ [UNIDADE-ADESAO] Link de checkout transparente salvo');
           }
 
-        } catch (vindiError) {
-          console.warn('⚠️ [UNIDADE-ADESAO] Falha na geração de link, mas beneficiário já foi salvo:', vindiError);
+        } catch (linkError) {
+          console.warn('⚠️ [UNIDADE-ADESAO] Erro na geração de link transparente:', linkError);
+          // Beneficiário já foi salvo, não é erro crítico
         }
 
         console.log('✅ [UNIDADE-ADESAO] Processo concluído com sucesso');
