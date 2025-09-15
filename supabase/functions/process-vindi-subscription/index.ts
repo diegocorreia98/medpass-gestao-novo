@@ -394,14 +394,23 @@ serve(async (req) => {
         if (charge.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
           
-          // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
-          const qrcodeSvg = gwFields.qrcode_path;
+          // 🎯 CAMPOS CORRETOS DA VINDI
+          const qrcodeSvg = gwFields.qrcode_path; // SVG do QR Code
+          const pixCopiaCola = gwFields.qrcode_original_path; // Código PIX copia e cola
           
-          pixCode = gwFields.qr_code_text || 
+          pixCode = pixCopiaCola || // ✅ PRIORIDADE: Campo correto do copia e cola
+                   gwFields.qr_code_text || 
                    gwFields.emv ||
                    gwFields.pix_copia_e_cola ||
                    gwFields.copy_paste ||
                    gwFields.pix_code;
+                   
+          console.log('[VINDI-PIX] PIX copia e cola extraction:', {
+            hasQrcodeSvg: !!qrcodeSvg,
+            hasPixCopiaCola: !!pixCopiaCola,
+            pixCopiaColaLength: pixCopiaCola?.length,
+            qrcodeSvgLength: qrcodeSvg?.length
+          });
           
           pixQrBase64 = gwFields.qr_code_base64 ||
                        gwFields.qr_code_png_base64 ||
@@ -451,11 +460,19 @@ serve(async (req) => {
         if (pixQrUrl) responseData.pix_qr_code_url = pixQrUrl;
         if (pixExpiration) responseData.due_at = pixExpiration;
         
-        // 🎯 NOVO: SVG QR Code da Vindi (campo correto)
+        // 🎯 CAMPOS CORRETOS DA VINDI
         const qrcodeSvg = charge.last_transaction?.gateway_response_fields?.qrcode_path;
+        const pixCopiaCola = charge.last_transaction?.gateway_response_fields?.qrcode_original_path;
+        
         if (qrcodeSvg) {
           responseData.pix_qr_svg = qrcodeSvg;
-          console.log('[VINDI-PIX] ✅ SVG QR Code found and included:', qrcodeSvg.substring(0, 100) + '...');
+          console.log('[VINDI-PIX] ✅ SVG QR Code found and included');
+        }
+        
+        if (pixCopiaCola) {
+          responseData.pix_copia_cola = pixCopiaCola;
+          responseData.pix_code = pixCopiaCola; // Override com o valor correto
+          console.log('[VINDI-PIX] ✅ PIX copia e cola found:', pixCopiaCola.substring(0, 50) + '...');
         }
         
         // Se ainda não encontrou o PIX, fazer uma chamada adicional específica

@@ -813,14 +813,40 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, onSuccess, onCance
                   )}
                 </div>
                 
-                <Button 
-                  variant="outline" 
-                  onClick={() => copyToClipboard(transactionResult.pix!.qr_code!)}
-                  className="w-full max-w-sm"
-                >
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copiar código PIX
-                </Button>
+                {/* ✅ BOTÃO PARA COPIAR PIX COPIA E COLA */}
+                <div className="flex flex-col gap-2 w-full max-w-sm">
+                  {transactionResult.pix.pix_copia_cola ? (
+                    <Button 
+                      variant="default" 
+                      onClick={() => {
+                        copyToClipboard(transactionResult.pix!.pix_copia_cola!);
+                        toast({
+                          title: "Código PIX copiado! 📱",
+                          description: "Cole no seu app do banco para pagar",
+                        });
+                      }}
+                      className="w-full"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar PIX Copia e Cola
+                    </Button>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        copyToClipboard(transactionResult.pix!.qr_code!);
+                        toast({
+                          title: "Código PIX copiado!",
+                          description: "Cole no seu app do banco para pagar",
+                        });
+                      }}
+                      className="w-full"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copiar código PIX
+                    </Button>
+                  )}
+                </div>
                 
                 {/* Show the PIX code in a copyable text area for debugging/fallback */}
                 <details className="w-full max-w-sm">

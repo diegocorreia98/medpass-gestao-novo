@@ -384,22 +384,35 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
                   )}
                 </div>
 
-                {paymentResult.pix_code && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-center text-muted-foreground">
-                      Ou copie o código PIX:
-                    </p>
-                    <div className="relative">
-                      <div className="p-3 bg-muted rounded-lg text-xs font-mono break-all">
-                        {paymentResult.pix_code}
+                {/* ✅ CÓDIGO PIX COPIA E COLA - MELHORADO */}
+                {(paymentResult.pix_copia_cola || paymentResult.pix_code) && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-center">
+                      {paymentResult.pix_copia_cola ? 'Código PIX (Copia e Cola)' : 'Código PIX'}
+                    </h4>
+                    
+                    <div className="space-y-2">
+                      <div className="p-3 bg-muted rounded-lg border">
+                        <code className="text-xs font-mono break-all text-center block">
+                          {paymentResult.pix_copia_cola || paymentResult.pix_code}
+                        </code>
                       </div>
+                      
                       <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={copyPixCode}
-                        className="absolute top-2 right-2"
+                        size="lg"
+                        variant={paymentResult.pix_copia_cola ? "default" : "outline"}
+                        onClick={() => {
+                          const pixCode = paymentResult.pix_copia_cola || paymentResult.pix_code;
+                          navigator.clipboard.writeText(pixCode!);
+                          toast({
+                            title: paymentResult.pix_copia_cola ? "PIX Copia e Cola copiado! 📱" : "Código PIX copiado!",
+                            description: "Cole no seu app do banco para pagar",
+                          });
+                        }}
+                        className="w-full"
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="mr-2 h-4 w-4" />
+                        {paymentResult.pix_copia_cola ? 'Copiar PIX Copia e Cola' : 'Copiar código PIX'}
                       </Button>
                     </div>
                   </div>

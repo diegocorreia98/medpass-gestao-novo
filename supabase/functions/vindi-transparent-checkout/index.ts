@@ -294,7 +294,12 @@ async function processPIXSubscription(customer: any, planData: any, affiliateIds
   // ✅ EXTRAIR DADOS PIX COMPLETOS (incluindo SVG)
   const gatewayFields = pixCharge.last_transaction?.gateway_response_fields || {};
   
-  const pixCode = gatewayFields.qr_code_text || 
+  // 🎯 CAMPOS CORRETOS DA VINDI
+  const qrcodeSvg = gatewayFields.qrcode_path; // SVG do QR Code
+  const pixCopiaCola = gatewayFields.qrcode_original_path; // Código PIX copia e cola
+  
+  const pixCode = pixCopiaCola || // ✅ PRIORIDADE: Código copia e cola correto
+                  gatewayFields.qr_code_text || 
                   gatewayFields.emv ||
                   gatewayFields.copy_paste ||
                   gatewayFields.pix_code ||
@@ -306,9 +311,6 @@ async function processPIXSubscription(customer: any, planData: any, affiliateIds
   
   const qrCodeBase64 = gatewayFields.qr_code_base64 || 
                        gatewayFields.qrcode_base64;
-  
-  // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
-  const qrcodeSvg = gatewayFields.qrcode_path;
 
   console.log('[VINDI-PIX] PIX data extraction results:', {
     hasPixCode: !!pixCode,
@@ -332,6 +334,7 @@ async function processPIXSubscription(customer: any, planData: any, affiliateIds
     pix_data: {
       qr_code: pixCode,
       pix_code: pixCode, // Compatibility
+      pix_copia_cola: pixCopiaCola, // ✅ Código PIX copia e cola da Vindi
       qr_code_url: qrCodeUrl,
       qr_code_base64: qrCodeBase64,
       qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi

@@ -660,7 +660,7 @@ serve(async (req) => {
         production: 'https://app.vindi.com.br/api/v1'
       };
       const vindiApiUrl = VINDI_API_URLS[vindiEnvironment as keyof typeof VINDI_API_URLS] || VINDI_API_URLS.production;
-      console.log(`🔧 Testing Vindi ${vindiEnvironment}:`, vindiApiUrl);
+      console.log(`🔧 Using Vindi ${vindiEnvironment} environment:`, vindiApiUrl);
 
       try {
         const response = await fetch(`${vindiApiUrl}/customers?limit=1`, {

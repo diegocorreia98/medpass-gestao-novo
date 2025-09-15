@@ -616,27 +616,57 @@ export function TransparentCheckout({ preSelectedPlan, onSuccess, onCancel }: Tr
                     ) : null}
                   </div>
                   
-                  {/* PIX Code */}
-                  <div className="space-y-2">
-                    <h3 className="font-semibold">Código PIX (Copia e Cola)</h3>
-                    <div className="flex items-center gap-2">
-                      <code className="flex-1 p-2 bg-muted rounded text-xs break-all">
-                        {transactionResult.pix.qr_code}
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText(transactionResult.pix!.qr_code!);
-                          toast({
-                            title: "Código copiado!",
-                            description: "Cole no seu app de banco para pagar",
-                          });
-                        }}
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  {/* PIX Code - Priorizar campo copia e cola da Vindi */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-center">Código PIX (Copia e Cola)</h3>
+                    
+                    {/* ✅ CÓDIGO PIX COPIA E COLA (PRIORITÁRIO) */}
+                    {transactionResult.pix.pix_copia_cola ? (
+                      <div className="space-y-2">
+                        <div className="p-3 bg-muted rounded-lg border">
+                          <code className="text-xs font-mono break-all text-center block">
+                            {transactionResult.pix.pix_copia_cola}
+                          </code>
+                        </div>
+                        <Button
+                          size="lg"
+                          onClick={() => {
+                            navigator.clipboard.writeText(transactionResult.pix!.pix_copia_cola!);
+                            toast({
+                              title: "PIX Copia e Cola copiado! 📱",
+                              description: "Cole no seu app do banco para pagar",
+                            });
+                          }}
+                          className="w-full"
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copiar PIX Copia e Cola
+                        </Button>
+                      </div>
+                    ) : transactionResult.pix.qr_code ? (
+                      <div className="space-y-2">
+                        <div className="p-3 bg-muted rounded-lg border">
+                          <code className="text-xs font-mono break-all text-center block">
+                            {transactionResult.pix.qr_code}
+                          </code>
+                        </div>
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(transactionResult.pix!.qr_code!);
+                            toast({
+                              title: "Código PIX copiado!",
+                              description: "Cole no seu app do banco para pagar",
+                            });
+                          }}
+                          className="w-full"
+                        >
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copiar código PIX
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
 
                   <Alert>

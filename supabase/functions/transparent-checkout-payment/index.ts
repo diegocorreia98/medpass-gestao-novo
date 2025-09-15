@@ -321,14 +321,16 @@ serve(async (req) => {
       const gatewayFields = charge.last_transaction?.gateway_response_fields;
       
       if (gatewayFields) {
-        // 🎯 CAMPO CORRETO: qrcode_path retorna SVG do QR Code
-        const qrcodeSvg = gatewayFields.qrcode_path;
+        // 🎯 CAMPOS CORRETOS DA VINDI
+        const qrcodeSvg = gatewayFields.qrcode_path; // SVG do QR Code
+        const pixCopiaCola = gatewayFields.qrcode_original_path; // Código PIX copia e cola
         
         responseData.pix = {
-          qr_code: gatewayFields.qr_code_text || gatewayFields.emv || gatewayFields.copy_paste,
+          qr_code: pixCopiaCola || gatewayFields.qr_code_text || gatewayFields.emv || gatewayFields.copy_paste,
           qr_code_url: gatewayFields.qr_code_url || gatewayFields.qr_code_image_url,
           qr_code_base64: gatewayFields.qr_code_base64 || gatewayFields.qrcode_base64,
           qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi
+          pix_copia_cola: pixCopiaCola, // ✅ Código PIX copia e cola
           expires_at: gatewayFields.expires_at || charge.due_at
         };
         

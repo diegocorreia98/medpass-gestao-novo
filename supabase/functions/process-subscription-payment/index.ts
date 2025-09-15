@@ -499,19 +499,28 @@ serve(async (req) => {
       const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
       const pixCode = gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
       
-      // 🎯 NOVO: SVG QR Code da Vindi (campo correto que retorna SVG)
-      const qrcodeSvg = gwFields.qrcode_path;
+      // 🎯 CAMPOS CORRETOS DA VINDI
+      const qrcodeSvg = gwFields.qrcode_path; // SVG do QR Code
+      const pixCopiaCola = gwFields.qrcode_original_path; // Código PIX copia e cola
 
       if (qrUrl) responseData.pix_qr_code_url = qrUrl;
       if (qrBase64) responseData.pix_qr_code = qrBase64;
       if (pixCode) responseData.pix_code = pixCode;
       
-      // ✅ ADICIONAR SVG QR CODE AO RESPONSE
+      // ✅ ADICIONAR SVG E COPIA E COLA AO RESPONSE
       if (qrcodeSvg) {
         responseData.pix_qr_svg = qrcodeSvg;
         logStep('SVG QR Code found and included', { 
-          svgLength: qrcodeSvg.length,
-          svgStart: qrcodeSvg.substring(0, 50) + '...'
+          svgLength: qrcodeSvg.length
+        });
+      }
+      
+      if (pixCopiaCola) {
+        responseData.pix_copia_cola = pixCopiaCola;
+        responseData.pix_code = pixCopiaCola; // Override com valor correto
+        logStep('PIX copia e cola found and included', { 
+          copiaColaLength: pixCopiaCola.length,
+          copiaColaStart: pixCopiaCola.substring(0, 50) + '...'
         });
       }
 
