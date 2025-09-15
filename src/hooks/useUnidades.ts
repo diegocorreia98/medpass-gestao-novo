@@ -49,11 +49,64 @@ export function useUnidades() {
     mutationFn: async (unidade: Omit<UnidadeInsert, 'user_id'>) => {
       if (!user) throw new Error('Usuário não autenticado')
 
-      // Matriz users create units without immediate ownership (user_id = null)
-      // Unidade users create their own unit (user_id = user.id)
+      // For matriz users, use the Edge Function to create unit with user
+      if (profile?.user_type === 'matriz' && unidade.email && unidade.responsavel) {
+        console.log('Creating unit with user via Edge Function...');
+
+        const { data: result, error: functionError } = await supabase.functions.invoke('create-unit-with-user', {
+          body: {
+            unidade: {
+              nome: unidade.nome,
+              cnpj: unidade.cnpj,
+              endereco: unidade.endereco,
+              cidade: unidade.cidade,
+              estado: unidade.estado,
+              telefone: unidade.telefone,
+              franquia_id: unidade.franquia_id,
+              status: unidade.status || 'ativo'
+            },
+            responsavel: {
+              nome: unidade.responsavel,
+              email: unidade.email,
+              telefone: unidade.telefone
+            }
+          }
+        });
+
+        if (functionError) {
+          console.error('Error calling create-unit-with-user:', functionError);
+          throw new Error(`Falha ao criar unidade: ${functionError.message}`);
+        }
+
+        if (!result?.success) {
+          throw new Error(result?.error || 'Falha ao criar unidade e usuário');
+        }
+
+        console.log('Unit and user created successfully:', result);
+
+        toast({
+          title: "Unidade e usuário criados!",
+          description: result.invitation_sent
+            ? "Unidade criada, usuário criado e convite enviado com sucesso."
+            : "Unidade criada e usuário criado. Convite será enviado posteriormente.",
+        });
+
+        // Return mock data that matches the expected format
+        return {
+          id: result.unidade_id,
+          nome: unidade.nome,
+          email: unidade.email,
+          responsavel: unidade.responsavel,
+          user_id: result.user_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+
+      // For unidade users, create their own unit (existing behavior)
       const unitData = {
         ...unidade,
-        user_id: profile?.user_type === 'matriz' ? null : user.id,
+        user_id: user.id,
       }
 
       const { data, error } = await supabase
@@ -64,58 +117,10 @@ export function useUnidades() {
 
       if (error) throw error
 
-      // Enviar convite por email usando edge function
-      if (unidade.email) {
-        try {
-          console.log('Enviando convite para unidade:', { id: data.id, email: unidade.email, nome: unidade.nome });
-          
-          const { data: inviteResult, error: inviteError } = await supabase.functions.invoke('send-franchise-invite', {
-            body: {
-              unidadeId: data.id,
-              email: unidade.email,
-              nome: unidade.nome,
-            }
-          });
-
-          console.log('Resultado do convite:', { inviteResult, inviteError });
-
-          if (inviteError) {
-            console.error('Erro ao invocar função de convite:', inviteError);
-            toast({
-              title: "Unidade criada!",
-              description: "Unidade criada, mas houve erro ao enviar o convite por email. Verifique os logs.",
-              variant: "destructive"
-            });
-          } else if (inviteResult?.manual_action_required) {
-            toast({
-              title: "Unidade criada!",
-              description: `Unidade criada. Convite salvo no sistema. URL: ${inviteResult.invite_url}`,
-            });
-          } else if (inviteResult?.warning) {
-            toast({
-              title: "Unidade criada!",
-              description: inviteResult.message || "Unidade criada com sucesso.",
-            });
-          } else {
-            toast({
-              title: "Unidade criada!",
-              description: "Unidade criada e convite enviado por email com sucesso.",
-            });
-          }
-        } catch (error) {
-          console.error('Erro ao enviar convite (catch):', error);
-          toast({
-            title: "Unidade criada!",
-            description: "Unidade criada, mas houve erro ao enviar o convite por email.",
-            variant: "destructive"
-          });
-        }
-      } else {
-        toast({
-          title: "Unidade criada!",
-          description: "A unidade foi criada com sucesso.",
-        });
-      }
+      toast({
+        title: "Unidade criada!",
+        description: "A unidade foi criada com sucesso.",
+      });
 
       return data
     },

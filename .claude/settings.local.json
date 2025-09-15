@@ -12,7 +12,9 @@
       "Bash(psql:*)",
       "Bash(node:*)",
       "Bash(supabase link:*)",
-      "Bash(supabase functions deploy:*)"
+      "Bash(supabase functions deploy:*)",
+      "Bash(supabase stop:*)",
+      "Bash(supabase login:*)"
     ],
     "deny": [],
     "ask": []
