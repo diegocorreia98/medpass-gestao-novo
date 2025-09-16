@@ -52,40 +52,47 @@ export default function UnidadeOrcamento() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-32">
-          <div className="text-muted-foreground">Carregando orçamentos...</div>
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-center justify-center h-32 sm:h-48">
+          <div className="text-sm sm:text-base text-muted-foreground">Carregando orçamentos...</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Orçamentos</h1>
-          <p className="text-muted-foreground">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight">
+            Orçamentos
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Gerencie os orçamentos da sua unidade
           </p>
         </div>
-        <Button onClick={() => setIsGerarModalOpen(true)}>
+        <Button
+          onClick={() => setIsGerarModalOpen(true)}
+          className="h-10 sm:h-9 w-fit self-start sm:self-auto touch-manipulation"
+          size="sm"
+        >
           <Plus className="h-4 w-4 mr-2" />
-          Novo Orçamento
+          <span className="hidden sm:inline">Novo Orçamento</span>
+          <span className="sm:hidden">Novo</span>
         </Button>
       </div>
 
       {/* Filtros */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Filtros</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Filtre os orçamentos por cliente, documento ou status
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="flex flex-col gap-3 sm:gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -93,13 +100,13 @@ export default function UnidadeOrcamento() {
                   placeholder="Buscar por cliente ou documento..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 h-12 sm:h-10 text-base"
                 />
               </div>
             </div>
             <div className="w-full sm:w-48">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12 sm:h-10 text-base">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -116,115 +123,212 @@ export default function UnidadeOrcamento() {
 
       {/* Tabela de Orçamentos */}
       <Card>
-        <CardHeader>
-          <CardTitle>Lista de Orçamentos</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Lista de Orçamentos</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             {filteredOrcamentos.length} orçamento(s) encontrado(s)
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-0">
           {filteredOrcamentos.length === 0 ? (
-            <div className="text-center py-8">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Nenhum orçamento encontrado</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchTerm || statusFilter !== "todos" ? 
-                  "Tente ajustar os filtros para encontrar orçamentos." : 
+            <div className="text-center py-8 sm:py-12">
+              <FileText className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg sm:text-xl font-medium mb-2">Nenhum orçamento encontrado</h3>
+              <p className="text-sm sm:text-base text-muted-foreground mb-4 sm:mb-6 max-w-md mx-auto">
+                {searchTerm || statusFilter !== "todos" ?
+                  "Tente ajustar os filtros para encontrar orçamentos." :
                   "Comece criando seu primeiro orçamento."
                 }
               </p>
               {!searchTerm && statusFilter === "todos" && (
-                <Button onClick={() => setIsGerarModalOpen(true)}>
+                <Button
+                  onClick={() => setIsGerarModalOpen(true)}
+                  className="h-10 sm:h-9 touch-manipulation"
+                  size="sm"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Criar Primeiro Orçamento
                 </Button>
               )}
             </div>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Documento</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredOrcamentos.map((orcamento) => (
-                    <TableRow key={orcamento.id}>
-                      <TableCell className="font-medium">
-                        {orcamento.cliente_nome}
-                      </TableCell>
-                      <TableCell>{orcamento.cliente_documento}</TableCell>
-                      <TableCell>
-                        R$ {Number(orcamento.total).toFixed(2)}
-                      </TableCell>
-                      <TableCell>
+            <>
+              {/* Mobile Cards */}
+              <div className="block sm:hidden space-y-3">
+                {filteredOrcamentos.map((orcamento) => (
+                  <Card key={orcamento.id} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-medium text-sm truncate">
+                            {orcamento.cliente_nome}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {orcamento.cliente_documento}
+                          </p>
+                        </div>
                         {getStatusBadge(orcamento.status)}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(orcamento.created_at).toLocaleDateString('pt-BR')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOrcamentoId(orcamento.id)
-                              setDetalhesModalOpen(true)
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOrcamentoId(orcamento.id)
-                              setEditarModalOpen(true)
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                      </div>
+
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-medium">
+                          R$ {Number(orcamento.total).toFixed(2)}
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          {new Date(orcamento.created_at).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-10 touch-manipulation"
+                          onClick={() => {
+                            setSelectedOrcamentoId(orcamento.id)
+                            setDetalhesModalOpen(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          Ver
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-10 touch-manipulation"
+                          onClick={() => {
+                            setSelectedOrcamentoId(orcamento.id)
+                            setEditarModalOpen(true)
+                          }}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-10 w-10 p-0 touch-manipulation"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="mx-4 max-w-md">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-base">Confirmar exclusão</AlertDialogTitle>
+                              <AlertDialogDescription className="text-sm">
+                                Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                              <AlertDialogCancel className="h-10 touch-manipulation">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(orcamento.id)}
+                                className="h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90 touch-manipulation"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Desktop Table */}
+              <div className="hidden sm:block rounded-md border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="whitespace-nowrap">Cliente</TableHead>
+                        <TableHead className="whitespace-nowrap">Documento</TableHead>
+                        <TableHead className="whitespace-nowrap">Total</TableHead>
+                        <TableHead className="whitespace-nowrap">Status</TableHead>
+                        <TableHead className="whitespace-nowrap">Data</TableHead>
+                        <TableHead className="text-right whitespace-nowrap">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredOrcamentos.map((orcamento) => (
+                        <TableRow key={orcamento.id}>
+                          <TableCell className="font-medium max-w-[200px] truncate">
+                            {orcamento.cliente_nome}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{orcamento.cliente_documento}</TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            R$ {Number(orcamento.total).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(orcamento.status)}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {new Date(orcamento.created_at).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  setSelectedOrcamentoId(orcamento.id)
+                                  setDetalhesModalOpen(true)
+                                }}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Eye className="h-4 w-4" />
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(orcamento.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => {
+                                  setSelectedOrcamentoId(orcamento.id)
+                                  setEditarModalOpen(true)
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir este orçamento? Esta ação não pode ser desfeita.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(orcamento.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

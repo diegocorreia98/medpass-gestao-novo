@@ -243,170 +243,228 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
 
   return (
     <>
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>CPF</TableHead>
-              <TableHead>Plano</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Unidade</TableHead>
-              <TableHead>Data Adesão</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Status Pagamento</TableHead>
-              <TableHead>Link Checkout</TableHead>
-              <TableHead className="w-[120px]">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {beneficiarios.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                  Nenhum beneficiário encontrado
-                </TableCell>
-              </TableRow>
-            ) : (
-              beneficiarios.map((beneficiario) => (
-                <TableRow key={beneficiario.id}>
-                  <TableCell className="font-medium">{beneficiario.nome}</TableCell>
-                  <TableCell>{beneficiario.cpf}</TableCell>
-                  <TableCell>{beneficiario.plano?.nome}</TableCell>
-                  <TableCell>{formatarMoeda(Number(beneficiario.valor_plano))}</TableCell>
-                  <TableCell>{beneficiario.unidade?.nome || "Matriz"}</TableCell>
-                  <TableCell>{formatarData(beneficiario.data_adesao)}</TableCell>
-                  <TableCell>{getStatusBadge(beneficiario.status)}</TableCell>
-                  <TableCell>
-                    <PaymentStatusBadge status={beneficiario.payment_status || 'not_requested'} />
-                  </TableCell>
-                  <TableCell>
-                    {beneficiario.checkout_link ? (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(beneficiario.checkout_link, '_blank')}
-                          className="text-xs"
+      {/* Mobile Cards */}
+      <div className="block sm:hidden space-y-3">
+        {beneficiarios.length === 0 ? (
+          <div className="text-center py-8 sm:py-12">
+            <p className="text-sm text-muted-foreground">Nenhum beneficiário encontrado</p>
+          </div>
+        ) : (
+          beneficiarios.map((beneficiario) => (
+            <div key={beneficiario.id} className="bg-card border rounded-lg p-4 space-y-3">
+              <div className="flex justify-between items-start">
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-medium text-sm truncate">{beneficiario.nome}</h4>
+                  <p className="text-xs text-muted-foreground">{beneficiario.cpf}</p>
+                </div>
+                {getStatusBadge(beneficiario.status)}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Plano:</span>
+                  <p className="font-medium truncate">{beneficiario.plano?.nome}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Valor:</span>
+                  <p className="font-medium">{formatarMoeda(Number(beneficiario.valor_plano))}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Unidade:</span>
+                  <p className="font-medium truncate">{beneficiario.unidade?.nome || "Matriz"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Adesão:</span>
+                  <p className="font-medium">{formatarData(beneficiario.data_adesao)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status Pagamento:</span>
+                  <PaymentStatusBadge status={beneficiario.payment_status || 'not_requested'} />
+                </div>
+
+                {beneficiario.checkout_link && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(beneficiario.checkout_link, '_blank')}
+                      className="flex-1 h-10 touch-manipulation text-xs"
+                    >
+                      Abrir Checkout
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopySubscriptionLink(beneficiario)}
+                      className="h-10 w-10 p-0 touch-manipulation"
+                      title="Copiar link"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDetalhes(beneficiario)}
+                  className="flex-1 h-10 touch-manipulation"
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Ver
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-10 w-10 p-0 touch-manipulation">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {beneficiario.status === 'ativo' && (
+                      <>
+                        <DropdownMenuItem onClick={() => handleEditar(beneficiario)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCancelar(beneficiario)}
+                          className="text-destructive"
                         >
-                          Abrir
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCopySubscriptionLink(beneficiario)}
-                          className="text-xs px-2"
-                          title="Copiar link do subscription-checkout"
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Cancelar
+                        </DropdownMenuItem>
+                        {canGeneratePaymentLink(beneficiario) && (
+                          <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Gerar Link Pagamento
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => handleGerarAdesaoRMS(beneficiario)}>
+                          <Send className="h-4 w-4 mr-2" />
+                          Gerar Adesão RMS
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleExcluirAdesao(beneficiario)}
+                          className="text-red-600"
+                          disabled={deletingBeneficiarioId === beneficiario.id}
                         >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">-</span>
+                          <X className="h-4 w-4 mr-2" />
+                          Excluir Adesão
+                        </DropdownMenuItem>
+                      </>
                     )}
+
+                    {beneficiario.status === 'inativo' && (
+                      <DropdownMenuItem
+                        onClick={() => handleReativar(beneficiario)}
+                        className="text-green-600"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reativar
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden sm:block border rounded-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Nome</TableHead>
+                <TableHead className="whitespace-nowrap">CPF</TableHead>
+                <TableHead className="whitespace-nowrap">Plano</TableHead>
+                <TableHead className="whitespace-nowrap">Valor</TableHead>
+                <TableHead className="whitespace-nowrap">Unidade</TableHead>
+                <TableHead className="whitespace-nowrap">Data Adesão</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
+                <TableHead className="whitespace-nowrap">Status Pagamento</TableHead>
+                <TableHead className="whitespace-nowrap">Link Checkout</TableHead>
+                <TableHead className="w-[120px] whitespace-nowrap">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {beneficiarios.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                    Nenhum beneficiário encontrado
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      {/* Desktop: Botões individuais */}
-                      <div className="hidden md:flex gap-1">
+                </TableRow>
+              ) : (
+                beneficiarios.map((beneficiario) => (
+                  <TableRow key={beneficiario.id}>
+                    <TableCell className="font-medium max-w-[200px] truncate">{beneficiario.nome}</TableCell>
+                    <TableCell className="whitespace-nowrap">{beneficiario.cpf}</TableCell>
+                    <TableCell className="max-w-[150px] truncate">{beneficiario.plano?.nome}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatarMoeda(Number(beneficiario.valor_plano))}</TableCell>
+                    <TableCell className="max-w-[120px] truncate">{beneficiario.unidade?.nome || "Matriz"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatarData(beneficiario.data_adesao)}</TableCell>
+                    <TableCell>{getStatusBadge(beneficiario.status)}</TableCell>
+                    <TableCell>
+                      <PaymentStatusBadge status={beneficiario.payment_status || 'not_requested'} />
+                    </TableCell>
+                    <TableCell>
+                      {beneficiario.checkout_link ? (
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(beneficiario.checkout_link, '_blank')}
+                            className="text-xs h-8"
+                          >
+                            Abrir
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopySubscriptionLink(beneficiario)}
+                            className="text-xs px-2 h-8"
+                            title="Copiar link do subscription-checkout"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="sm"
                           onClick={() => handleDetalhes(beneficiario)}
-                          className="h-8 w-8"
+                          className="h-8 w-8 p-0"
                           title="Ver detalhes"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        
-                        {beneficiario.status === 'ativo' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditar(beneficiario)}
-                              className="h-8 w-8"
-                              title="Editar"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleCancelar(beneficiario)}
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              title="Cancelar"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                            {canGeneratePaymentLink(beneficiario) && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleGeneratePaymentLink(beneficiario)}
-                                  className="h-8 w-8 text-primary hover:text-primary"
-                                  title="Gerar Link de Pagamento"
-                                >
-                                  <CreditCard className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleGerarAdesaoRMS(beneficiario)}
-                              className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                              title="Gerar Adesão RMS"
-                            >
-                              <Send className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleExcluirAdesao(beneficiario)}
-                              className="h-8 w-8 text-red-600 hover:text-red-700"
-                              title="Excluir Adesão"
-                              disabled={deletingBeneficiarioId === beneficiario.id}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                        
-                        {beneficiario.status === 'inativo' && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleReativar(beneficiario)}
-                            className="h-8 w-8 text-green-600 hover:text-green-700"
-                            title="Reativar"
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
 
-                      {/* Mobile: Dropdown menu */}
-                      <div className="md:hidden">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleDetalhes(beneficiario)}>
-                              <Eye className="h-4 w-4 mr-2" />
-                              Ver Detalhes
-                            </DropdownMenuItem>
-                            
                             {beneficiario.status === 'ativo' && (
                               <>
                                 <DropdownMenuItem onClick={() => handleEditar(beneficiario)}>
                                   <Edit className="h-4 w-4 mr-2" />
                                   Editar
                                 </DropdownMenuItem>
-                                <DropdownMenuItem 
+                                <DropdownMenuItem
                                   onClick={() => handleCancelar(beneficiario)}
                                   className="text-destructive"
                                 >
@@ -414,12 +472,10 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                   Cancelar
                                 </DropdownMenuItem>
                                 {canGeneratePaymentLink(beneficiario) && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
-                                      <CreditCard className="h-4 w-4 mr-2" />
-                                      Gerar Link de Pagamento
-                                    </DropdownMenuItem>
-                                  </>
+                                  <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
+                                    <CreditCard className="h-4 w-4 mr-2" />
+                                    Gerar Link de Pagamento
+                                  </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem onClick={() => handleGerarAdesaoRMS(beneficiario)}>
                                   <Send className="h-4 w-4 mr-2" />
@@ -435,9 +491,9 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                 </DropdownMenuItem>
                               </>
                             )}
-                            
+
                             {beneficiario.status === 'inativo' && (
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleReativar(beneficiario)}
                                 className="text-green-600"
                               >
@@ -448,13 +504,13 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {/* Modais */}
@@ -510,14 +566,14 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
 
       {/* Modal de Confirmação de Exclusão */}
       <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent>
+        <DialogContent className="mx-4 max-w-md sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Confirmar Exclusão</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Confirmar Exclusão</DialogTitle>
+            <DialogDescription className="text-sm">
               Tem certeza que deseja excluir a adesão de <strong>{beneficiarioSelecionado?.nome}</strong>?
               <br /><br />
               Esta ação irá:
-              <ul className="list-disc list-inside mt-2 space-y-1">
+              <ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm">
                 <li>Remover o beneficiário do sistema</li>
                 {beneficiarioSelecionado?.vindi_subscription_id && (
                   <li>Informar o ID da assinatura Vindi para cancelamento manual</li>
@@ -526,7 +582,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
               </ul>
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2">
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -534,6 +590,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                 setBeneficiarioSelecionado(undefined);
               }}
               disabled={deletingBeneficiarioId !== null}
+              className="h-10 touch-manipulation"
             >
               Cancelar
             </Button>
@@ -541,6 +598,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
               variant="destructive"
               onClick={handleConfirmDelete}
               disabled={deletingBeneficiarioId !== null}
+              className="h-10 touch-manipulation"
             >
               {deletingBeneficiarioId !== null ? "Excluindo..." : "Confirmar Exclusão"}
             </Button>

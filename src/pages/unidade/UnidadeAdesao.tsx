@@ -67,35 +67,53 @@ export default function UnidadeAdesao() {
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold text-foreground">Adesões de Beneficiários</h2>
-          <p className="text-muted-foreground">Gerencie todas as adesões de sua unidade</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight">
+            Adesões de Beneficiários
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+            Gerencie todas as adesões de sua unidade
+          </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button onClick={() => setModalOpen(true)}>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            onClick={() => setModalOpen(true)}
+            className="h-10 sm:h-9 touch-manipulation order-1 sm:order-none"
+            size="sm"
+          >
             <UserPlus className="h-4 w-4 mr-2" />
-            Nova Adesão
+            <span className="hidden sm:inline">Nova Adesão</span>
+            <span className="sm:hidden">Nova Adesão</span>
           </Button>
-          <Button onClick={() => setImportacaoModalOpen(true)} variant="outline">
+          <Button
+            onClick={() => setImportacaoModalOpen(true)}
+            variant="outline"
+            className="h-10 sm:h-9 touch-manipulation order-2 sm:order-none"
+            size="sm"
+          >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Importar em Lote
+            <span className="hidden sm:inline">Importar em Lote</span>
+            <span className="sm:hidden">Importar</span>
           </Button>
           <Button
             onClick={handleManualRefresh}
             variant="outline"
             disabled={isRefreshing}
+            className="h-10 sm:h-9 touch-manipulation order-3 sm:order-none"
+            size="sm"
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Atualizar Status
+            <span className="hidden sm:inline">Atualizar Status</span>
+            <span className="sm:hidden">Atualizar</span>
           </Button>
         </div>
       </div>
 
       {profile?.user_type === 'unidade' && !unidadeUsuario && (
-        <div className="text-center py-8 space-y-4">
-          <p className="text-muted-foreground">
+        <div className="text-center py-8 sm:py-12 space-y-4">
+          <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto px-4">
             Você não possui uma unidade cadastrada. Entre em contato com o administrador para criar sua unidade.
           </p>
         </div>
