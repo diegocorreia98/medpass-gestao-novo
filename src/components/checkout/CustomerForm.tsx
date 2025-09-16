@@ -151,63 +151,67 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <User className="w-5 h-5" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <User className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Dados Pessoais</span>
           </CardTitle>
         </CardHeader>
-        
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Nome Completo *</Label>
+
+        <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
+          <div className="space-y-3">
+            <Label htmlFor="name" className="text-sm sm:text-base font-medium">
+              Nome Completo *
+            </Label>
             <Input
               id="name"
               placeholder="Seu nome completo"
               value={customerData.name || ''}
               onChange={(e) => handleChange('name', e.target.value)}
-              className={errors.name ? 'border-destructive' : ''}
+              className={`h-12 sm:h-14 text-base ${errors.name ? 'border-destructive' : ''}`}
             />
             {errors.name && (
               <div className="flex items-center text-destructive text-sm">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                {errors.name}
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>{errors.name}</span>
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
+          <div className="space-y-3">
+            <Label htmlFor="email" className="text-sm sm:text-base font-medium">
+              Email *
+            </Label>
             <Input
               id="email"
               type="email"
               placeholder="seu@email.com"
               value={customerData.email || ''}
               onChange={(e) => handleChange('email', e.target.value)}
-              className={errors.email ? 'border-destructive' : ''}
+              className={`h-12 sm:h-14 text-base ${errors.email ? 'border-destructive' : ''}`}
             />
             {errors.email && (
               <div className="flex items-center text-destructive text-sm">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                {errors.email}
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>{errors.email}</span>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Tipo de Documento *</Label>
-               <Select 
-                value={customerData.documentType || 'cpf'} 
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label className="text-sm sm:text-base font-medium">Tipo de Documento *</Label>
+              <Select
+                value={customerData.documentType || 'cpf'}
                 onValueChange={(value: 'cpf' | 'cnpj') => {
                   if (onCustomerDataChange) {
                     onCustomerDataChange({ ...customerData, documentType: value });
                   }
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-12 sm:h-14 text-base">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -217,8 +221,10 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="document">{customerData.documentType === 'cnpj' ? 'CNPJ' : 'CPF'} *</Label>
+            <div className="space-y-3">
+              <Label htmlFor="document" className="text-sm sm:text-base font-medium">
+                {customerData.documentType === 'cnpj' ? 'CNPJ' : 'CPF'} *
+              </Label>
               <InputMask
                 mask={customerData.documentType === 'cnpj' ? '99.999.999/9999-99' : '999.999.999-99'}
                 value={customerData.document || ''}
@@ -230,21 +236,23 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
                     {...inputProps}
                     id="document"
                     placeholder={customerData.documentType === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'}
-                    className={errors.document ? 'border-destructive' : ''}
+                    className={`h-12 sm:h-14 text-base ${errors.document ? 'border-destructive' : ''}`}
                   />
                 )}
               </InputMask>
               {errors.document && (
                 <div className="flex items-center text-destructive text-sm">
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                  {errors.document}
+                  <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>{errors.document}</span>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Telefone</Label>
+          <div className="space-y-3">
+            <Label htmlFor="phone" className="text-sm sm:text-base font-medium">
+              Telefone
+            </Label>
             <InputMask
               mask="(99) 99999-9999"
               value={customerData.phone || ''}
@@ -255,15 +263,16 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
                 <Input
                   {...inputProps}
                   id="phone"
+                  type="tel"
                   placeholder="(11) 99999-9999"
-                  className={errors.phone ? 'border-destructive' : ''}
+                  className={`h-12 sm:h-14 text-base ${errors.phone ? 'border-destructive' : ''}`}
                 />
               )}
             </InputMask>
             {errors.phone && (
               <div className="flex items-center text-destructive text-sm">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                {errors.phone}
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>{errors.phone}</span>
               </div>
             )}
           </div>
@@ -271,18 +280,18 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <MapPin className="w-5 h-5" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Endereço</span>
           </CardTitle>
         </CardHeader>
-        
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="zipcode">CEP</Label>
-              <div className="flex space-x-2">
+
+        <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label htmlFor="zipcode" className="text-sm sm:text-base font-medium">CEP</Label>
+              <div className="flex gap-3">
                 <InputMask
                   mask="99999-999"
                   value={customerData.address?.zipcode || ''}
@@ -297,7 +306,7 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
                       {...inputProps}
                       id="zipcode"
                       placeholder="00000-000"
-                      className={`flex-1 ${errors.zipcode ? 'border-destructive' : ''}`}
+                      className={`flex-1 h-12 sm:h-14 text-base ${errors.zipcode ? 'border-destructive' : ''}`}
                     />
                   )}
                 </InputMask>
@@ -306,23 +315,27 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
                   variant="outline"
                   onClick={() => fetchAddressByCEP(customerData.address?.zipcode || '')}
                   disabled={isLoadingCEP}
+                  className="h-12 sm:h-14 px-4 sm:px-6 text-base whitespace-nowrap"
                 >
                   {isLoadingCEP ? '...' : 'Buscar'}
                 </Button>
               </div>
               {errors.zipcode && (
-                <div className="text-destructive text-xs">{errors.zipcode}</div>
+                <div className="flex items-center text-destructive text-sm">
+                  <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>{errors.zipcode}</span>
+                </div>
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="state">Estado</Label>
-              <Select 
-                value={customerData.address?.state || ''} 
+            <div className="space-y-3">
+              <Label htmlFor="state" className="text-sm sm:text-base font-medium">Estado</Label>
+              <Select
+                value={customerData.address?.state || ''}
                 onValueChange={(value) => handleAddressChange('state', value)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
+                <SelectTrigger className="h-12 sm:h-14 text-base">
+                  <SelectValue placeholder="Selecione o estado" />
                 </SelectTrigger>
                 <SelectContent>
                   {BRAZILIAN_STATES.map((state) => (
@@ -335,46 +348,50 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="street">Endereço</Label>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label htmlFor="street" className="text-sm sm:text-base font-medium">Endereço</Label>
               <Input
                 id="street"
-                placeholder="Rua, Avenida..."
+                placeholder="Rua, Avenida, Alameda..."
                 value={customerData.address?.street || ''}
                 onChange={(e) => handleAddressChange('street', e.target.value)}
+                className="h-12 sm:h-14 text-base"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="number">Número</Label>
+            <div className="space-y-3">
+              <Label htmlFor="number" className="text-sm sm:text-base font-medium">Número</Label>
               <Input
                 id="number"
                 placeholder="123"
                 value={customerData.address?.number || ''}
                 onChange={(e) => handleAddressChange('number', e.target.value)}
+                className="h-12 sm:h-14 text-base"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="neighborhood">Bairro</Label>
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label htmlFor="neighborhood" className="text-sm sm:text-base font-medium">Bairro</Label>
               <Input
                 id="neighborhood"
                 placeholder="Nome do bairro"
                 value={customerData.address?.neighborhood || ''}
                 onChange={(e) => handleAddressChange('neighborhood', e.target.value)}
+                className="h-12 sm:h-14 text-base"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="city">Cidade</Label>
+            <div className="space-y-3">
+              <Label htmlFor="city" className="text-sm sm:text-base font-medium">Cidade</Label>
               <Input
                 id="city"
                 placeholder="Nome da cidade"
                 value={customerData.address?.city || ''}
                 onChange={(e) => handleAddressChange('city', e.target.value)}
+                className="h-12 sm:h-14 text-base"
               />
             </div>
           </div>
@@ -382,8 +399,8 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
       </Card>
 
       {onSubmit && (
-        <div className="flex justify-end pt-4">
-          <Button 
+        <div className="pt-4 sm:pt-6">
+          <Button
             onClick={() => {
               const isFormValid = !!(
                 customerData.name?.trim() &&
@@ -392,7 +409,7 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
                 customerData.documentType &&
                 Object.keys(errors).length === 0
               );
-              
+
               if (isFormValid) {
                 onSubmit(customerData as CustomerData);
               }
@@ -403,7 +420,8 @@ export function CustomerForm({ customerData, onCustomerDataChange, onSubmit, pre
               !customerData.document?.trim() ||
               Object.keys(errors).length > 0
             }
-            className="w-full sm:w-auto"
+            className="w-full h-12 sm:h-14 text-base sm:text-lg touch-manipulation"
+            size="lg"
           >
             Continuar para Pagamento
           </Button>

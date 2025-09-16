@@ -103,16 +103,18 @@ export function CardForm({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <CreditCard className="w-5 h-5" />
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+          <CreditCard className="w-4 h-4 sm:w-5 sm:h-5" />
           <span>Dados do Cartão</span>
         </CardTitle>
       </CardHeader>
-      
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="card-number">Número do Cartão</Label>
+
+      <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
+        <div className="space-y-3">
+          <Label htmlFor="card-number" className="text-sm sm:text-base font-medium">
+            Número do Cartão
+          </Label>
           <div className="relative">
             <InputMask
               mask="9999 9999 9999 9999"
@@ -125,14 +127,14 @@ export function CardForm({
                   {...inputProps}
                   id="card-number"
                   placeholder="1234 5678 9012 3456"
-                  className={errors.number ? 'border-destructive' : ''}
+                  className={`h-12 sm:h-14 text-base pr-16 ${errors.number ? 'border-destructive' : ''}`}
                 />
               )}
             </InputMask>
-            
+
             {cardBrand !== 'generic' && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <div className={`w-8 h-5 rounded text-xs flex items-center justify-center font-bold ${
+                <div className={`w-10 h-6 sm:w-12 sm:h-7 rounded text-xs sm:text-sm flex items-center justify-center font-bold ${
                   cardBrand === 'visa' ? 'bg-blue-600 text-white' :
                   cardBrand === 'mastercard' ? 'bg-red-600 text-white' :
                   cardBrand === 'amex' ? 'bg-green-600 text-white' :
@@ -145,76 +147,93 @@ export function CardForm({
           </div>
           {errors.number && (
             <div className="flex items-center text-destructive text-sm">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              {errors.number}
+              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+              <span>{errors.number}</span>
             </div>
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="card-name">Nome no Cartão</Label>
+        <div className="space-y-3">
+          <Label htmlFor="card-name" className="text-sm sm:text-base font-medium">
+            Nome no Cartão
+          </Label>
           <Input
             id="card-name"
             placeholder="Nome conforme impresso no cartão"
             value={cardData.holder_name || ''}
             onChange={(e) => handleChange('holder_name', e.target.value.toUpperCase())}
-            className={errors.holder_name ? 'border-destructive' : ''}
+            className={`h-12 sm:h-14 text-base ${errors.holder_name ? 'border-destructive' : ''}`}
           />
           {errors.holder_name && (
             <div className="flex items-center text-destructive text-sm">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              {errors.holder_name}
+              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+              <span>{errors.holder_name}</span>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="expiry-month">Mês</Label>
-            <Select 
-              value={cardData.expiry_month || ''} 
-              onValueChange={(value) => handleChange('expiry_month', value)}
-            >
-              <SelectTrigger className={errors.expiry_month ? 'border-destructive' : ''}>
-                <SelectValue placeholder="MM" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                  <SelectItem key={month} value={month.toString().padStart(2, '0')}>
-                    {month.toString().padStart(2, '0')}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.expiry_month && (
-              <div className="text-destructive text-xs">{errors.expiry_month}</div>
-            )}
+        {/* Mobile: Stack all fields vertically */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-3">
+              <Label htmlFor="expiry-month" className="text-sm sm:text-base font-medium">
+                Mês
+              </Label>
+              <Select
+                value={cardData.expiry_month || ''}
+                onValueChange={(value) => handleChange('expiry_month', value)}
+              >
+                <SelectTrigger className={`h-12 sm:h-14 text-base ${errors.expiry_month ? 'border-destructive' : ''}`}>
+                  <SelectValue placeholder="MM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                    <SelectItem key={month} value={month.toString().padStart(2, '0')}>
+                      {month.toString().padStart(2, '0')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.expiry_month && (
+                <div className="flex items-center text-destructive text-xs">
+                  <AlertCircle className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span>{errors.expiry_month}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <Label htmlFor="expiry-year" className="text-sm sm:text-base font-medium">
+                Ano
+              </Label>
+              <Select
+                value={cardData.expiry_year || ''}
+                onValueChange={(value) => handleChange('expiry_year', value)}
+              >
+                <SelectTrigger className={`h-12 sm:h-14 text-base ${errors.expiry_year ? 'border-destructive' : ''}`}>
+                  <SelectValue placeholder="AAAA" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.expiry_year && (
+                <div className="flex items-center text-destructive text-xs">
+                  <AlertCircle className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span>{errors.expiry_year}</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="expiry-year">Ano</Label>
-            <Select 
-              value={cardData.expiry_year || ''} 
-              onValueChange={(value) => handleChange('expiry_year', value)}
-            >
-              <SelectTrigger className={errors.expiry_year ? 'border-destructive' : ''}>
-                <SelectValue placeholder="AAAA" />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() + i).map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
-                    {year}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.expiry_year && (
-              <div className="text-destructive text-xs">{errors.expiry_year}</div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cvv">CVV</Label>
+          <div className="space-y-3">
+            <Label htmlFor="cvv" className="text-sm sm:text-base font-medium">
+              CVV
+            </Label>
             <InputMask
               mask="999"
               maskChar=""
@@ -228,23 +247,26 @@ export function CardForm({
                   id="cvv"
                   placeholder="123"
                   type="password"
-                  className={errors.cvv ? 'border-destructive' : ''}
+                  className={`h-12 sm:h-14 text-base ${errors.cvv ? 'border-destructive' : ''}`}
                 />
               )}
             </InputMask>
             {errors.cvv && (
-              <div className="text-destructive text-xs">{errors.cvv}</div>
+              <div className="flex items-center text-destructive text-sm">
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <span>{errors.cvv}</span>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Parcelamento</Label>
-          <Select 
-            value={installments.toString()} 
+        <div className="space-y-3">
+          <Label className="text-sm sm:text-base font-medium">Parcelamento</Label>
+          <Select
+            value={installments.toString()}
             onValueChange={(value) => onInstallmentsChange(parseInt(value))}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-12 sm:h-14 text-base">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -258,11 +280,12 @@ export function CardForm({
         </div>
 
         {onSubmit && (
-          <div className="pt-4">
-            <Button 
-              type="submit" 
-              className="w-full" 
+          <div className="pt-4 sm:pt-6">
+            <Button
+              type="submit"
+              className="w-full h-12 sm:h-14 text-base sm:text-lg touch-manipulation"
               disabled={isProcessing}
+              size="lg"
               onClick={() => {
                 if (onSubmit) {
                   const completeCardData: CardData = {
@@ -278,13 +301,13 @@ export function CardForm({
             >
               {isProcessing ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Criptografando dados...
+                  <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                  <span className="truncate">Criptografando dados...</span>
                 </>
               ) : (
                 <>
-                  <Shield className="mr-2 h-4 w-4" />
-                  Processar Pagamento
+                  <Shield className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="truncate">Processar Pagamento</span>
                 </>
               )}
             </Button>

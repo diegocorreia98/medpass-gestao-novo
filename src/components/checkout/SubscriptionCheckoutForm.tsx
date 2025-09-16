@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, CreditCard, Smartphone, CheckCircle, AlertCircle, Clock, Copy, QrCode } from 'lucide-react';
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { CardForm } from './CardForm';
@@ -268,7 +267,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE CORRETAMENTE
+  // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE RESPONSIVO
   const renderPixQr = useCallback((r: PaymentResult) => {
     const s = (r.pix_qr_svg || '').trim();
 
@@ -276,7 +275,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     if (s.startsWith('<svg')) {
       return (
         <div
-          className="w-48 h-48 p-2 bg-white border rounded-lg flex items-center justify-center"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 p-2 bg-white border rounded-lg flex items-center justify-center mx-auto touch-manipulation"
           dangerouslySetInnerHTML={{ __html: s }}
         />
       );
@@ -288,7 +287,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         <img
           src={s}
           alt="QR Code PIX"
-          className="w-48 h-48 border rounded-lg bg-white p-2"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
         />
       );
     }
@@ -299,7 +298,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         <img
           src={s}
           alt="QR Code PIX"
-          className="w-48 h-48 border rounded-lg bg-white p-2"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
@@ -314,7 +313,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         <img
           src={r.pix_qr_code_url}
           alt="QR Code PIX"
-          className="w-48 h-48 border rounded-lg bg-white p-2"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
@@ -331,16 +330,16 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         <img
           src={src}
           alt="QR Code PIX"
-          className="w-48 h-48 border rounded-lg bg-white p-2"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
         />
       );
     }
 
     // sem nada: placeholder
     return (
-      <div className="w-48 h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border">
-        <QrCode className="h-16 w-16 text-gray-400 mb-2" />
-        <span className="text-xs text-muted-foreground text-center">
+      <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border mx-auto">
+        <QrCode className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mb-2" />
+        <span className="text-xs text-muted-foreground text-center px-2">
           QR Code não disponível<br />Use o código PIX abaixo
         </span>
       </div>
@@ -358,19 +357,31 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 sm:h-12 sm:w-12 animate-spin mx-auto text-primary" />
+          <p className="text-sm sm:text-base text-muted-foreground" aria-live="polite">
+            Carregando dados do pagamento...
+          </p>
+        </div>
       </div>
     );
   }
 
   if (!subscriptionData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h1 className="text-2xl font-bold">Assinatura não encontrada</h1>
-          <p className="text-muted-foreground">O link pode ter expirado ou ser inválido</p>
+      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <div className="text-center max-w-md mx-auto">
+          <AlertCircle
+            className="h-12 w-12 sm:h-16 sm:w-16 text-destructive mx-auto mb-4 sm:mb-6"
+            aria-hidden="true"
+          />
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-2 sm:mb-4">
+            Assinatura não encontrada
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
+            O link pode ter expirado ou ser inválido
+          </p>
         </div>
       </div>
     );
@@ -379,19 +390,23 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
   // Approved step - redirect to success
   if (currentStep === 'approved') {
     setTimeout(() => navigate('/'), 3000);
-    
+
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-green-600">Pagamento Confirmado!</CardTitle>
+      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <Card className="w-full max-w-sm sm:max-w-md">
+          <CardHeader className="text-center space-y-4 p-6 sm:p-8">
+            <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-green-500 mx-auto" />
+            <CardTitle className="text-lg sm:text-xl text-green-600">Pagamento Confirmado!</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-center">
-            <p className="text-muted-foreground">
+          <CardContent className="space-y-4 text-center p-6 sm:p-8 pt-0">
+            <p className="text-sm sm:text-base text-muted-foreground">
               Seu pagamento foi processado com sucesso. Você será redirecionado em alguns segundos.
             </p>
-            <Button onClick={() => navigate('/')} className="w-full">
+            <Button
+              onClick={() => navigate('/')}
+              className="w-full h-12 sm:h-14 text-base touch-manipulation"
+              size="lg"
+            >
               Ir para o Início
             </Button>
           </CardContent>
@@ -403,25 +418,30 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
   // Awaiting payment step
   if (currentStep === 'awaiting-payment' && paymentResult) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+      <div className="min-h-screen flex items-center justify-center p-4 sm:p-6">
+        <Card className="w-full max-w-sm sm:max-w-lg">
+          <CardHeader className="text-center space-y-4 p-4 sm:p-6">
             {selectedPaymentMethod === 'pix' ? (
-              <QrCode className="h-12 w-12 text-primary mx-auto mb-4" />
+              <QrCode className="h-12 w-12 sm:h-16 sm:w-16 text-primary mx-auto" />
             ) : (
-              <Clock className="h-12 w-12 text-primary mx-auto mb-4" />
+              <Clock className="h-12 w-12 sm:h-16 sm:w-16 text-primary mx-auto" />
             )}
-            <CardTitle>
+            <CardTitle className="text-lg sm:text-xl">
               {selectedPaymentMethod === 'pix' ? 'Pagamento PIX' : 'Processando Pagamento'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6 p-4 sm:p-6 pt-0">
             {selectedPaymentMethod === 'pix' && (
               <>
                 {timeLeft > 0 && (
-                  <div className="text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Expira em: {formatTime(timeLeft)}
+                  <div
+                    className="text-center text-sm sm:text-base text-muted-foreground flex items-center justify-center gap-2 p-3 bg-muted rounded-lg"
+                    role="timer"
+                    aria-live="polite"
+                    aria-label={`PIX expira em ${formatTime(timeLeft)}`}
+                  >
+                    <Clock className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+                    <span className="font-medium">Expira em: {formatTime(timeLeft)}</span>
                   </div>
                 )}
 
@@ -429,59 +449,81 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
                   {renderPixQr(paymentResult)}
                 </div>
 
-                {/* ✅ CÓDIGO PIX COPIA E COLA - MELHORADO */}
+                {/* ✅ CÓDIGO PIX COPIA E COLA - MOBILE OTIMIZADO */}
                 {(paymentResult.pix_copia_cola || paymentResult.pix_code) && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-semibold text-center">
+                  <div className="space-y-4">
+                    <h4 className="text-sm sm:text-base font-semibold text-center">
                       {paymentResult.pix_copia_cola ? 'Código PIX (Copia e Cola)' : 'Código PIX'}
                     </h4>
-                    
-                    <div className="space-y-2">
-                      <div className="p-3 bg-muted rounded-lg border">
-                        <code className="text-xs font-mono break-all text-center block">
+
+                    <div className="space-y-3">
+                      <div className="p-4 bg-muted rounded-lg border border-dashed">
+                        <code className="text-xs sm:text-sm font-mono break-all text-center block leading-relaxed">
                           {paymentResult.pix_copia_cola || paymentResult.pix_code}
                         </code>
                       </div>
-                      
+
                       <Button
                         size="lg"
                         variant={paymentResult.pix_copia_cola ? "default" : "outline"}
-                        onClick={() => {
+                        onClick={async () => {
                           const pixCode = paymentResult.pix_copia_cola || paymentResult.pix_code;
-                          navigator.clipboard.writeText(pixCode!);
-                          toast({
-                            title: paymentResult.pix_copia_cola ? "PIX Copia e Cola copiado! 📱" : "Código PIX copiado!",
-                            description: "Cole no seu app do banco para pagar",
-                          });
+                          try {
+                            await navigator.clipboard.writeText(pixCode!);
+                            toast({
+                              title: paymentResult.pix_copia_cola ? "PIX Copia e Cola copiado! 📱" : "Código PIX copiado!",
+                              description: "Cole no seu app do banco para pagar",
+                            });
+                          } catch (error) {
+                            toast({
+                              title: "Erro ao copiar",
+                              description: "Não foi possível copiar o código PIX",
+                              variant: "destructive",
+                            });
+                          }
                         }}
-                        className="w-full"
+                        className="w-full h-12 sm:h-14 text-base touch-manipulation"
+                        aria-label={`Copiar ${paymentResult.pix_copia_cola ? 'PIX Copia e Cola' : 'código PIX'} para área de transferência`}
                       >
-                        <Copy className="mr-2 h-4 w-4" />
-                        {paymentResult.pix_copia_cola ? 'Copiar PIX Copia e Cola' : 'Copiar código PIX'}
+                        <Copy className="mr-2 h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true" />
+                        <span className="truncate">
+                          {paymentResult.pix_copia_cola ? 'Copiar PIX Copia e Cola' : 'Copiar código PIX'}
+                        </span>
                       </Button>
                     </div>
                   </div>
                 )}
 
-                <div className="text-center text-sm text-muted-foreground">
-                  Aguardando confirmação do pagamento...
+                <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm sm:text-base text-blue-700 font-medium">
+                    Aguardando confirmação do pagamento...
+                  </p>
+                  <p className="text-xs sm:text-sm text-blue-600 mt-1">
+                    O pagamento será confirmado automaticamente
+                  </p>
                 </div>
               </>
             )}
 
             {selectedPaymentMethod === 'credit_card' && (
-              <div className="text-center space-y-2">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                <p className="text-sm text-muted-foreground">
-                  Processando pagamento no cartão de crédito...
-                </p>
+              <div className="text-center space-y-4 p-6">
+                <Loader2 className="h-12 w-12 sm:h-16 sm:w-16 animate-spin mx-auto text-primary" />
+                <div className="space-y-2">
+                  <p className="text-base sm:text-lg font-medium">
+                    Processando pagamento...
+                  </p>
+                  <p className="text-sm sm:text-base text-muted-foreground">
+                    Aguarde a confirmação do cartão de crédito
+                  </p>
+                </div>
               </div>
             )}
 
-            <Button 
-              variant="outline" 
-              onClick={() => setCurrentStep('payment')} 
-              className="w-full"
+            <Button
+              variant="outline"
+              onClick={() => setCurrentStep('payment')}
+              className="w-full h-12 sm:h-14 text-base touch-manipulation"
+              size="lg"
             >
               Voltar
             </Button>
@@ -493,117 +535,143 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
 
   // Payment form step
   return (
-    <div className="min-h-screen p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold">Finalizar Assinatura</h1>
-          <p className="text-muted-foreground">Complete os dados para ativar seu plano</p>
+    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6 sm:mb-8 lg:mb-12 text-center">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 sm:mb-4">
+            Finalizar Assinatura
+          </h1>
+          <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">
+            Complete os dados para ativar seu plano
+          </p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-6 sm:gap-8 lg:grid-cols-2 xl:gap-12">
           {/* Order Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Resumo da Assinatura
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <h3 className="font-semibold">{subscriptionData.planos?.nome}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {subscriptionData.planos?.descricao}
-                </p>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span>Cliente:</span>
-                  <span className="text-sm">{subscriptionData.customer_name}</span>
+          <div className="order-2 lg:order-1">
+            <Card className="sticky top-4">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <CreditCard className="h-5 w-5 sm:h-6 sm:w-6" />
+                  Resumo da Assinatura
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6 pt-0">
+                <div className="space-y-2 sm:space-y-3 p-4 bg-muted rounded-lg">
+                  <h3 className="text-base sm:text-lg font-semibold">{subscriptionData.planos?.nome}</h3>
+                  <p className="text-sm sm:text-base text-muted-foreground">
+                    {subscriptionData.planos?.descricao}
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span>Email:</span>
-                  <span className="text-sm">{subscriptionData.customer_email}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Documento:</span>
-                  <span className="text-sm">{subscriptionData.customer_document}</span>
-                </div>
-              </div>
 
-              <Separator />
+                <Separator />
 
-              <div className="flex justify-between items-center text-lg font-semibold">
-                <span>Total Mensal:</span>
-                <span>
-                  {new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                  }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-sm sm:text-base font-medium">Cliente:</span>
+                    <span className="text-sm sm:text-base text-right text-muted-foreground">
+                      {subscriptionData.customer_name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-sm sm:text-base font-medium">Email:</span>
+                    <span className="text-sm sm:text-base text-right text-muted-foreground break-all">
+                      {subscriptionData.customer_email}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start gap-4">
+                    <span className="text-sm sm:text-base font-medium">Documento:</span>
+                    <span className="text-sm sm:text-base text-right text-muted-foreground">
+                      {subscriptionData.customer_document}
+                    </span>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex justify-between items-center p-4 bg-primary/5 rounded-lg border border-primary/20">
+                  <span className="text-base sm:text-lg lg:text-xl font-semibold">Total Mensal:</span>
+                  <span className="text-lg sm:text-xl lg:text-2xl font-bold text-primary">
+                    {new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL'
+                    }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Payment Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Smartphone className="h-5 w-5" />
-                Método de Pagamento
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <PaymentMethodSelector
-                selectedMethod={selectedPaymentMethod}
-                onSelectMethod={(method) => setSelectedPaymentMethod(method as 'credit_card' | 'pix')}
-                hideMethod="boleto"
-              />
-
-              {selectedPaymentMethod === 'credit_card' && (
-                <CardForm
-                  cardData={cardData}
-                  onCardDataChange={(data) => setCardData(prev => ({ ...prev, ...data }))}
-                  installments={1}
-                  onInstallmentsChange={() => {}}
-                  planPrice={subscriptionData.plan_price || subscriptionData.planos?.valor || 0}
+          <div className="order-1 lg:order-2">
+            <Card>
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <Smartphone className="h-5 w-5 sm:h-6 sm:w-6" />
+                  Método de Pagamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 sm:space-y-8 p-4 sm:p-6 pt-0">
+                <PaymentMethodSelector
+                  selectedMethod={selectedPaymentMethod}
+                  onSelectMethod={(method) => setSelectedPaymentMethod(method as 'credit_card' | 'pix')}
+                  hideMethod="boleto"
                 />
-              )}
 
-              <CustomerForm
-                customerData={customerData}
-                onCustomerDataChange={(data) => setCustomerData(prev => ({ ...prev, ...data }))}
-                prefilled={true}
-              />
-
-              <Button
-                onClick={handlePayment}
-                disabled={!isFormValid() || isProcessing}
-                className="w-full"
-                size="lg"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {selectedPaymentMethod === 'pix' ? 'Gerando QR Code...' : 'Processando...'}
-                  </>
-                ) : selectedPaymentMethod === 'pix' ? (
-                  `Gerar QR Code ${new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                  }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}`
-                ) : (
-                  `Pagar ${new Intl.NumberFormat('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                  }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}`
+                {selectedPaymentMethod === 'credit_card' && (
+                  <CardForm
+                    cardData={cardData}
+                    onCardDataChange={(data) => setCardData(prev => ({ ...prev, ...data }))}
+                    installments={1}
+                    onInstallmentsChange={() => {}}
+                    planPrice={subscriptionData.plan_price || subscriptionData.planos?.valor || 0}
+                  />
                 )}
-              </Button>
-            </CardContent>
-          </Card>
+
+                <CustomerForm
+                  customerData={customerData}
+                  onCustomerDataChange={(data) => setCustomerData(prev => ({ ...prev, ...data }))}
+                  prefilled={true}
+                />
+
+                <Button
+                  onClick={handlePayment}
+                  disabled={!isFormValid() || isProcessing}
+                  className="w-full h-12 sm:h-14 lg:h-16 text-base sm:text-lg touch-manipulation"
+                  size="lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                      <span className="truncate">
+                        {selectedPaymentMethod === 'pix' ? 'Gerando QR Code...' : 'Processando...'}
+                      </span>
+                    </>
+                  ) : selectedPaymentMethod === 'pix' ? (
+                    <span className="truncate">
+                      Gerar QR Code{' '}
+                      <span className="hidden sm:inline">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="truncate">
+                      Pagar{' '}
+                      <span className="hidden sm:inline">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(subscriptionData.plan_price || subscriptionData.planos?.valor || 0)}
+                      </span>
+                    </span>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
