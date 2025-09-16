@@ -15,7 +15,8 @@
       "Bash(supabase functions deploy:*)",
       "Bash(supabase stop:*)",
       "Bash(supabase login:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(supabase db:*)"
     ],
     "deny": [],
     "ask": []

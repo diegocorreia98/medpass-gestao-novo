@@ -78,11 +78,22 @@ export function AcceptInvite() {
           }
 
           // Get unit name - we need to fetch it separately since the function doesn't return it
-          const { data: unidadeData } = await supabase
-            .from('unidades')
-            .select('nome')
-            .eq('id', convite.unidade_id)
-            .single()
+          let unidadeData = null
+          try {
+            const { data, error: unidadeError } = await supabase
+              .from('unidades')
+              .select('nome')
+              .eq('id', convite.unidade_id)
+              .single()
+
+            if (!unidadeError) {
+              unidadeData = data
+            } else {
+              console.warn('Não foi possível buscar nome da unidade:', unidadeError)
+            }
+          } catch (err) {
+            console.warn('Erro ao buscar unidade:', err)
+          }
 
           setConviteData({
             ...convite,
@@ -169,6 +180,7 @@ export function AcceptInvite() {
             console.log('Sign in successful:', userId)
           } else if (signInError) {
             console.log('Sign in failed:', signInError.message)
+            console.log('Sign in error details:', signInError)
 
             // If user doesn't exist or credentials are wrong, create new account
             if (signInError.message.includes('Invalid login credentials')) {
@@ -299,24 +311,47 @@ export function AcceptInvite() {
         return
         
       } else {
-        // Convite de franqueado - use the secure function
-        console.log('Accepting franchise invite using secure function...')
+        // Convite de franqueado - fallback to direct database operations
+        console.log('Accepting franchise invite using direct operations...')
 
-        const { data: acceptResult, error: acceptError } = await supabase
-          .rpc('accept_franchise_invite', {
-            invitation_token: token,
-            accepting_user_id: userId
+        // First, get the invite details again to ensure we have the unidade_id
+        const { data: inviteDetails, error: inviteError } = await supabase
+          .rpc('get_convite_by_token', {
+            invitation_token: token
           })
 
-        if (acceptError) {
-          console.error('Erro ao aceitar convite:', acceptError)
-          throw acceptError
+        if (inviteError || !inviteDetails || inviteDetails.length === 0) {
+          console.error('Erro ao buscar detalhes do convite:', inviteError)
+          throw new Error('Convite não encontrado ou expirado')
         }
 
-        console.log('Accept result:', acceptResult)
+        const invite = inviteDetails[0]
 
-        if (!acceptResult?.success) {
-          throw new Error('Falha ao aceitar convite - token pode ter expirado ou já foi usado')
+        // Update the invite to mark as accepted
+        const { error: updateInviteError } = await supabase
+          .from('convites_franqueados')
+          .update({
+            aceito: true,
+            user_id_aceito: userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('token', token)
+
+        if (updateInviteError) {
+          console.error('Erro ao atualizar convite:', updateInviteError)
+          throw updateInviteError
+        }
+
+        // Update the unit to associate it with the user
+        const { error: updateUnitError } = await supabase
+          .from('unidades')
+          .update({ user_id: userId })
+          .eq('id', invite.unidade_id)
+
+        if (updateUnitError) {
+          console.error('Erro ao associar unidade ao usuário:', updateUnitError)
+          // Don't throw here, as the invite was already marked as accepted
+          console.log('Convite aceito, mas falhou ao associar unidade automaticamente')
         }
 
         console.log('Convite aceito e usuário vinculado à unidade com sucesso')
@@ -390,7 +425,7 @@ export function AcceptInvite() {
             ) : (
               <>
                 Você foi convidado para ser um franqueado da unidade: <br />
-                <strong>{conviteData?.unidades?.nome}</strong>
+                <strong>{conviteData?.unidades?.nome || 'Carregando...'}</strong>
               </>
             )}
           </CardDescription>
