@@ -11,13 +11,23 @@ import {
 } from "lucide-react"
 import { useBeneficiarios } from "@/hooks/useBeneficiarios"
 import { useComissoes } from "@/hooks/useComissoes"
+import { useUnidades } from "@/hooks/useUnidades"
 import { ChartAreaInteractive } from "@/components/charts/ChartAreaInteractive"
 
 export default function UnidadeDashboard() {
-  const { beneficiarios, isLoading: beneficiariosLoading } = useBeneficiarios()
-  const { comissoes, isLoading: comissoesLoading } = useComissoes()
-  
-  const isLoading = beneficiariosLoading || comissoesLoading
+  // Buscar a unidade do usuário logado
+  const { unidades, isLoading: unidadesLoading } = useUnidades()
+  const unidadeDoUsuario = unidades?.[0] // Para usuário de unidade, sempre há apenas uma unidade
+
+  // Filtrar dados apenas da unidade do usuário
+  const { beneficiarios, isLoading: beneficiariosLoading } = useBeneficiarios({
+    unidadeId: unidadeDoUsuario?.id
+  })
+  const { comissoes, isLoading: comissoesLoading } = useComissoes({
+    unidadeId: unidadeDoUsuario?.id
+  })
+
+  const isLoading = beneficiariosLoading || comissoesLoading || unidadesLoading
 
   // Calcular métricas baseadas nos dados reais
   const clientesAtivos = beneficiarios.filter(b => b.status === 'ativo').length
@@ -41,9 +51,9 @@ export default function UnidadeDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard Unidade</h1>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard da Unidade</h1>
           <p className="text-muted-foreground">
-            Acompanhe o desempenho da sua unidade
+            Acompanhe o desempenho da unidade: {unidadeDoUsuario?.nome || 'Carregando...'}
           </p>
         </div>
         <Badge variant="outline" className="gap-2">
@@ -56,7 +66,7 @@ export default function UnidadeDashboard() {
       </div>
 
       {/* Gráfico de Adesões e Cancelamentos */}
-      <ChartAreaInteractive />
+      <ChartAreaInteractive unidadeId={unidadeDoUsuario?.id} />
 
       {/* Métricas Principais */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

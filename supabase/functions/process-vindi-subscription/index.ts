@@ -349,7 +349,7 @@ serve(async (req) => {
     // =======================
     // PASSO 4: EXTRAIR DADOS DO PIX CORRETAMENTE
     // =======================
-    let responseData: any = {
+    const responseData: any = {
       success: true,
       message: "Pagamento processado com sucesso",
       bill_id: billData.bill.id,
@@ -376,7 +376,7 @@ serve(async (req) => {
                        charge.qr_code_url ||
                        charge.print_url;
         
-        let pixExpiration = charge.pix_expiration_date || 
+        const pixExpiration = charge.pix_expiration_date || 
                            charge.pix_expires_at ||
                            charge.due_at ||
                            billData.bill.due_at;

@@ -9,9 +9,9 @@ interface AdesoesCancelamentosData {
   cancelamentos: number
 }
 
-export function useAdesoesCancelamentos(timeRange: string = "90d") {
+export function useAdesoesCancelamentos(timeRange: string = "90d", unidadeId?: string) {
   return useQuery({
-    queryKey: ["adesoes-cancelamentos", timeRange],
+    queryKey: ["adesoes-cancelamentos", timeRange, unidadeId],
     queryFn: async (): Promise<AdesoesCancelamentosData[]> => {
       const now = new Date()
       let daysToSubtract = 90
@@ -26,12 +26,19 @@ export function useAdesoesCancelamentos(timeRange: string = "90d") {
       const endDate = endOfDay(now)
       
       // Fetch adesões (beneficiários criados)
-      const { data: adesoes, error: adesoesError } = await supabase
+      let adesoesQuery = supabase
         .from("beneficiarios")
         .select("data_adesao, created_at")
         .gte("data_adesao", format(startDate, "yyyy-MM-dd"))
         .lte("data_adesao", format(endDate, "yyyy-MM-dd"))
         .eq("status", "ativo")
+
+      // Filtrar por unidade se especificado
+      if (unidadeId) {
+        adesoesQuery = adesoesQuery.eq("unidade_id", unidadeId)
+      }
+
+      const { data: adesoes, error: adesoesError } = await adesoesQuery
       
       if (adesoesError) {
         console.error("Erro ao buscar adesões:", adesoesError)
@@ -39,11 +46,22 @@ export function useAdesoesCancelamentos(timeRange: string = "90d") {
       }
       
       // Fetch cancelamentos
-      const { data: cancelamentos, error: cancelamentosError } = await supabase
+      let cancelamentosQuery = supabase
         .from("cancelamentos")
-        .select("data_cancelamento, created_at")
+        .select(`
+          data_cancelamento,
+          created_at,
+          beneficiario:beneficiarios!inner(unidade_id)
+        `)
         .gte("data_cancelamento", format(startDate, "yyyy-MM-dd"))
         .lte("data_cancelamento", format(endDate, "yyyy-MM-dd"))
+
+      // Filtrar por unidade se especificado
+      if (unidadeId) {
+        cancelamentosQuery = cancelamentosQuery.eq("beneficiario.unidade_id", unidadeId)
+      }
+
+      const { data: cancelamentos, error: cancelamentosError } = await cancelamentosQuery
       
       if (cancelamentosError) {
         console.error("Erro ao buscar cancelamentos:", cancelamentosError)

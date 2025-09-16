@@ -59,7 +59,7 @@ export function AcceptInvite() {
         console.log('Validando token:', token)
         
         // Use the secure function to get invite by token
-        let { data: franqueadoData, error: franqueadoError } = await supabase
+        const { data: franqueadoData, error: franqueadoError } = await supabase
           .rpc('get_convite_by_token', {
             invitation_token: token
           })

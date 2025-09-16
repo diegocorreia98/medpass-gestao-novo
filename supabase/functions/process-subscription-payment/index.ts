@@ -542,7 +542,7 @@ serve(async (req) => {
     logStep("Transaction saved successfully");
 
     // Prepare response based on payment method
-    let responseData: any = {
+    const responseData: any = {
       success: true,
       message: "Pagamento processado com sucesso",
       bill_id: billData.bill.id,

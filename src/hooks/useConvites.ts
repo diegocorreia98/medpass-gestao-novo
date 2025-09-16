@@ -17,7 +17,7 @@ export function useConvites() {
     queryFn: async () => {
       if (!user) throw new Error('Usuário não autenticado')
 
-      let query = supabase
+      const query = supabase
         .from('convites_franqueados')
         .select(`
           *,

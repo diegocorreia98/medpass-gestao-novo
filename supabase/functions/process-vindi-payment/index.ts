@@ -245,7 +245,7 @@ serve(async (req) => {
     }
 
     // 7. Prepare response based on payment method
-    let responseData: any = {
+    const responseData: any = {
       success: true,
       transaction_id: transaction?.id,
       charge_id: charge.id,

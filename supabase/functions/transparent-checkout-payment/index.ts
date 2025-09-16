@@ -307,7 +307,7 @@ serve(async (req) => {
     logStep("Transaction saved successfully");
 
     // Step 5: Prepare response with PIX/Boleto data
-    let responseData: any = {
+    const responseData: any = {
       success: true,
       message: "Pagamento processado com sucesso",
       subscription_id: subscription.id,

@@ -18,15 +18,23 @@ import {
 } from "lucide-react"
 import { useBeneficiarios } from "@/hooks/useBeneficiarios"
 import { usePlanos } from "@/hooks/usePlanos"
+import { useUnidades } from "@/hooks/useUnidades"
 
 export default function GestaoCliente() {
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("todos")
-  
-  const { beneficiarios, isLoading: beneficiariosLoading } = useBeneficiarios()
+
+  // Buscar a unidade do usuário logado
+  const { unidades, isLoading: unidadesLoading } = useUnidades()
+  const unidadeDoUsuario = unidades?.[0] // Para usuário de unidade, sempre há apenas uma unidade
+
+  // Filtrar beneficiários apenas da unidade do usuário
+  const { beneficiarios, isLoading: beneficiariosLoading } = useBeneficiarios({
+    unidadeId: unidadeDoUsuario?.id
+  })
   const { planos, isLoading: planosLoading } = usePlanos()
-  
-  const isLoading = beneficiariosLoading || planosLoading
+
+  const isLoading = beneficiariosLoading || planosLoading || unidadesLoading
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -126,9 +134,9 @@ export default function GestaoCliente() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestão de Cliente</h1>
+          <h1 className="text-3xl font-bold text-foreground">Gestão de Clientes</h1>
           <p className="text-muted-foreground">
-            Gerencie todos os seus clientes e planos
+            Gerencie os clientes da sua unidade: {unidadeDoUsuario?.nome || 'Carregando...'}
           </p>
         </div>
       </div>

@@ -40,9 +40,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function ChartAreaInteractive() {
+interface ChartAreaInteractiveProps {
+  unidadeId?: string
+}
+
+export function ChartAreaInteractive({ unidadeId }: ChartAreaInteractiveProps) {
   const [timeRange, setTimeRange] = React.useState("90d")
-  const { data: chartData, isLoading, error } = useAdesoesCancelamentos(timeRange)
+  const { data: chartData, isLoading, error } = useAdesoesCancelamentos(timeRange, unidadeId)
 
   if (isLoading) {
     return (
