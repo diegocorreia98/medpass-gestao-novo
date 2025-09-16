@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const logStep = (step: string, details?: unknown) => {
@@ -54,6 +55,7 @@ serve(async (req) => {
     logStep("Found beneficiary", { name: beneficiario.nome });
 
     // Cancel subscription in Vindi if we have a subscription ID
+    let vindiCanceled = false;
     if (vindiSubscriptionId) {
       logStep("Canceling Vindi subscription", { vindiSubscriptionId });
 
@@ -71,19 +73,18 @@ serve(async (req) => {
             }
           });
 
-          const vindiResult = await vindiResponse.json();
-
-          if (!vindiResponse.ok) {
-            logStep("Vindi cancellation failed", { status: vindiResponse.status, result: vindiResult });
-
-            // Don't throw error - continue with local deletion even if Vindi fails
-            logStep("Continuing with local deletion despite Vindi error");
-          } else {
+          if (vindiResponse.ok) {
+            const vindiResult = await vindiResponse.json();
             logStep("Vindi subscription canceled successfully", { result: vindiResult });
+            vindiCanceled = true;
+          } else {
+            const errorResult = await vindiResponse.text();
+            logStep("Vindi cancellation failed", { status: vindiResponse.status, error: errorResult });
+            // Continue with local deletion even if Vindi fails
           }
         } catch (vindiError) {
           logStep("Vindi API error", { error: vindiError.message });
-          // Don't throw - continue with local deletion
+          // Continue with local deletion
         }
       }
     } else {
@@ -135,7 +136,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       message: "Adesão cancelada com sucesso",
-      vindiCanceled: !!vindiSubscriptionId,
+      vindiCanceled: vindiCanceled,
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

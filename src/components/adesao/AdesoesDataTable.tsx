@@ -164,29 +164,31 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
     setDeletingBeneficiarioId(beneficiarioSelecionado.id);
 
     try {
-      // Call Edge Function to cancel subscription in Vindi and delete locally
-      const { data, error } = await supabase.functions.invoke('cancel-vindi-subscription', {
-        body: {
-          beneficiarioId: beneficiarioSelecionado.id,
-          vindiSubscriptionId: beneficiarioSelecionado.vindi_subscription_id
-        }
-      });
+      // Delete from local database first
+      const { error: deleteError } = await supabase
+        .from('beneficiarios')
+        .delete()
+        .eq('id', beneficiarioSelecionado.id);
 
-      if (error) {
-        throw error;
+      if (deleteError) {
+        throw new Error('Erro ao excluir beneficiário do banco de dados');
       }
 
-      if (data?.success) {
+      // Show success message with instruction about Vindi
+      if (beneficiarioSelecionado.vindi_subscription_id) {
+        toast({
+          title: "Adesão excluída do sistema!",
+          description: `Beneficiário removido. Cancelar manualmente na Vindi a assinatura ID: ${beneficiarioSelecionado.vindi_subscription_id}`,
+        });
+      } else {
         toast({
           title: "Adesão excluída com sucesso!",
-          description: "A adesão foi cancelada na Vindi e removida do sistema.",
+          description: "O beneficiário foi removido do sistema.",
         });
-
-        // Refresh the page or call a refetch function if available
-        window.location.reload();
-      } else {
-        throw new Error(data?.error || 'Erro desconhecido ao excluir adesão');
       }
+
+      // Refresh the page
+      window.location.reload();
     } catch (error) {
       console.error('Erro ao excluir adesão:', error);
       toast({
@@ -516,8 +518,10 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
               <br /><br />
               Esta ação irá:
               <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Cancelar a assinatura na Vindi</li>
                 <li>Remover o beneficiário do sistema</li>
+                {beneficiarioSelecionado?.vindi_subscription_id && (
+                  <li>Informar o ID da assinatura Vindi para cancelamento manual</li>
+                )}
                 <li>Esta ação não pode ser desfeita</li>
               </ul>
             </DialogDescription>
