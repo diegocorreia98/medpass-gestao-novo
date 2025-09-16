@@ -9,16 +9,17 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { 
-  CreditCard, 
-  DollarSign, 
-  TrendingUp, 
-  Users, 
-  Eye, 
+import {
+  CreditCard,
+  DollarSign,
+  TrendingUp,
+  Users,
+  Eye,
   Download,
   RefreshCw,
   RotateCcw,
-  Settings
+  Settings,
+  CheckCircle
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,6 +51,7 @@ export default function Transacoes() {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [refreshingTransactionId, setRefreshingTransactionId] = useState<string | null>(null);
+  const [markingPaidTransactionId, setMarkingPaidTransactionId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
   const [sortField, setSortField] = useState<keyof Transaction>('created_at');
@@ -239,7 +241,7 @@ export default function Transacoes() {
   const handleTestVindiConnection = async () => {
     try {
       const { data, error } = await supabase.functions.invoke('test-vindi-connection');
-      
+
       if (error) {
         throw error;
       }
@@ -263,6 +265,49 @@ export default function Transacoes() {
         description: "Não foi possível testar a conexão com Vindi",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleMarkAsPaid = async (transaction: Transaction) => {
+    if (transaction.status === 'paid') {
+      toast({
+        title: "Transação já paga",
+        description: "Esta transação já está marcada como paga",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMarkingPaidTransactionId(transaction.id);
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', transaction.id);
+
+      if (error) {
+        throw error;
+      }
+
+      await refetch(); // Refresh the transactions list
+
+      toast({
+        title: "Status atualizado",
+        description: "Transação marcada como paga manualmente",
+      });
+    } catch (error) {
+      console.error('Error marking transaction as paid:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao marcar transação como paga",
+        variant: "destructive",
+      });
+    } finally {
+      setMarkingPaidTransactionId(null);
     }
   };
 
@@ -462,6 +507,7 @@ export default function Transacoes() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewDetails(transaction)}
+                            title="Ver detalhes"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -474,6 +520,18 @@ export default function Transacoes() {
                           >
                             <RotateCcw className="h-4 w-4" />
                           </Button>
+                          {transaction.status !== 'paid' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMarkAsPaid(transaction)}
+                              disabled={markingPaidTransactionId === transaction.id}
+                              title="Marcar como pago manualmente"
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
