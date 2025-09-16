@@ -108,12 +108,12 @@ serve(async (req) => {
         id: subscription.id,
         nome: subscription.customer_name,
         cpf: subscription.customer_document,
-        data_nascimento: subscription.metadata?.birth_date || '01011990', // Default if not available
+        data_nascimento: subscription.metadata?.birth_date || '01011990',
         telefone: subscription.metadata?.phone || subscription.customer_phone || '11999999999',
         email: subscription.customer_email,
-        cep: subscription.metadata?.cep || '01234567', // Default if not available
-        numero_endereco: subscription.metadata?.numero || '123', // Default if not available
-        estado: subscription.metadata?.uf || 'SP', // Default if not available
+        cep: subscription.metadata?.cep || '01234567',
+        numero_endereco: subscription.metadata?.numero || '123',
+        estado: subscription.metadata?.uf || 'SP',
         plano_id: subscription.plan_id,
         id_beneficiario_tipo: 1,
         codigo_externo: `VINDI_${subscriptionId}`
