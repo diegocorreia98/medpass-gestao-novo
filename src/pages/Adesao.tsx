@@ -13,6 +13,7 @@ export default function Adesao() {
   const { beneficiarios, isLoading, refetch } = useBeneficiarios();
   const { isRefreshing, refreshPaymentStatuses } = usePaymentStatus();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [importacaoModalOpen, setImportacaoModalOpen] = useState(false);
 
@@ -21,16 +22,18 @@ export default function Adesao() {
       const result = await refreshPaymentStatuses();
 
       // Show detailed success message
-      const message = result?.message || "Status atualizados com sucesso";
       const updates = result?.updates || 0;
       const localSyncs = result?.local_syncs || 0;
       const vindiSyncs = result?.vindi_syncs || 0;
 
       if (updates > 0) {
-        // Wait a bit for database updates to propagate
+        // Immediately invalidate all beneficiarios queries to force refresh
+        queryClient.invalidateQueries({ queryKey: ['beneficiarios'] });
+
+        // Also force refetch for immediate UI update
         setTimeout(async () => {
           await refetch(); // Refresh the beneficiarios data after database updates
-        }, 1000);
+        }, 500);
 
         toast({
           title: `✅ ${updates} Status Atualizados!`,
