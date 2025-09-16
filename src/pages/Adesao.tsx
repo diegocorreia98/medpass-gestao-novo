@@ -4,6 +4,7 @@ import { UserPlus, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useBeneficiarios } from "@/hooks/useBeneficiarios";
 import { usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import { AdesoesDataTable } from "@/components/adesao/AdesoesDataTable";
 import { AdesaoModal } from "@/components/adesao/AdesaoModal";
 import { ImportacaoLoteModal } from "@/components/adesao/ImportacaoLoteModal";
