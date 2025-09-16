@@ -94,6 +94,18 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
         return `${day}${month}${year}`;
       };
 
+      // Generate external code using unit name
+      const generateExternalCode = (beneficiario: BeneficiarioCompleto) => {
+        const unidadeName = beneficiario.unidade?.nome || 'MATRIZ';
+        const beneficiarioNumbers = beneficiario.id.replace(/[^0-9]/g, '').slice(0, 6);
+        // Clean unit name: remove spaces, special chars, and limit size
+        const cleanUnitName = unidadeName
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '')
+          .slice(0, 8);
+        return `${cleanUnitName}${beneficiarioNumbers}`.slice(0, 15);
+      };
+
       const adesaoData = {
         id: beneficiario.id,
         nome: beneficiario.nome,
@@ -106,7 +118,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
         estado: beneficiario.estado || 'SP',
         plano_id: beneficiario.plano_id,
         id_beneficiario_tipo: beneficiario.id_beneficiario_tipo || 1,
-        codigo_externo: beneficiario.codigo_externo || `${beneficiario.unidade?.id || '0'}${beneficiario.id}`
+        codigo_externo: beneficiario.codigo_externo || generateExternalCode(beneficiario)
       };
 
       const { data, error } = await supabase.functions.invoke('notify-external-api', {
