@@ -161,6 +161,26 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
 
   const isGeneratingLink = (beneficiarioId: string) => generatingLinks.has(beneficiarioId);
 
+  // ✅ NOVA: Função para copiar link do subscription-checkout
+  const handleCopySubscriptionLink = async (beneficiario: BeneficiarioCompleto) => {
+    if (!beneficiario.checkout_link) return;
+
+    try {
+      await navigator.clipboard.writeText(beneficiario.checkout_link);
+      toast({
+        title: "Link copiado! 📋",
+        description: `Link do subscription-checkout copiado para área de transferência`,
+      });
+    } catch (error) {
+      console.error('Erro ao copiar link:', error);
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o link",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -211,14 +231,25 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                   </TableCell>
                   <TableCell>
                     {beneficiario.checkout_link ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(beneficiario.checkout_link, '_blank')}
-                        className="text-xs"
-                      >
-                        Abrir Link
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(beneficiario.checkout_link, '_blank')}
+                          className="text-xs"
+                        >
+                          Abrir
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopySubscriptionLink(beneficiario)}
+                          className="text-xs px-2"
+                          title="Copiar link do subscription-checkout"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
                     )}

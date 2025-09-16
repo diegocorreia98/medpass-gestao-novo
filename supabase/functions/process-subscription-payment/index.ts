@@ -90,7 +90,6 @@ serve(async (req) => {
       .from("subscription_checkout_links")
       .select("*, subscriptions(*)")
       .eq("token", paymentData.token)
-      .eq("is_used", false)
       .gt("expires_at", new Date().toISOString())
       .single();
 
@@ -504,11 +503,8 @@ serve(async (req) => {
        }
      }
 
-    // Mark checkout link as used
-    await supabaseClient
-      .from("subscription_checkout_links")
-      .update({ is_used: true, updated_at: new Date().toISOString() })
-      .eq("id", checkoutLink.id);
+    // Link will remain usable until it expires naturally (24 hours)
+    // Removed is_used marking to allow multiple payment attempts
 
     // Update subscription status to pending_payment and add Vindi subscription ID
     await supabaseClient
