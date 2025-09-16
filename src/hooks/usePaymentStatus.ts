@@ -16,17 +16,17 @@ export function usePaymentStatus() {
 
   const refreshPaymentStatuses = async (showToast = false) => {
     if (isRefreshing) return;
-    
+
     setIsRefreshing(true);
-    
+
     try {
       // This would typically call an edge function to check Vindi API
       // and update payment statuses in the database
       const { data, error } = await supabase.functions.invoke('refresh-payment-statuses');
-      
+
       if (error) {
         console.error('Error refreshing payment statuses:', error);
-        return;
+        throw error;
       }
 
       if (showToast && data?.updates && data.updates.length > 0) {
@@ -35,15 +35,18 @@ export function usePaymentStatus() {
           description: `${data.updates.length} pagamento(s) tiveram status atualizado`,
         });
       }
+
+      return data;
     } catch (error) {
       console.error('Error in refreshPaymentStatuses:', error);
+      throw error;
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const manualRefresh = () => {
-    refreshPaymentStatuses(true);
+  const manualRefresh = async () => {
+    return await refreshPaymentStatuses(true);
   };
 
   const checkSinglePaymentStatus = async (beneficiarioId: string) => {

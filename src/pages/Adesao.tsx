@@ -17,18 +17,39 @@ export default function Adesao() {
 
   const handleRefreshStatuses = async () => {
     try {
-      await Promise.all([
-        refreshPaymentStatuses(),
-        refetch()
-      ]);
-      toast({
-        title: "Status atualizados",
-        description: "Os status e status de pagamento foram atualizados com sucesso",
-      });
+      const result = await refreshPaymentStatuses();
+
+      // Show detailed success message
+      const message = result?.message || "Status atualizados com sucesso";
+      const updates = result?.updates || 0;
+      const localSyncs = result?.local_syncs || 0;
+      const vindiSyncs = result?.vindi_syncs || 0;
+
+      if (updates > 0) {
+        // Wait a bit for database updates to propagate
+        setTimeout(async () => {
+          await refetch(); // Refresh the beneficiarios data after database updates
+        }, 1000);
+
+        toast({
+          title: `✅ ${updates} Status Atualizados!`,
+          description: localSyncs > 0 && vindiSyncs > 0
+            ? `${localSyncs} sincronizações locais + ${vindiSyncs} da API Vindi`
+            : localSyncs > 0
+            ? `${localSyncs} beneficiários sincronizados localmente`
+            : `${vindiSyncs} sincronizados da API Vindi`,
+        });
+      } else {
+        toast({
+          title: "Status verificados",
+          description: "Todos os status já estão atualizados",
+        });
+      }
     } catch (error) {
+      console.error('Error refreshing statuses:', error);
       toast({
         title: "Erro ao atualizar",
-        description: "Não foi possível atualizar os status",
+        description: error?.message || "Não foi possível atualizar os status",
         variant: "destructive",
       });
     }

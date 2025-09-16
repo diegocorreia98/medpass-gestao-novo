@@ -17,6 +17,58 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // ✅ Real-time subscription for beneficiarios updates (especially payment_status)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log('[REAL-TIME] Setting up beneficiarios subscription for user:', user.id);
+
+    const channel = supabase
+      .channel('beneficiarios-payment-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'beneficiarios',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('[REAL-TIME] Beneficiario update received:', payload);
+
+          const updatedBeneficiario = payload.new as Beneficiario;
+          const oldBeneficiario = payload.old as Beneficiario;
+
+          // Check if payment_status changed
+          if (updatedBeneficiario.payment_status !== oldBeneficiario.payment_status) {
+            console.log('[REAL-TIME] Payment status changed:', {
+              id: updatedBeneficiario.id,
+              nome: updatedBeneficiario.nome,
+              old_status: oldBeneficiario.payment_status,
+              new_status: updatedBeneficiario.payment_status
+            });
+
+            // Show toast notification for payment status changes
+            if (updatedBeneficiario.payment_status === 'paid') {
+              toast({
+                title: "Pagamento Confirmado! 🎉",
+                description: `O pagamento do beneficiário ${updatedBeneficiario.nome} foi confirmado.`,
+              });
+            }
+
+            // Invalidate and refetch beneficiarios data
+            queryClient.invalidateQueries({ queryKey: ['beneficiarios'] });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('[REAL-TIME] Cleaning up beneficiarios subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient, toast]);
+
   // Query para buscar beneficiários
   const {
     data: beneficiarios = [],

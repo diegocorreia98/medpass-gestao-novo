@@ -39,7 +39,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Get all transactions with payment_requested status
+    // ✅ ENHANCED: Get ALL transactions (both pending and paid) for comprehensive status sync
     const { data: transactions } = await supabaseService
       .from('transactions')
       .select(`
@@ -47,25 +47,55 @@ serve(async (req) => {
         beneficiario_id,
         vindi_charge_id,
         status,
+        customer_document,
         beneficiarios (
           id,
+          nome,
+          cpf,
           payment_status,
           user_id
         )
       `)
-      .eq('status', 'pending')
       .not('vindi_charge_id', 'is', null);
 
-    if (!transactions || transactions.length === 0) {
+    // Also get transactions that are already paid locally but beneficiario status might be outdated
+    const { data: paidTransactions } = await supabaseService
+      .from('transactions')
+      .select(`
+        id,
+        beneficiario_id,
+        customer_document,
+        status,
+        beneficiarios (
+          id,
+          nome,
+          cpf,
+          payment_status,
+          user_id
+        )
+      `)
+      .eq('status', 'paid');
+
+    // Combine both transaction sets
+    const allTransactions = [...(transactions || []), ...(paidTransactions || [])];
+
+    // Remove duplicates by transaction id
+    const uniqueTransactions = allTransactions.filter((transaction, index, self) =>
+      index === self.findIndex(t => t.id === transaction.id)
+    );
+
+    if (!uniqueTransactions || uniqueTransactions.length === 0) {
       return new Response(JSON.stringify({
         success: true,
         updates: [],
-        message: 'No pending transactions to check'
+        message: 'No transactions to check'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       });
     }
+
+    console.log(`🔍 Found ${uniqueTransactions.length} unique transactions to process`);
 
     // Get Vindi API settings from environment
     const vindiApiKey = Deno.env.get('VINDI_API_KEY');
@@ -87,8 +117,48 @@ serve(async (req) => {
 
     const updates: any[] = [];
 
-    // Check each transaction status with Vindi
-    for (const transaction of transactions) {
+    // Process each unique transaction
+    for (const transaction of uniqueTransactions) {
+      console.log(`🔄 Processing transaction ${transaction.id} - Status: ${transaction.status}`);
+
+      // ✅ PRIORITY FIX: Handle locally paid transactions first
+      if (transaction.status === 'paid' && transaction.beneficiarios?.payment_status !== 'paid') {
+        console.log(`💰 Found paid transaction with outdated beneficiario status:`, {
+          transaction_id: transaction.id,
+          beneficiario_id: transaction.beneficiario_id,
+          current_beneficiario_status: transaction.beneficiarios?.payment_status
+        });
+
+        // Update beneficiary payment status immediately
+        const { error: beneficiarioError } = await supabaseService
+          .from('beneficiarios')
+          .update({
+            payment_status: 'paid',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', transaction.beneficiario_id);
+
+        if (beneficiarioError) {
+          console.error('Error updating paid beneficiary:', beneficiarioError);
+        } else {
+          updates.push({
+            beneficiario_id: transaction.beneficiario_id,
+            beneficiario_nome: transaction.beneficiarios?.nome || 'Unknown',
+            old_status: transaction.beneficiarios?.payment_status,
+            new_status: 'paid',
+            transaction_id: transaction.id,
+            source: 'local_transaction_sync'
+          });
+          console.log(`✅ Updated beneficiario to paid status`);
+        }
+        continue; // Skip Vindi API check for already paid transactions
+      }
+
+      // ✅ Continue with Vindi API check for pending transactions
+      if (!transaction.vindi_charge_id) {
+        console.log(`⏭️  Skipping transaction ${transaction.id} - no Vindi charge ID`);
+        continue;
+      }
       try {
         const chargeResponse = await fetch(`${vindiApiUrl}/charges/${transaction.vindi_charge_id}`, {
           method: 'GET',
@@ -161,9 +231,11 @@ serve(async (req) => {
 
           updates.push({
             beneficiario_id: transaction.beneficiario_id,
+            beneficiario_nome: transaction.beneficiarios?.nome || 'Unknown',
             old_status: transaction.beneficiarios?.payment_status,
             new_status: newPaymentStatus,
-            transaction_id: transaction.id
+            transaction_id: transaction.id,
+            source: 'vindi_api_sync'
           });
         }
 
@@ -176,8 +248,10 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       updates,
-      checked_transactions: transactions.length,
-      message: `Checked ${transactions.length} transactions, ${updates.length} updates made`
+      checked_transactions: uniqueTransactions.length,
+      local_syncs: updates.filter(u => u.source === 'local_transaction_sync').length,
+      vindi_syncs: updates.filter(u => u.source === 'vindi_api_sync').length,
+      message: `Checked ${uniqueTransactions.length} transactions, made ${updates.length} updates (${updates.filter(u => u.source === 'local_transaction_sync').length} from local sync, ${updates.filter(u => u.source === 'vindi_api_sync').length} from Vindi API)`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
