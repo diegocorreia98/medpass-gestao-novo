@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy, Send } from "lucide-react";
+import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy, Send, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { EditarAdesaoModal } from "./EditarAdesaoModal";
@@ -28,7 +29,9 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
   const [detalhesModalOpen, setDetalhesModalOpen] = useState(false);
   const [reativarModalOpen, setReativarModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [beneficiarioSelecionado, setBeneficiarioSelecionado] = useState<BeneficiarioCompleto | undefined>();
+  const [deletingBeneficiarioId, setDeletingBeneficiarioId] = useState<string | null>(null);
   const { refreshPaymentStatuses } = usePaymentStatus();
   const { toast } = useToast();
 
@@ -147,6 +150,54 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
         description: error.message || "Não foi possível gerar a adesão na RMS",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleExcluirAdesao = (beneficiario: BeneficiarioCompleto) => {
+    setBeneficiarioSelecionado(beneficiario);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!beneficiarioSelecionado) return;
+
+    setDeletingBeneficiarioId(beneficiarioSelecionado.id);
+
+    try {
+      // Call Edge Function to cancel subscription in Vindi and delete locally
+      const { data, error } = await supabase.functions.invoke('cancel-vindi-subscription', {
+        body: {
+          beneficiarioId: beneficiarioSelecionado.id,
+          vindiSubscriptionId: beneficiarioSelecionado.vindi_subscription_id
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        toast({
+          title: "Adesão excluída com sucesso!",
+          description: "A adesão foi cancelada na Vindi e removida do sistema.",
+        });
+
+        // Refresh the page or call a refetch function if available
+        window.location.reload();
+      } else {
+        throw new Error(data?.error || 'Erro desconhecido ao excluir adesão');
+      }
+    } catch (error) {
+      console.error('Erro ao excluir adesão:', error);
+      toast({
+        title: "Erro ao excluir adesão",
+        description: error.message || "Não foi possível excluir a adesão",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingBeneficiarioId(null);
+      setDeleteModalOpen(false);
+      setBeneficiarioSelecionado(undefined);
     }
   };
 
@@ -307,6 +358,16 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                             >
                               <Send className="h-4 w-4" />
                             </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleExcluirAdesao(beneficiario)}
+                              className="h-8 w-8 text-red-600 hover:text-red-700"
+                              title="Excluir Adesão"
+                              disabled={deletingBeneficiarioId === beneficiario.id}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </>
                         )}
                         
@@ -361,6 +422,14 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                 <DropdownMenuItem onClick={() => handleGerarAdesaoRMS(beneficiario)}>
                                   <Send className="h-4 w-4 mr-2" />
                                   Gerar Adesão RMS
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleExcluirAdesao(beneficiario)}
+                                  className="text-red-600"
+                                  disabled={deletingBeneficiarioId === beneficiario.id}
+                                >
+                                  <X className="h-4 w-4 mr-2" />
+                                  Excluir Adesão
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -423,8 +492,8 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
         beneficiario={beneficiarioSelecionado}
       />
 
-      <GeneratePaymentLinkModal 
-        open={paymentModalOpen} 
+      <GeneratePaymentLinkModal
+        open={paymentModalOpen}
         onClose={() => {
           setPaymentModalOpen(false);
           setBeneficiarioSelecionado(undefined);
@@ -436,6 +505,44 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
           // This would be handled by the parent component
         }}
       />
+
+      {/* Modal de Confirmação de Exclusão */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Exclusão</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a adesão de <strong>{beneficiarioSelecionado?.nome}</strong>?
+              <br /><br />
+              Esta ação irá:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Cancelar a assinatura na Vindi</li>
+                <li>Remover o beneficiário do sistema</li>
+                <li>Esta ação não pode ser desfeita</li>
+              </ul>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteModalOpen(false);
+                setBeneficiarioSelecionado(undefined);
+              }}
+              disabled={deletingBeneficiarioId !== null}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deletingBeneficiarioId !== null}
+            >
+              {deletingBeneficiarioId !== null ? "Excluindo..." : "Confirmar Exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
