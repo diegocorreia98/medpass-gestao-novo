@@ -84,11 +84,21 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
 
   const handleGerarAdesaoRMS = async (beneficiario: BeneficiarioCompleto) => {
     try {
+      // Format data_nascimento to DDMMYYYY
+      const formatDateForRMS = (dateStr: string) => {
+        if (!dateStr) return '01011990';
+        const date = new Date(dateStr);
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString();
+        return `${day}${month}${year}`;
+      };
+
       const adesaoData = {
         id: beneficiario.id,
         nome: beneficiario.nome,
         cpf: beneficiario.cpf,
-        data_nascimento: beneficiario.data_nascimento,
+        data_nascimento: formatDateForRMS(beneficiario.data_nascimento),
         telefone: beneficiario.telefone || '11999999999',
         email: beneficiario.email,
         cep: beneficiario.cep || '01234567',
@@ -96,7 +106,7 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
         estado: beneficiario.estado || 'SP',
         plano_id: beneficiario.plano_id,
         id_beneficiario_tipo: beneficiario.id_beneficiario_tipo || 1,
-        codigo_externo: beneficiario.codigo_externo || `UNIDADE_${beneficiario.unidade?.nome || 'MATRIZ'}_${beneficiario.id}`
+        codigo_externo: beneficiario.codigo_externo || `${beneficiario.unidade?.id || '0'}${beneficiario.id}`
       };
 
       const { data, error } = await supabase.functions.invoke('notify-external-api', {
