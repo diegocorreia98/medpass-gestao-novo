@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface Empresa {
   id: string;
   user_id: string;
+  unidade_id?: string;
   razao_social: string;
   nome_fantasia?: string;
   cnpj: string;
@@ -54,6 +55,7 @@ export interface ColaboradorEmpresa {
 }
 
 export interface EmpresaInsert {
+  unidade_id?: string;
   razao_social: string;
   nome_fantasia?: string;
   cnpj: string;
@@ -70,8 +72,8 @@ export interface EmpresaInsert {
   status?: 'ativo' | 'inativo';
 }
 
-export const useEmpresas = () => {
-  const { user } = useAuth();
+export const useEmpresas = (filters?: { unidadeId?: string }) => {
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -82,12 +84,32 @@ export const useEmpresas = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['empresas', user?.id],
+    queryKey: ['empresas', user?.id, filters?.unidadeId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      if (!user?.id) throw new Error('Usuário não autenticado');
+
+      let query = supabase
         .from('empresas')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Se for usuário matriz, pode ver todas as empresas ou filtrar por unidade
+      if (profile?.user_type === 'matriz') {
+        if (filters?.unidadeId) {
+          query = query.eq('unidade_id', filters.unidadeId);
+        }
+        // Se não especificar unidade, matriz vê todas as empresas
+      } else {
+        // Para usuários de unidade, sempre filtrar pela própria unidade
+        if (filters?.unidadeId) {
+          query = query.eq('unidade_id', filters.unidadeId);
+        } else {
+          // Se não tiver unidadeId no filtro, não retornar nada (por segurança)
+          query = query.eq('unidade_id', 'non-existent-id');
+        }
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as Empresa[];
@@ -98,12 +120,14 @@ export const useEmpresas = () => {
 
   // Create empresa
   const createEmpresa = useMutation({
-    mutationFn: async (empresaData: EmpresaInsert) => {
+    mutationFn: async (empresaData: EmpresaInsert & { unidadeId?: string }) => {
+      const { unidadeId, ...restData } = empresaData;
       const { data, error } = await supabase
         .from('empresas')
         .insert({
-          ...empresaData,
+          ...restData,
           user_id: user?.id,
+          unidade_id: unidadeId || filters?.unidadeId,
         })
         .select()
         .single();

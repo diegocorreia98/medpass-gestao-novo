@@ -33,9 +33,10 @@ interface EmpresaFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   empresa?: Empresa;
+  unidadeId?: string;
 }
 
-export const EmpresaFormModal = ({ isOpen, onClose, empresa }: EmpresaFormModalProps) => {
+export const EmpresaFormModal = ({ isOpen, onClose, empresa, unidadeId }: EmpresaFormModalProps) => {
   const { createEmpresa, updateEmpresa, isCreating, isUpdating } = useEmpresas();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -124,7 +125,10 @@ export const EmpresaFormModal = ({ isOpen, onClose, empresa }: EmpresaFormModalP
           observacoes: data.observacoes || undefined,
           status: data.status,
         };
-        await createEmpresa.mutateAsync(createData);
+        await createEmpresa.mutateAsync({
+          ...createData,
+          unidadeId
+        });
       }
       
       onClose();

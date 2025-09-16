@@ -4,12 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEmpresas } from '@/hooks/useEmpresas';
+import { useUnidades } from '@/hooks/useUnidades';
+import { useAuth } from '@/contexts/AuthContext';
 import { EmpresaCard } from '@/components/empresas/EmpresaCard';
 import { EmpresaFormModal } from '@/components/empresas/EmpresaFormModal';
 import { DetalhesEmpresaModal } from '@/components/empresas/DetalhesEmpresaModal';
 
 export const GestaoEmpresas = () => {
-  const { empresas, isLoading } = useEmpresas();
+  const { profile } = useAuth();
+  const { unidades } = useUnidades();
+  const unidadeDoUsuario = unidades?.[0]; // Para usuário de unidade, sempre há apenas uma unidade
+
+  // Filtrar empresas por unidade se for usuário de unidade
+  const { empresas, isLoading } = useEmpresas({
+    unidadeId: profile?.user_type === 'unidade' ? unidadeDoUsuario?.id : undefined
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -42,7 +52,10 @@ export const GestaoEmpresas = () => {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Gestão de Empresas</h1>
           <p className="text-muted-foreground mt-1">
-            Gerencie empresas e seus responsáveis para orçamentos PJ
+            {profile?.user_type === 'unidade'
+              ? `Gerencie empresas da sua unidade: ${unidadeDoUsuario?.nome || 'Carregando...'}`
+              : 'Gerencie empresas e seus responsáveis para orçamentos PJ'
+            }
           </p>
         </div>
         <Button onClick={() => setIsFormModalOpen(true)}>
@@ -115,6 +128,7 @@ export const GestaoEmpresas = () => {
       <EmpresaFormModal
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
+        unidadeId={profile?.user_type === 'unidade' ? unidadeDoUsuario?.id : undefined}
       />
 
       <DetalhesEmpresaModal
