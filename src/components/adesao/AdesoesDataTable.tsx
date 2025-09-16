@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy } from "lucide-react";
+import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy, Send } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,7 +29,6 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
   const [reativarModalOpen, setReativarModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [beneficiarioSelecionado, setBeneficiarioSelecionado] = useState<BeneficiarioCompleto | undefined>();
-  const [generatingLinks, setGeneratingLinks] = useState<Set<string>>(new Set()); // Track loading per beneficiario
   const { refreshPaymentStatuses } = usePaymentStatus();
   const { toast } = useToast();
 
@@ -83,6 +82,52 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
     setPaymentModalOpen(true);
   };
 
+  const handleGerarAdesaoRMS = async (beneficiario: BeneficiarioCompleto) => {
+    try {
+      const adesaoData = {
+        id: beneficiario.id,
+        nome: beneficiario.nome,
+        cpf: beneficiario.cpf,
+        data_nascimento: beneficiario.data_nascimento,
+        telefone: beneficiario.telefone,
+        email: beneficiario.email,
+        cep: beneficiario.cep,
+        numero_endereco: beneficiario.numero_endereco,
+        estado: beneficiario.estado,
+        plano_id: beneficiario.plano_id,
+        id_beneficiario_tipo: beneficiario.id_beneficiario_tipo || 1,
+        codigo_externo: beneficiario.codigo_externo
+      };
+
+      const { data, error } = await supabase.functions.invoke('notify-external-api', {
+        body: {
+          operation: 'adesao',
+          data: adesaoData
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.success) {
+        toast({
+          title: "Adesão RMS gerada com sucesso!",
+          description: "O beneficiário foi registrado na RMS.",
+        });
+      } else {
+        throw new Error(data?.error || 'Erro desconhecido ao gerar adesão');
+      }
+    } catch (error) {
+      console.error('Erro ao gerar adesão RMS:', error);
+      toast({
+        title: "Erro ao gerar adesão",
+        description: error.message || "Não foi possível gerar a adesão na RMS",
+        variant: "destructive",
+      });
+    }
+  };
+
   const canGeneratePaymentLink = (beneficiario: BeneficiarioCompleto) => {
     return beneficiario.status === 'ativo' && 
            (!beneficiario.payment_status || 
@@ -90,76 +135,6 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
             beneficiario.payment_status === 'failed');
   };
 
-  // ✅ NOVA: Gerar link direto via API Vindi (sem modal)
-  const handleGenerateVindiLink = async (beneficiario: BeneficiarioCompleto) => {
-    const beneficiarioId = beneficiario.id;
-    setGeneratingLinks(prev => new Set([...prev, beneficiarioId]));
-    
-    try {
-      console.log('🔗 [VINDI-LINK] Gerando link para:', beneficiario.nome);
-      
-      const { data, error } = await supabase.functions.invoke('generate-payment-link-v2', {
-        body: { 
-          beneficiario_id: beneficiarioId,
-          payment_method: 'bank_slip' // Gera boleto/PIX
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      console.log('✅ [VINDI-LINK] Link gerado:', data);
-      
-      // Copiar link automaticamente
-      let linkToCopy = '';
-      let linkType = '';
-      
-      if (data.checkout_url) {
-        linkToCopy = data.checkout_url;
-        linkType = 'Checkout';
-      } else if (data.payment_url) {
-        linkToCopy = data.payment_url;
-        linkType = 'Vindi';
-      }
-      
-      if (linkToCopy) {
-        await navigator.clipboard.writeText(linkToCopy);
-        toast({
-          title: `Link ${linkType} gerado! 🔗`,
-          description: `Link copiado para área de transferência. ${data.due_date ? `Vencimento: ${new Date(data.due_date).toLocaleDateString('pt-BR')}` : ''}`,
-          action: (
-            <Button
-              size="sm"
-              onClick={() => window.open(linkToCopy, '_blank')}
-            >
-              Abrir Link
-            </Button>
-          )
-        });
-      } else {
-        throw new Error('Nenhum link foi gerado na resposta');
-      }
-      
-    } catch (error: any) {
-      console.error('❌ [VINDI-LINK] Erro:', error);
-      toast({
-        title: "Erro ao gerar link Vindi",
-        description: error.message || "Erro interno do servidor",
-        variant: "destructive",
-      });
-    } finally {
-      setGeneratingLinks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(beneficiarioId);
-        return newSet;
-      });
-    }
-  };
-
-  const isGeneratingLink = (beneficiarioId: string) => generatingLinks.has(beneficiarioId);
 
   // ✅ NOVA: Função para copiar link do subscription-checkout
   const handleCopySubscriptionLink = async (beneficiario: BeneficiarioCompleto) => {
@@ -295,27 +270,21 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                   size="icon"
                                   onClick={() => handleGeneratePaymentLink(beneficiario)}
                                   className="h-8 w-8 text-primary hover:text-primary"
-                                  title="Gerar Link de Pagamento (Modal)"
+                                  title="Gerar Link de Pagamento"
                                 >
                                   <CreditCard className="h-4 w-4" />
                                 </Button>
-                                {/* ✅ NOVO: Botão direto para gerar link via Vindi */}
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleGenerateVindiLink(beneficiario)}
-                                  disabled={isGeneratingLink(beneficiario.id)}
-                                  className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                                  title="Gerar Link Vindi (Direto)"
-                                >
-                                  {isGeneratingLink(beneficiario.id) ? (
-                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Link className="h-4 w-4" />
-                                  )}
-                                </Button>
                               </>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleGerarAdesaoRMS(beneficiario)}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                              title="Gerar Adesão RMS"
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
                           </>
                         )}
                         
@@ -363,23 +332,14 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                                   <>
                                     <DropdownMenuItem onClick={() => handleGeneratePaymentLink(beneficiario)}>
                                       <CreditCard className="h-4 w-4 mr-2" />
-                                      Gerar Link (Modal)
-                                    </DropdownMenuItem>
-                                    {/* ✅ NOVO: Botão direto Vindi no mobile */}
-                                    <DropdownMenuItem 
-                                      onClick={() => handleGenerateVindiLink(beneficiario)}
-                                      disabled={isGeneratingLink(beneficiario.id)}
-                                      className="text-blue-600"
-                                    >
-                                      {isGeneratingLink(beneficiario.id) ? (
-                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                      ) : (
-                                        <Link className="h-4 w-4 mr-2" />
-                                      )}
-                                      Gerar Link Vindi
+                                      Gerar Link de Pagamento
                                     </DropdownMenuItem>
                                   </>
                                 )}
+                                <DropdownMenuItem onClick={() => handleGerarAdesaoRMS(beneficiario)}>
+                                  <Send className="h-4 w-4 mr-2" />
+                                  Gerar Adesão RMS
+                                </DropdownMenuItem>
                               </>
                             )}
                             
