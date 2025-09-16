@@ -101,6 +101,21 @@ serve(async (req) => {
         logStep("Subscription status updated to active");
       }
 
+      // Also update related transaction status to paid
+      const { error: transactionUpdateError } = await supabase
+        .from('transactions')
+        .update({
+          status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('vindi_subscription_id', subscriptionId);
+
+      if (transactionUpdateError) {
+        logStep("Error updating transaction status", { error: transactionUpdateError.message });
+      } else {
+        logStep("Transaction status updated to paid");
+      }
+
       // Call adesão API
       logStep("Calling adesão API for subscription", { subscriptionId: subscription.id });
 

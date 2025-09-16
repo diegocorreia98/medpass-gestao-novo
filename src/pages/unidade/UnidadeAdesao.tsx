@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus, FileSpreadsheet, Link, RefreshCw } from "lucide-react";
+import { UserPlus, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useBeneficiarios } from "@/hooks/useBeneficiarios";
 import { useUnidades } from "@/hooks/useUnidades";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,7 +8,6 @@ import { usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { AdesoesDataTable } from "@/components/adesao/AdesoesDataTable";
 import { UnidadeAdesaoModal } from "@/components/adesao/UnidadeAdesaoModal";
 import { ImportacaoLoteModal } from "@/components/adesao/ImportacaoLoteModal";
-import { GerarLinkModal } from "@/components/adesao/GerarLinkModal";
 import { useToast } from "@/hooks/use-toast";
 export default function UnidadeAdesao() {
   const { user, profile } = useAuth();
@@ -31,7 +30,6 @@ export default function UnidadeAdesao() {
   console.log('[UNIDADE-ADESAO] Total beneficiários encontrados:', beneficiarios.length);
   const [modalOpen, setModalOpen] = useState(false);
   const [importacaoModalOpen, setImportacaoModalOpen] = useState(false);
-  const [gerarLinkModalOpen, setGerarLinkModalOpen] = useState(false);
 
   // Consolidate refresh functions with useCallback to prevent unnecessary re-renders
   const handleRefresh = useCallback(async (showToast = false) => {
@@ -84,13 +82,9 @@ export default function UnidadeAdesao() {
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Importar em Lote
           </Button>
-          <Button onClick={() => setGerarLinkModalOpen(true)} variant="outline">
-            <Link className="h-4 w-4 mr-2" />
-            Gerar Link
-          </Button>
-          <Button 
-            onClick={handleManualRefresh} 
-            variant="outline" 
+          <Button
+            onClick={handleManualRefresh}
+            variant="outline"
             disabled={isRefreshing}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -119,18 +113,9 @@ export default function UnidadeAdesao() {
         onClose={() => setModalOpen(false)} 
       />
 
-      <ImportacaoLoteModal 
-        open={importacaoModalOpen} 
-        onClose={() => setImportacaoModalOpen(false)} 
-      />
-
-      <GerarLinkModal 
-        open={gerarLinkModalOpen}
-        onClose={() => {
-          setGerarLinkModalOpen(false);
-          refetch();
-        }}
-        beneficiarios={beneficiariosUnidade}
+      <ImportacaoLoteModal
+        open={importacaoModalOpen}
+        onClose={() => setImportacaoModalOpen(false)}
       />
     </div>
   );

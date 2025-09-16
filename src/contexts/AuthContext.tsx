@@ -67,11 +67,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Error fetching profile:', error);
         return null;
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error fetching profile:', error);
       return null;
+    }
+  };
+
+  const autoUpdateInviteStatus = async (userEmail: string, userId: string, userType: UserType) => {
+    try {
+      console.log('Checking for pending invites for:', userEmail, 'Type:', userType);
+
+      // Only process for unidade users
+      if (userType !== 'unidade') {
+        return;
+      }
+
+      // Check for pending franchise invites
+      const { data: pendingInvites, error: inviteError } = await supabase
+        .from('convites_franqueados')
+        .select('id, unidade_id, aceito, expires_at')
+        .eq('email', userEmail)
+        .eq('aceito', false);
+
+      if (inviteError) {
+        console.error('Error checking pending invites:', inviteError);
+        return;
+      }
+
+      if (!pendingInvites || pendingInvites.length === 0) {
+        console.log('No pending invites found for:', userEmail);
+        return;
+      }
+
+      // Process valid (non-expired) invites
+      const validInvites = pendingInvites.filter(invite =>
+        new Date(invite.expires_at) > new Date()
+      );
+
+      if (validInvites.length === 0) {
+        console.log('All invites expired for:', userEmail);
+        return;
+      }
+
+      console.log(`Found ${validInvites.length} valid pending invites for ${userEmail}`);
+
+      // Update invites to accepted and associate with user
+      for (const invite of validInvites) {
+        try {
+          // Mark invite as accepted
+          const { error: updateInviteError } = await supabase
+            .from('convites_franqueados')
+            .update({
+              aceito: true,
+              user_id_aceito: userId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', invite.id);
+
+          if (updateInviteError) {
+            console.error('Error updating invite:', invite.id, updateInviteError);
+            continue;
+          }
+
+          // Associate unit with user
+          const { error: updateUnitError } = await supabase
+            .from('unidades')
+            .update({ user_id: userId })
+            .eq('id', invite.unidade_id);
+
+          if (updateUnitError) {
+            console.error('Error associating unit to user:', updateUnitError);
+            // Don't throw - invite is still marked as accepted
+          }
+
+          console.log(`Successfully updated invite ${invite.id} and associated unit ${invite.unidade_id}`);
+        } catch (error) {
+          console.error('Error processing invite:', invite.id, error);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error in autoUpdateInviteStatus:', error);
+      // Don't throw - this is a background process
     }
   };
 
@@ -87,6 +166,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setTimeout(async () => {
             const profileData = await fetchProfile(session.user.id);
             setProfile(profileData);
+
+            // Auto-update invite status when user logs in
+            if (profileData && session.user.email) {
+              await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -105,6 +189,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimeout(async () => {
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
+
+          // Auto-update invite status when checking existing session
+          if (profileData && session.user.email) {
+            await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
+          }
         }, 0);
       }
       

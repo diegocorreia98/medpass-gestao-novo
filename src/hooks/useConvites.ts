@@ -120,7 +120,7 @@ export function useConvites() {
       // Atualizar o convite para aceito
       const { error } = await supabase
         .from('convites_franqueados')
-        .update({ 
+        .update({
           aceito: true,
           updated_at: new Date().toISOString()
         })
@@ -150,6 +150,126 @@ export function useConvites() {
     }
   })
 
+  // Mutation para sincronizar status de convites
+  const syncInviteStatuses = useMutation({
+    mutationFn: async () => {
+      console.log('=== SINCRONIZANDO STATUS DE CONVITES ===')
+
+      // Buscar convites pendentes (não aceitos e não expirados)
+      const { data: pendingInvites, error: invitesError } = await supabase
+        .from('convites_franqueados')
+        .select('id, email, unidade_id, aceito, expires_at')
+        .eq('aceito', false)
+        .gt('expires_at', new Date().toISOString())
+
+      if (invitesError) {
+        console.error('Erro ao buscar convites pendentes:', invitesError)
+        throw invitesError
+      }
+
+      if (!pendingInvites || pendingInvites.length === 0) {
+        console.log('Nenhum convite pendente encontrado')
+        return { updated: 0, total: 0 }
+      }
+
+      console.log(`Found ${pendingInvites.length} pending invites`)
+
+      let updatedCount = 0
+
+      // Para cada convite pendente, verificar se existe usuário ativo com o email
+      for (const invite of pendingInvites) {
+        try {
+          // Verificar se existe um perfil de usuário ativo com este email
+          const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('user_id, user_type')
+            .eq('user_type', 'unidade')
+
+          if (profileError) {
+            console.error('Erro ao buscar perfis:', profileError)
+            continue
+          }
+
+          // Verificar se existe usuário ativo para este convite usando uma abordagem diferente
+          // Buscar unidades que já têm user_id mas o convite ainda não foi marcado como aceito
+          const { data: associatedUnits, error: unitsError } = await supabase
+            .from('unidades')
+            .select('user_id, email')
+            .eq('email', invite.email)
+            .not('user_id', 'is', null)
+
+          let matchingUserId = null
+          if (!unitsError && associatedUnits && associatedUnits.length > 0) {
+            matchingUserId = associatedUnits[0].user_id
+          }
+
+          if (matchingUserId) {
+            console.log(`Found active user for invite ${invite.id}: ${invite.email}`)
+
+            // Marcar convite como aceito
+            const { error: updateInviteError } = await supabase
+              .from('convites_franqueados')
+              .update({
+                aceito: true,
+                user_id_aceito: matchingUserId,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', invite.id)
+
+            if (updateInviteError) {
+              console.error('Erro ao atualizar convite:', invite.id, updateInviteError)
+              continue
+            }
+
+            // Associar unidade ao usuário
+            const { error: updateUnitError } = await supabase
+              .from('unidades')
+              .update({ user_id: matchingUserId })
+              .eq('id', invite.unidade_id)
+
+            if (updateUnitError) {
+              console.error('Erro ao associar unidade:', updateUnitError)
+              // Continue - invite is still marked as accepted
+            }
+
+            updatedCount++
+            console.log(`Successfully synced invite ${invite.id}`)
+          }
+        } catch (error) {
+          console.error('Erro ao processar convite:', invite.id, error)
+        }
+      }
+
+      console.log(`Sync completed: ${updatedCount}/${pendingInvites.length} invites updated`)
+      return { updated: updatedCount, total: pendingInvites.length }
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['convites'] })
+
+      if (result.updated > 0) {
+        toast({
+          title: "Sincronização concluída!",
+          description: `${result.updated} de ${result.total} convites foram atualizados automaticamente.`,
+        })
+      } else {
+        toast({
+          title: "Sincronização concluída",
+          description: result.total > 0
+            ? "Nenhum convite precisou ser atualizado."
+            : "Nenhum convite pendente encontrado.",
+        })
+      }
+    },
+    onError: (error) => {
+      console.error('Erro na sincronização:', error)
+      toast({
+        title: "Erro na sincronização",
+        description: "Houve um erro ao sincronizar os status dos convites.",
+        variant: "destructive"
+      })
+    }
+  })
+
   return {
     convites,
     isLoading,
@@ -161,5 +281,7 @@ export function useConvites() {
     isResending: resendInvite.isPending,
     markInviteAccepted: markInviteAccepted.mutate,
     isMarkingAccepted: markInviteAccepted.isPending,
+    syncInviteStatuses: syncInviteStatuses.mutate,
+    isSyncing: syncInviteStatuses.isPending,
   }
 }

@@ -1,17 +1,38 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UserPlus, FileSpreadsheet, Link } from "lucide-react";
+import { UserPlus, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { useBeneficiarios } from "@/hooks/useBeneficiarios";
+import { usePaymentStatus } from "@/hooks/usePaymentStatus";
+import { useToast } from "@/hooks/use-toast";
 import { AdesoesDataTable } from "@/components/adesao/AdesoesDataTable";
 import { AdesaoModal } from "@/components/adesao/AdesaoModal";
 import { ImportacaoLoteModal } from "@/components/adesao/ImportacaoLoteModal";
-import { GerarLinkModal } from "@/components/adesao/GerarLinkModal";
 
 export default function Adesao() {
-  const { beneficiarios, isLoading } = useBeneficiarios();
+  const { beneficiarios, isLoading, refetch } = useBeneficiarios();
+  const { isRefreshing, refreshPaymentStatuses } = usePaymentStatus();
+  const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [importacaoModalOpen, setImportacaoModalOpen] = useState(false);
-  const [gerarLinkModalOpen, setGerarLinkModalOpen] = useState(false);
+
+  const handleRefreshStatuses = async () => {
+    try {
+      await Promise.all([
+        refreshPaymentStatuses(),
+        refetch()
+      ]);
+      toast({
+        title: "Status atualizados",
+        description: "Os status e status de pagamento foram atualizados com sucesso",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao atualizar",
+        description: "Não foi possível atualizar os status",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -29,9 +50,13 @@ export default function Adesao() {
             <FileSpreadsheet className="h-4 w-4 mr-2" />
             Importar em Lote
           </Button>
-          <Button onClick={() => setGerarLinkModalOpen(true)} variant="outline">
-            <Link className="h-4 w-4 mr-2" />
-            Gerar Link
+          <Button
+            onClick={handleRefreshStatuses}
+            variant="outline"
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Atualizar Status
           </Button>
         </div>
       </div>
@@ -46,15 +71,9 @@ export default function Adesao() {
         onClose={() => setModalOpen(false)} 
       />
 
-      <ImportacaoLoteModal 
-        open={importacaoModalOpen} 
-        onClose={() => setImportacaoModalOpen(false)} 
-      />
-
-      <GerarLinkModal 
-        open={gerarLinkModalOpen} 
-        onClose={() => setGerarLinkModalOpen(false)}
-        beneficiarios={beneficiarios}
+      <ImportacaoLoteModal
+        open={importacaoModalOpen}
+        onClose={() => setImportacaoModalOpen(false)}
       />
     </div>
   );

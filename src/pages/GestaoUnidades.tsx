@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, Search, Building2, Users, CheckCircle, XCircle } from "lucide-react"
+import { Plus, Search, Building2, Users, CheckCircle, XCircle, RefreshCw } from "lucide-react"
 import { MultiStepForm } from "@/components/unidades/MultiStepForm"
 import { UnidadeStep, type UnidadeFormData } from "@/components/unidades/UnidadeStep"
 import { ResponsavelStep, type ResponsavelFormData } from "@/components/unidades/ResponsavelStep"
@@ -19,7 +19,7 @@ import type { Unidade } from "@/types/database"
 export default function GestaoUnidades() {
   const { unidades, isLoading, createUnidade, updateUnidade, deleteUnidade, canManageAll } = useUnidades()
   const { franquias } = useFranquias()
-  const { convites, resendInvite, isResending, markInviteAccepted, isMarkingAccepted } = useConvites()
+  const { convites, resendInvite, isResending, markInviteAccepted, isMarkingAccepted, syncInviteStatuses, isSyncing } = useConvites()
   
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -233,6 +233,10 @@ export default function GestaoUnidades() {
     markInviteAccepted({ unidadeId })
   }
 
+  const handleSyncInviteStatuses = () => {
+    syncInviteStatuses()
+  }
+
   const steps = [
     {
       title: "Informações da Unidade",
@@ -324,12 +328,23 @@ export default function GestaoUnidades() {
             Gerencie unidades e seus responsáveis em um só lugar
           </p>
         </div>
-        {canManageAll && (
-          <Button onClick={openCreateDialog} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Nova Unidade
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSyncInviteStatuses}
+            variant="outline"
+            className="flex items-center gap-2"
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar Status'}
           </Button>
-        )}
+          {canManageAll && (
+            <Button onClick={openCreateDialog} className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nova Unidade
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Statistics Cards */}
