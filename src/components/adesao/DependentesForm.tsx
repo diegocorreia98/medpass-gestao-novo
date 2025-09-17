@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { UserPlus, X, Users } from "lucide-react";
+import { UserPlus, X, Users, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export interface DependenteFormData {
@@ -20,6 +20,9 @@ interface DependentesFormProps {
   dependentes: DependenteFormData[];
   onDependentesChange: (dependentes: DependenteFormData[]) => void;
   disabled?: boolean;
+  onCancelarDependente?: (dependente: DependenteFormData, index: number) => void;
+  cancellingDependente?: string | null;
+  showCancelButtons?: boolean;
 }
 
 const dependenteVazio: DependenteFormData = {
@@ -31,7 +34,14 @@ const dependenteVazio: DependenteFormData = {
   observacoes: ""
 };
 
-export function DependentesForm({ dependentes, onDependentesChange, disabled = false }: DependentesFormProps) {
+export function DependentesForm({
+  dependentes,
+  onDependentesChange,
+  disabled = false,
+  onCancelarDependente,
+  cancellingDependente,
+  showCancelButtons = false
+}: DependentesFormProps) {
   const { toast } = useToast();
 
   const adicionarDependente = () => {
@@ -77,16 +87,35 @@ export function DependentesForm({ dependentes, onDependentesChange, disabled = f
           <div key={index} className="relative border rounded-lg p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Dependente {index + 1}</h4>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => removerDependente(index)}
-                disabled={disabled}
-                className="text-destructive hover:text-destructive"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                {showCancelButtons && onCancelarDependente && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onCancelarDependente(dependente, index)}
+                    disabled={disabled || cancellingDependente === `${dependente.cpf}_${dependente.nome.replace(/\s/g, '_')}`}
+                    className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300"
+                  >
+                    {cancellingDependente === `${dependente.cpf}_${dependente.nome.replace(/\s/g, '_')}` ? (
+                      <div className="animate-spin h-3 w-3 border-2 border-red-600 border-t-transparent rounded-full" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                    Cancelar na RMS
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removerDependente(index)}
+                  disabled={disabled}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

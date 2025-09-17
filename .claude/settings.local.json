@@ -17,7 +17,9 @@
       "Bash(supabase login:*)",
       "Bash(npm run build:*)",
       "Bash(supabase db:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

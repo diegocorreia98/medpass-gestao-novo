@@ -250,6 +250,7 @@ export default function ApiLogs() {
                   <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="adesao">Adesão</SelectItem>
                   <SelectItem value="cancelamento">Cancelamento</SelectItem>
+                  <SelectItem value="dependentes">Dependentes</SelectItem>
                   <SelectItem value="test">Teste</SelectItem>
                   <SelectItem value="test-credentials">Teste Credenciais</SelectItem>
                   <SelectItem value="test-adesao">Teste Adesão</SelectItem>
@@ -390,6 +391,13 @@ export default function ApiLogs() {
                             {log.request_data && (
                               <div>
                                 <h4 className="font-medium mb-2">Dados da Requisição</h4>
+                                {log.operation === 'dependentes' && log.request_data.cpfTitular && (
+                                  <div className="mb-2 p-2 bg-blue-50 rounded border">
+                                    <p className="text-sm font-medium text-blue-700">Dependente</p>
+                                    <p className="text-xs text-blue-600">CPF Titular: {log.request_data.cpfTitular}</p>
+                                    <p className="text-xs text-blue-600">Tipo: {log.request_data.idBeneficiarioTipo === 3 ? 'Dependente' : 'Não identificado'}</p>
+                                  </div>
+                                )}
                                 <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
                                   {JSON.stringify(log.request_data, null, 2)}
                                 </pre>

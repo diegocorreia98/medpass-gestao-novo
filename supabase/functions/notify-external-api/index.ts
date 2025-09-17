@@ -290,10 +290,12 @@ function formatCPFForVindi(cpf: string): string {
 function mapPlanoToTipoPlano(planoId: string): number {
   // Mapear plano_id para tipoPlano da API externa
   const planoMapping: { [key: string]: number } = {
-    'f3395d2c-7e18-41e6-8204-1d71c1981d3c': 102304, // Plano Familiar
-    '1af1a9e8-5590-4349-84cc-be5f8f7f9d83': 102303, // Plano Individual
+    'f3395d2c-7e18-41e6-8204-1d71c1981d3c': 102304, // Plano Familiar (old)
+    '1af1a9e8-5590-4349-84cc-be5f8f7f9d83': 102303, // Plano Individual (old)
+    '8f22a8dc-62f6-5145-b57d-fcec8c6780de': 102304, // Plano Familiar (new UUID)
+    '4e11e7cb-51f5-4034-a46c-ebdb7b5679cd': 102303, // Plano Individual (new UUID)
   };
-  
+
   return planoMapping[planoId] || 102303; // Default para Individual
 }
 
@@ -528,7 +530,8 @@ serve(async (req) => {
         estado,
         plano_id,
         id_beneficiario_tipo,
-        codigo_externo
+        codigo_externo,
+        cpf_titular // CPF do titular (obrigatório para dependentes)
       } = data;
 
       const requestData = {
@@ -546,6 +549,11 @@ serve(async (req) => {
         uf: estado,
         tipoPlano: mapPlanoToTipoPlano(plano_id)
       };
+
+      // Add cpfTitular field if this is a dependent (idBeneficiarioTipo = 3)
+      if (id_beneficiario_tipo === 3 && cpf_titular) {
+        requestData.cpfTitular = cpf_titular;
+      }
 
       try {
         const response = await makeApiCall(requestData, 'adesao', apiSettings);
@@ -581,6 +589,95 @@ serve(async (req) => {
         });
       } catch (error) {
         await logApiCall(beneficiarioId, 'adesao', requestData, null, 'error', error.message);
+        throw error;
+      }
+
+    } else if (operation === 'dependentes') {
+      // Handle dependents as adesao operation with idBeneficiarioTipo = 3
+      const {
+        id: beneficiarioId,
+        nome,
+        cpf,
+        data_nascimento,
+        celular,
+        email,
+        cep,
+        numero,
+        uf,
+        id_beneficiario_tipo,
+        codigo_externo,
+        cpf_titular
+      } = data;
+
+      const requestData = {
+        idClienteContrato: parseInt(idClienteContrato),
+        idBeneficiarioTipo: id_beneficiario_tipo || 3, // 3 = Dependente
+        nome,
+        codigoExterno: codigo_externo,
+        cpf,
+        idCliente: parseInt(idCliente),
+        celular,
+        email,
+        cep,
+        numero,
+        uf,
+        tipoPlano: tipoPlano
+      };
+
+      // Add cpfTitular field if this is a dependent (idBeneficiarioTipo = 3)
+      if (id_beneficiario_tipo === 3 && cpf_titular) {
+        requestData.cpfTitular = cpf_titular;
+      }
+
+      // Format date if provided
+      if (data_nascimento) {
+        const formatDateForRMS = (dateStr: string) => {
+          if (!dateStr) return '01011990'
+          const date = new Date(dateStr)
+          const day = date.getDate().toString().padStart(2, '0')
+          const month = (date.getMonth() + 1).toString().padStart(2, '0')
+          const year = date.getFullYear().toString()
+          return `${day}${month}${year}`
+        }
+        requestData.dataNascimento = formatDateForRMS(data_nascimento);
+      }
+
+      console.log('=== DEPENDENTE ADESAO ===');
+      console.log('requestData:', JSON.stringify(requestData, null, 2));
+
+      try {
+        const response = await makeApiCall(requestData, 'adesao', apiSettings);
+
+        const validation = validateApiResponse('adesao', response);
+
+        if (!validation.isValid) {
+          console.warn('Validação falhou:', validation.errorMessage);
+          await logApiCall(
+            beneficiarioId,
+            'dependentes',
+            requestData,
+            response,
+            'error',
+            validation.errorMessage
+          );
+
+          return new Response(JSON.stringify({
+            success: false,
+            error: validation.errorMessage,
+            response
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400
+          });
+        }
+
+        await logApiCall(beneficiarioId, 'dependentes', requestData, response, 'success');
+
+        return new Response(JSON.stringify({ success: true, response }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        await logApiCall(beneficiarioId, 'dependentes', requestData, null, 'error', error.message);
         throw error;
       }
 
