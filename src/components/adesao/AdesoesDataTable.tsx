@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy, Send, X } from "lucide-react";
+import { Edit, Trash2, Eye, MoreHorizontal, RefreshCw, CreditCard, Link, Copy, Send, X, RotateCcw, CheckCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
@@ -32,6 +32,8 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [beneficiarioSelecionado, setBeneficiarioSelecionado] = useState<BeneficiarioCompleto | undefined>();
   const [deletingBeneficiarioId, setDeletingBeneficiarioId] = useState<string | null>(null);
+  const [refreshingPaymentId, setRefreshingPaymentId] = useState<string | null>(null);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const { refreshPaymentStatuses } = usePaymentStatus();
   const { toast } = useToast();
 
@@ -231,6 +233,89 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
     }
   };
 
+  const handleRefreshPaymentStatus = async (beneficiario: BeneficiarioCompleto) => {
+    if (!beneficiario.vindi_subscription_id) {
+      toast({
+        title: "Erro",
+        description: "Beneficiário não possui ID de assinatura da Vindi para verificação",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRefreshingPaymentId(beneficiario.id);
+
+    try {
+      // Use the same refresh-payment-statuses function from transactions page
+      const { data, error } = await supabase.functions.invoke('refresh-payment-statuses');
+
+      if (error) {
+        throw error;
+      }
+
+      // Refresh the page to get updated data
+      window.location.reload();
+
+      toast({
+        title: "Status atualizado",
+        description: `Status de pagamento foi verificado e atualizado`,
+      });
+    } catch (error) {
+      console.error('Error refreshing payment status:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar status do pagamento",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingPaymentId(null);
+    }
+  };
+
+  const handleMarkAsPaid = async (beneficiario: BeneficiarioCompleto) => {
+    if (beneficiario.payment_status === 'paid') {
+      toast({
+        title: "Pagamento já confirmado",
+        description: "Este beneficiário já está marcado como pago",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMarkingPaidId(beneficiario.id);
+
+    try {
+      const { error } = await supabase
+        .from('beneficiarios')
+        .update({
+          payment_status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', beneficiario.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Refresh the page to get updated data
+      window.location.reload();
+
+      toast({
+        title: "Status atualizado",
+        description: "Beneficiário marcado como pago manualmente",
+      });
+    } catch (error) {
+      console.error('Error marking as paid:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao marcar como pago",
+        variant: "destructive",
+      });
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -318,13 +403,68 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                   <Eye className="h-4 w-4 mr-2" />
                   Ver
                 </Button>
+
+                {/* Botões de Status de Pagamento */}
+                {beneficiario.vindi_subscription_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRefreshPaymentStatus(beneficiario)}
+                    disabled={refreshingPaymentId === beneficiario.id}
+                    className="h-10 w-10 p-0 touch-manipulation"
+                    title="Atualizar status do pagamento"
+                  >
+                    <RotateCcw className={`h-4 w-4 ${refreshingPaymentId === beneficiario.id ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+
+                {beneficiario.payment_status !== 'paid' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleMarkAsPaid(beneficiario)}
+                    disabled={markingPaidId === beneficiario.id}
+                    className="h-10 w-10 p-0 touch-manipulation text-green-600 hover:text-green-700"
+                    title="Marcar como pago manualmente"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                  </Button>
+                )}
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-10 w-10 p-0 touch-manipulation">
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-56">
+                    {/* Ações de Status de Pagamento */}
+                    {beneficiario.vindi_subscription_id && (
+                      <DropdownMenuItem
+                        onClick={() => handleRefreshPaymentStatus(beneficiario)}
+                        disabled={refreshingPaymentId === beneficiario.id}
+                        className="text-blue-600"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Atualizar Status Pagamento
+                      </DropdownMenuItem>
+                    )}
+
+                    {beneficiario.payment_status !== 'paid' && (
+                      <DropdownMenuItem
+                        onClick={() => handleMarkAsPaid(beneficiario)}
+                        disabled={markingPaidId === beneficiario.id}
+                        className="text-green-600"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Marcar como Pago
+                      </DropdownMenuItem>
+                    )}
+
+                    {(beneficiario.vindi_subscription_id || beneficiario.payment_status !== 'paid') && (
+                      <div className="border-t my-1"></div>
+                    )}
+
                     {beneficiario.status === 'ativo' && (
                       <>
                         <DropdownMenuItem onClick={() => handleEditar(beneficiario)}>
@@ -451,6 +591,33 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                           <Eye className="h-4 w-4" />
                         </Button>
 
+                        {/* Botões de Status de Pagamento */}
+                        {beneficiario.vindi_subscription_id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRefreshPaymentStatus(beneficiario)}
+                            disabled={refreshingPaymentId === beneficiario.id}
+                            className="h-8 w-8 p-0"
+                            title="Atualizar status do pagamento"
+                          >
+                            <RotateCcw className={`h-4 w-4 ${refreshingPaymentId === beneficiario.id ? 'animate-spin' : ''}`} />
+                          </Button>
+                        )}
+
+                        {beneficiario.payment_status !== 'paid' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMarkAsPaid(beneficiario)}
+                            disabled={markingPaidId === beneficiario.id}
+                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
+                            title="Marcar como pago manualmente"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                        )}
+
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -458,6 +625,33 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            {/* Ações de Status de Pagamento */}
+                            {beneficiario.vindi_subscription_id && (
+                              <DropdownMenuItem
+                                onClick={() => handleRefreshPaymentStatus(beneficiario)}
+                                disabled={refreshingPaymentId === beneficiario.id}
+                                className="text-blue-600"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Atualizar Status Pagamento
+                              </DropdownMenuItem>
+                            )}
+
+                            {beneficiario.payment_status !== 'paid' && (
+                              <DropdownMenuItem
+                                onClick={() => handleMarkAsPaid(beneficiario)}
+                                disabled={markingPaidId === beneficiario.id}
+                                className="text-green-600"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Marcar como Pago
+                              </DropdownMenuItem>
+                            )}
+
+                            {(beneficiario.vindi_subscription_id || beneficiario.payment_status !== 'paid') && (
+                              <div className="border-t my-1"></div>
+                            )}
+
                             {beneficiario.status === 'ativo' && (
                               <>
                                 <DropdownMenuItem onClick={() => handleEditar(beneficiario)}>
