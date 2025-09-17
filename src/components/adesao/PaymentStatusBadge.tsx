@@ -15,28 +15,14 @@ export function PaymentStatusBadge({ status }: PaymentStatusBadgeProps) {
       case 'aprovado':
         return {
           variant: 'default' as const,
-          label: '✅ Pago',
+          label: 'Pago',
           className: 'bg-success text-success-foreground'
-        };
-      case 'payment_requested':
-      case 'solicitado':
-        return {
-          variant: 'secondary' as const,
-          label: '🟡 Link Gerado',
-          className: 'bg-warning text-warning-foreground'
-        };
-      case 'processing':
-      case 'processando':
-        return {
-          variant: 'default' as const,
-          label: '🔵 Processando',
-          className: 'bg-primary text-primary-foreground'
         };
       case 'pending':
       case 'pendente':
         return {
           variant: 'secondary' as const,
-          label: '🟡 Pendente',
+          label: 'Pendente',
           className: 'bg-warning text-warning-foreground'
         };
       case 'failed':
@@ -44,22 +30,36 @@ export function PaymentStatusBadge({ status }: PaymentStatusBadgeProps) {
       case 'rejeitado':
         return {
           variant: 'destructive' as const,
-          label: '❌ Falhou',
+          label: 'Falhou',
           className: ''
         };
       case 'cancelled':
       case 'cancelado':
         return {
           variant: 'outline' as const,
-          label: '🚫 Cancelado',
+          label: 'Cancelado',
           className: 'text-muted-foreground'
+        };
+      case 'payment_requested':
+      case 'solicitado':
+        return {
+          variant: 'secondary' as const,
+          label: 'Link Gerado',
+          className: 'bg-warning text-warning-foreground'
+        };
+      case 'processing':
+      case 'processando':
+        return {
+          variant: 'default' as const,
+          label: 'Processando',
+          className: 'bg-primary text-primary-foreground'
         };
       case 'not_requested':
       case 'nao_solicitado':
       default:
         return {
           variant: 'outline' as const,
-          label: '⚪ Não Solicitado',
+          label: 'Não Solicitado',
           className: 'text-muted-foreground'
         };
     }
