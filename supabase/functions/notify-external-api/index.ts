@@ -462,18 +462,17 @@ serve(async (req) => {
       }
     }
 
-    // Handle test with real data for cancelamento - USANDO PAYLOAD IDÊNTICO AO POSTMAN
+    // Handle test with real data for cancelamento - seguindo RMS API Cancelamento V4.0
     if (operation === 'test-cancelamento') {
       console.log('=== DEBUG EDGE FUNCTION - CANCELAMENTO ===');
       console.log('Dados recebidos do frontend:', JSON.stringify(data, null, 2));
 
-      // USANDO EXATAMENTE O MESMO PAYLOAD QUE FUNCIONA NO POSTMAN
+      // Seguir exatamente a especificação da RMS API Cancelamento V4.0
       const requestData = {
         idClienteContrato: parseInt(idClienteContrato),
-        idCliente: parseInt(idCliente), // ADICIONADO: Campo obrigatório que estava faltando
+        idCliente: parseInt(idCliente),
         cpf: data.cpf,
-        codigoExterno: data.codigoExterno
-        // REMOVIDO: motivo e dataCancelamento para ficar igual ao Postman
+        codigoExterno: data.codigoExterno || ""
       };
 
       console.log('=== PAYLOAD CORRIGIDO PARA CANCELAMENTO ===');
@@ -683,20 +682,16 @@ serve(async (req) => {
 
     } else if (operation === 'cancelamento') {
       const {
-        beneficiario_id,
-        motivo,
-        data_cancelamento,
-        beneficiario
+        cpf,
+        codigoExterno
       } = data;
 
-      // Usar o mesmo payload corrigido que funciona no teste
+      // Seguir exatamente a especificação da RMS API Cancelamento V4.0
       const requestData = {
         idClienteContrato: parseInt(idClienteContrato),
-        idCliente: parseInt(idCliente), // ADICIONADO: Campo obrigatório
-        cpf: beneficiario?.cpf,
-        codigoExterno: beneficiario?.codigo_externo
-        // Campos motivo e dataCancelamento removidos se estão causando problema
-        // Pode ser que a API aceite esses campos, mas vamos testar sem eles primeiro
+        idCliente: parseInt(idCliente),
+        cpf: cpf,
+        codigoExterno: codigoExterno || ""
       };
 
       console.log('=== CANCELAMENTO REAL COM PAYLOAD CORRIGIDO ===');
@@ -704,18 +699,18 @@ serve(async (req) => {
 
       try {
         const response = await makeApiCall(requestData, 'cancelamento', apiSettings);
-        
+
         // Validar resposta da API para cancelamento
         const validation = validateApiResponse('cancelamento', response);
-        
+
         if (!validation.isValid) {
           console.warn('Validação falhou:', validation.errorMessage);
           await logApiCall(
-            beneficiario_id, 
-            'cancelamento', 
-            requestData, 
-            response, 
-            'error', 
+            null,
+            'cancelamento',
+            requestData,
+            response,
+            'error',
             validation.errorMessage
           );
           
@@ -729,13 +724,13 @@ serve(async (req) => {
           });
         }
 
-        await logApiCall(beneficiario_id, 'cancelamento', requestData, response, 'success');
+        await logApiCall(null, 'cancelamento', requestData, response, 'success');
         
         return new Response(JSON.stringify({ success: true, response }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       } catch (error) {
-        await logApiCall(beneficiario_id, 'cancelamento', requestData, null, 'error', error.message);
+        await logApiCall(null, 'cancelamento', requestData, null, 'error', error.message);
         throw error;
       }
 

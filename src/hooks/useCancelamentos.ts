@@ -61,13 +61,8 @@ export const useCancelamentos = () => {
           body: {
             operation: 'cancelamento',
             data: {
-              beneficiario_id: beneficiarioId,
-              motivo,
-              data_cancelamento: new Date().toISOString().split('T')[0],
-              beneficiario: {
-                codigo_externo: `BEN${beneficiario.id.slice(0, 8)}`,
-                cpf: beneficiario.cpf
-              }
+              cpf: beneficiario.cpf,
+              codigoExterno: `BEN${beneficiario.id.slice(0, 8)}`
             }
           }
         });

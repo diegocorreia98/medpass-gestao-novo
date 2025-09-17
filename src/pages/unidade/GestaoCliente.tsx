@@ -164,13 +164,8 @@ export default function GestaoCliente() {
         body: {
           operation: 'cancelamento',
           data: {
-            beneficiario_id: `${titular.id}_DEP_${index + 1}`,
-            motivo: 'Cancelamento de dependente',
-            data_cancelamento: new Date().toISOString().split('T')[0],
-            beneficiario: {
-              codigo_externo: codigoExterno,
-              cpf: dependente.cpf
-            }
+            cpf: dependente.cpf,
+            codigoExterno: codigoExterno
           }
         }
       })
