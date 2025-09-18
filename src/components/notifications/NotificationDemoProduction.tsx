@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNotificationService } from "@/hooks/useNotificationService";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationSoundSettings } from "./NotificationSoundSettings";
+import { createMissingProfile, createTestUnidadeUser } from "@/utils/createMissingProfile";
+import { debugNotificationIssue } from "@/utils/debugNotificationIssue";
 import type { NotificationType } from "@/services/notificationService";
 
 export function NotificationDemoProduction() {
@@ -24,6 +26,17 @@ export function NotificationDemoProduction() {
   const { createSystemNotification } = useNotificationService();
 
   const isMatriz = profile?.user_type === "matriz";
+
+  // Make debug functions available in console
+  useEffect(() => {
+    (window as any).createMissingProfile = createMissingProfile;
+    (window as any).createTestUnidadeUser = createTestUnidadeUser;
+    (window as any).debugNotificationIssue = debugNotificationIssue;
+    console.log("🔧 Debug functions available! Use:");
+    console.log("  - createMissingProfile() to create profile for current user");
+    console.log("  - createTestUnidadeUser() to convert current user to unidade type");
+    console.log("  - debugNotificationIssue() to debug notification targeting issues");
+  }, []);
 
   const handleCreateNotification = async () => {
     if (!title || !message) return;
