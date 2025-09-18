@@ -4,18 +4,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { beneficiariosSecureService, type SecureBeneficiario } from '@/services/beneficiarios-secure';
-import type { 
-  Beneficiario, 
-  BeneficiarioInsert, 
-  BeneficiarioUpdate, 
+import { createSystemNotification } from '@/services/notificationService';
+import { usePaymentNotificationSound } from '@/hooks/useNotificationSound';
+import type {
+  Beneficiario,
+  BeneficiarioInsert,
+  BeneficiarioUpdate,
   BeneficiarioCompleto,
-  BeneficiarioFilters 
+  BeneficiarioFilters
 } from '@/types/database';
 
 export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: string }) => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { notifyPaymentSuccess } = usePaymentNotificationSound();
 
   // ✅ Real-time subscription for beneficiarios updates (especially payment_status)
   useEffect(() => {
@@ -53,6 +56,41 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
               toast({
                 title: "Pagamento Confirmado! 🎉",
                 description: `O pagamento do beneficiário ${updatedBeneficiario.nome} foi confirmado.`,
+              });
+
+              // 🎵 Play payment success sound
+              notifyPaymentSuccess(updatedBeneficiario.nome).catch(soundError => {
+                console.error('⚠️ Erro ao tocar som de pagamento confirmado:', soundError);
+              });
+
+              // Criar notificação para usuários matriz sobre pagamento confirmado
+              createSystemNotification({
+                title: 'Pagamento Confirmado',
+                message: `Pagamento do beneficiário ${updatedBeneficiario.nome} foi confirmado. A adesão será processada automaticamente.`,
+                type: 'success',
+                userType: 'matriz',
+                actionUrl: '/beneficiarios',
+                actionLabel: 'Ver Beneficiários'
+              }).catch(notificationError => {
+                console.error('⚠️ Erro ao criar notificação de pagamento confirmado:', notificationError);
+              });
+            } else if (updatedBeneficiario.payment_status === 'failed') {
+              toast({
+                title: "Pagamento Falhado ⚠️",
+                description: `O pagamento do beneficiário ${updatedBeneficiario.nome} falhou.`,
+                variant: "destructive"
+              });
+
+              // Criar notificação para usuários matriz sobre falha no pagamento
+              createSystemNotification({
+                title: 'Falha no Pagamento',
+                message: `Pagamento do beneficiário ${updatedBeneficiario.nome} falhou. Verifique os dados de pagamento.`,
+                type: 'error',
+                userType: 'matriz',
+                actionUrl: '/beneficiarios',
+                actionLabel: 'Ver Beneficiários'
+              }).catch(notificationError => {
+                console.error('⚠️ Erro ao criar notificação de falha no pagamento:', notificationError);
               });
             }
 
@@ -183,7 +221,23 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
       // Beneficiário criado com sucesso
       // A sincronização com API externa será feita após confirmação de pagamento
       console.log("✅ Beneficiário criado com sucesso");
-      
+
+      // 2. Criar notificação para usuários matriz sobre novo beneficiário
+      try {
+        await createSystemNotification({
+          title: 'Novo Beneficiário Cadastrado',
+          message: `Novo beneficiário ${data.nome} foi cadastrado e aguarda confirmação de pagamento.`,
+          type: 'info',
+          userType: 'matriz',
+          actionUrl: '/beneficiarios',
+          actionLabel: 'Ver Beneficiários'
+        });
+        console.log('✅ Notificação de novo beneficiário criada para usuários matriz');
+      } catch (notificationError: any) {
+        console.error('⚠️ Erro ao criar notificação de novo beneficiário:', notificationError);
+        // Não falhar a operação principal
+      }
+
       return data;
     },
     onSuccess: () => {

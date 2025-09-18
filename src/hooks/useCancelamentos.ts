@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { createSystemNotification } from '@/services/notificationService';
 import type { CancelamentoInsert } from '@/types/database';
 
 export const useCancelamentos = () => {
@@ -81,6 +82,22 @@ export const useCancelamentos = () => {
           description: "Cancelamento realizado localmente, mas houve falha na sincronização com a API externa.",
           variant: "destructive",
         });
+      }
+
+      // 5. Criar notificação para usuários matriz sobre o cancelamento
+      try {
+        await createSystemNotification({
+          title: 'Cancelamento Realizado',
+          message: `Beneficiário ${beneficiario.nome} (CPF: ${beneficiario.cpf}) foi cancelado. Motivo: ${motivo}`,
+          type: 'warning',
+          userType: 'matriz',
+          actionUrl: '/cancelamento',
+          actionLabel: 'Ver Cancelamentos'
+        });
+        console.log('✅ Notificação de cancelamento criada para usuários matriz');
+      } catch (notificationError: any) {
+        console.error('⚠️ Erro ao criar notificação de cancelamento:', notificationError);
+        // Não falhar a operação principal
       }
 
       return true;

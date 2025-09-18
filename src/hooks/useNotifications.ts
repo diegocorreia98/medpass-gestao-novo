@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface Notification {
   id: string;
@@ -17,6 +18,7 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -54,73 +56,80 @@ export function useNotifications() {
 
   useEffect(() => {
     fetchNotifications();
+  }, [fetchNotifications]);
 
-    // Setup real-time subscription for notifications
-    const setupSubscription = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // Setup real-time subscription in a separate useEffect
+  useEffect(() => {
+    if (!user) return;
 
-      const channel = supabase
-        .channel('notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notificacoes',
-            filter: `user_id=eq.${user.id}`
-          },
-          (payload) => {
-            console.log('Notification change received:', payload);
+    console.log('🔔 Setting up real-time notifications subscription for user:', user.id);
 
-            if (payload.eventType === 'INSERT') {
-              const newNotification: Notification = {
-                id: payload.new.id,
-                title: payload.new.titulo,
-                message: payload.new.mensagem,
-                type: payload.new.tipo as "info" | "success" | "warning" | "error",
-                read: payload.new.lida,
-                createdAt: new Date(payload.new.created_at),
-                actionUrl: payload.new.action_url || undefined,
-                actionLabel: payload.new.action_label || undefined,
-              };
-              setNotifications(prev => [newNotification, ...prev]);
-            } else if (payload.eventType === 'UPDATE') {
-              setNotifications(prev =>
-                prev.map(notification =>
-                  notification.id === payload.new.id
-                    ? {
-                        ...notification,
-                        title: payload.new.titulo,
-                        message: payload.new.mensagem,
-                        type: payload.new.tipo as "info" | "success" | "warning" | "error",
-                        read: payload.new.lida,
-                        actionUrl: payload.new.action_url || undefined,
-                        actionLabel: payload.new.action_label || undefined,
-                      }
-                    : notification
-                )
-              );
-            } else if (payload.eventType === 'DELETE') {
-              setNotifications(prev =>
-                prev.filter(notification => notification.id !== payload.old.id)
-              );
-            }
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notificacoes',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('🔔 [REALTIME] Notification change received:', payload);
+
+          // Only process changes for the current user (extra security)
+          if (payload.new?.user_id !== user.id && payload.old?.user_id !== user.id) {
+            console.warn('🔔 [REALTIME] Ignoring notification for different user');
+            return;
           }
-        )
-        .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    };
-
-    const cleanupPromise = setupSubscription();
+          if (payload.eventType === 'INSERT') {
+            console.log('🔔 [REALTIME] Adding new notification');
+            const newNotification: Notification = {
+              id: payload.new.id,
+              title: payload.new.titulo,
+              message: payload.new.mensagem,
+              type: payload.new.tipo as "info" | "success" | "warning" | "error",
+              read: payload.new.lida,
+              createdAt: new Date(payload.new.created_at),
+              actionUrl: payload.new.action_url || undefined,
+              actionLabel: payload.new.action_label || undefined,
+            };
+            setNotifications(prev => [newNotification, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            console.log('🔔 [REALTIME] Updating notification:', payload.new.id);
+            setNotifications(prev =>
+              prev.map(notification =>
+                notification.id === payload.new.id
+                  ? {
+                      ...notification,
+                      title: payload.new.titulo,
+                      message: payload.new.mensagem,
+                      type: payload.new.tipo as "info" | "success" | "warning" | "error",
+                      read: payload.new.lida,
+                      actionUrl: payload.new.action_url || undefined,
+                      actionLabel: payload.new.action_label || undefined,
+                    }
+                  : notification
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            console.log('🔔 [REALTIME] Removing notification:', payload.old.id);
+            setNotifications(prev =>
+              prev.filter(notification => notification.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('🔔 [REALTIME] Subscription status:', status);
+      });
 
     return () => {
-      cleanupPromise.then(cleanup => cleanup?.());
+      console.log('🔔 [REALTIME] Cleaning up notifications subscription');
+      supabase.removeChannel(channel);
     };
-  }, [fetchNotifications]);
+  }, [user]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
