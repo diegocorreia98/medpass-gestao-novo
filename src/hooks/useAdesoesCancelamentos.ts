@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { format, subDays, startOfDay, endOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { useAuth } from "@/contexts/AuthContext"
 
 interface AdesoesCancelamentosData {
   date: string
@@ -10,9 +11,16 @@ interface AdesoesCancelamentosData {
 }
 
 export function useAdesoesCancelamentos(timeRange: string = "90d", unidadeId?: string) {
+  const { user, profile } = useAuth();
+
   return useQuery({
-    queryKey: ["adesoes-cancelamentos", timeRange, unidadeId],
+    queryKey: ["adesoes-cancelamentos", timeRange, unidadeId, user?.id],
     queryFn: async (): Promise<AdesoesCancelamentosData[]> => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      console.log('[USE-ADESOES] Executando query para user:', user?.id);
+      console.log('[USE-ADESOES] Profile type:', profile?.user_type);
+      console.log('[USE-ADESOES] UnidadeId:', unidadeId);
       const now = new Date()
       let daysToSubtract = 90
       
@@ -33,6 +41,12 @@ export function useAdesoesCancelamentos(timeRange: string = "90d", unidadeId?: s
         .lte("data_adesao", format(endDate, "yyyy-MM-dd"))
         .eq("status", "ativo")
 
+      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
+      if (profile?.user_type === 'unidade') {
+        console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade em adesões');
+        adesoesQuery = adesoesQuery.eq('user_id', user?.id);
+      }
+
       // Filtrar por unidade se especificado
       if (unidadeId) {
         adesoesQuery = adesoesQuery.eq("unidade_id", unidadeId)
@@ -51,10 +65,16 @@ export function useAdesoesCancelamentos(timeRange: string = "90d", unidadeId?: s
         .select(`
           data_cancelamento,
           created_at,
-          beneficiario:beneficiarios!inner(unidade_id)
+          beneficiario:beneficiarios!inner(unidade_id, user_id)
         `)
         .gte("data_cancelamento", format(startDate, "yyyy-MM-dd"))
         .lte("data_cancelamento", format(endDate, "yyyy-MM-dd"))
+
+      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
+      if (profile?.user_type === 'unidade') {
+        console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade em cancelamentos');
+        cancelamentosQuery = cancelamentosQuery.eq('beneficiario.user_id', user?.id);
+      }
 
       // Filtrar por unidade se especificado
       if (unidadeId) {
@@ -104,6 +124,7 @@ export function useAdesoesCancelamentos(timeRange: string = "90d", unidadeId?: s
         }))
         .sort((a, b) => a.date.localeCompare(b.date))
     },
+    enabled: !!user,
     // Removed auto-refresh to prevent notification spam
   })
 }

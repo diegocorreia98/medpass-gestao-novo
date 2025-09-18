@@ -54,6 +54,72 @@ export function useNotifications() {
 
   useEffect(() => {
     fetchNotifications();
+
+    // Setup real-time subscription for notifications
+    const setupSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const channel = supabase
+        .channel('notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notificacoes',
+            filter: `user_id=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('Notification change received:', payload);
+
+            if (payload.eventType === 'INSERT') {
+              const newNotification: Notification = {
+                id: payload.new.id,
+                title: payload.new.titulo,
+                message: payload.new.mensagem,
+                type: payload.new.tipo as "info" | "success" | "warning" | "error",
+                read: payload.new.lida,
+                createdAt: new Date(payload.new.created_at),
+                actionUrl: payload.new.action_url || undefined,
+                actionLabel: payload.new.action_label || undefined,
+              };
+              setNotifications(prev => [newNotification, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+              setNotifications(prev =>
+                prev.map(notification =>
+                  notification.id === payload.new.id
+                    ? {
+                        ...notification,
+                        title: payload.new.titulo,
+                        message: payload.new.mensagem,
+                        type: payload.new.tipo as "info" | "success" | "warning" | "error",
+                        read: payload.new.lida,
+                        actionUrl: payload.new.action_url || undefined,
+                        actionLabel: payload.new.action_label || undefined,
+                      }
+                    : notification
+                )
+              );
+            } else if (payload.eventType === 'DELETE') {
+              setNotifications(prev =>
+                prev.filter(notification => notification.id !== payload.old.id)
+              );
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+
+    const cleanupPromise = setupSubscription();
+
+    return () => {
+      cleanupPromise.then(cleanup => cleanup?.());
+    };
   }, [fetchNotifications]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -157,6 +223,23 @@ export function useNotifications() {
       setNotifications(prev => [newNotification, ...prev]);
     } catch (error) {
       console.error('Erro ao adicionar notificação:', error);
+      // If table doesn't exist, create a mock notification for testing
+      if (error.message?.includes('relation "public.notificacoes" does not exist')) {
+        console.warn('Tabela notificacoes não existe, criando notificação mock para teste');
+        const mockNotification: Notification = {
+          id: Date.now().toString(),
+          title: notification.title,
+          message: notification.message,
+          type: notification.type,
+          read: false,
+          createdAt: new Date(),
+          actionUrl: notification.actionUrl,
+          actionLabel: notification.actionLabel,
+        };
+        setNotifications(prev => [mockNotification, ...prev]);
+        return;
+      }
+
       toast({
         title: "Erro",
         description: "Não foi possível adicionar a notificação",

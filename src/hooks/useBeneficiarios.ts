@@ -79,8 +79,9 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
     queryKey: ['beneficiarios', user?.id, filters],
     queryFn: async (): Promise<BeneficiarioCompleto[]> => {
       console.log('[USE-BENEFICIARIOS] Executando query para user:', user?.id);
+      console.log('[USE-BENEFICIARIOS] Profile type:', profile?.user_type);
       console.log('[USE-BENEFICIARIOS] Filtros aplicados:', filters);
-      
+
       let query = supabase
         .from('beneficiarios')
         .select(`
@@ -91,7 +92,14 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
         `)
         .order('created_at', { ascending: false });
 
-      // Aplicar filtros
+      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
+      if (profile?.user_type === 'unidade') {
+        console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade');
+        query = query.eq('user_id', user?.id);
+      }
+      // Para usuários matriz, permitir acesso a todos os dados
+
+      // Aplicar filtros adicionais
       if (filters?.status) {
         query = query.eq('status', filters.status);
       }

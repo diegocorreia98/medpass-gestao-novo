@@ -3,7 +3,7 @@ import { useLocation, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader } from "@/components/ui/sidebar";
-import { Home, Calculator, UserPlus, UserMinus, Users, Wallet, FileText, User, Settings, LogOut, Heart, Building2 } from "lucide-react";
+import { Home, Calculator, UserPlus, UserMinus, Users, Wallet, FileText, User, Settings, LogOut, Heart, Building2, Bell } from "lucide-react";
 const mainItems = [{
   title: "Dashboard",
   url: "/unidade",
@@ -43,6 +43,10 @@ const perfilItems = [{
   title: "Configurações",
   url: "/configuracoes",
   icon: Settings
+}, {
+  title: "Notificações",
+  url: "/unidade/notificacoes",
+  icon: Bell
 }];
 export function UnidadeSidebar() {
   const {

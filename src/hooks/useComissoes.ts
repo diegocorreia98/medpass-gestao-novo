@@ -23,6 +23,10 @@ export const useComissoes = (filters?: ComissaoFilters) => {
   } = useQuery({
     queryKey: ['comissoes', user?.id, filters],
     queryFn: async (): Promise<ComissaoCompleta[]> => {
+      console.log('[USE-COMISSOES] Executando query para user:', user?.id);
+      console.log('[USE-COMISSOES] Profile type:', profile?.user_type);
+      console.log('[USE-COMISSOES] Filtros aplicados:', filters);
+
       let query = supabase
         .from('comissoes')
         .select(`
@@ -32,7 +36,14 @@ export const useComissoes = (filters?: ComissaoFilters) => {
         `)
         .order('mes_referencia', { ascending: false });
 
-      // Aplicar filtros
+      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
+      if (profile?.user_type === 'unidade') {
+        console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade');
+        query = query.eq('user_id', user?.id);
+      }
+      // Para usuários matriz, permitir acesso a todos os dados
+
+      // Aplicar filtros adicionais
       if (filters?.mesReferencia) {
         query = query.eq('mes_referencia', filters.mesReferencia);
       }

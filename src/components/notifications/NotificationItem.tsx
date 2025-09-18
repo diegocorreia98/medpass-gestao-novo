@@ -4,6 +4,7 @@ import { CheckCircle, AlertTriangle, Info, XCircle, X, ExternalLink } from "luci
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
 import type { Notification } from "@/hooks/useNotifications";
 
 interface NotificationItemProps {
@@ -29,10 +30,26 @@ const typeColors = {
 export function NotificationItem({ notification, onMarkAsRead, onRemove }: NotificationItemProps) {
   const Icon = typeIcons[notification.type];
   const iconColor = typeColors[notification.type];
+  const navigate = useNavigate();
 
   const handleClick = () => {
     if (!notification.read) {
       onMarkAsRead(notification.id);
+    }
+  };
+
+  const handleActionClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!notification.actionUrl) return;
+
+    // Check if it's an external URL or internal route
+    if (notification.actionUrl.startsWith('http://') || notification.actionUrl.startsWith('https://')) {
+      // External URL - open in new tab
+      window.open(notification.actionUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      // Internal route - use React Router navigation
+      navigate(notification.actionUrl);
     }
   };
 
@@ -86,11 +103,7 @@ export function NotificationItem({ notification, onMarkAsRead, onRemove }: Notif
                 variant="ghost"
                 size="sm"
                 className="h-6 text-xs px-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // In a real app, you'd navigate here
-                  console.log("Navigate to:", notification.actionUrl);
-                }}
+                onClick={handleActionClick}
               >
                 <ExternalLink className="h-3 w-3 mr-1" />
                 {notification.actionLabel}

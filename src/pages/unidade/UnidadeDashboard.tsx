@@ -13,8 +13,16 @@ import { useBeneficiarios } from "@/hooks/useBeneficiarios"
 import { useComissoes } from "@/hooks/useComissoes"
 import { useUnidades } from "@/hooks/useUnidades"
 import { ChartAreaInteractive } from "@/components/charts/ChartAreaInteractive"
+import { testUnidadeDataSecurity } from "@/utils/testSecurity"
+import { useEffect } from "react"
 
 export default function UnidadeDashboard() {
+  // Make security test available in console
+  useEffect(() => {
+    (window as any).testSecurity = testUnidadeDataSecurity;
+    console.log("🔒 Teste de segurança disponível! Digite 'testSecurity()' no console para testar");
+  }, []);
+
   // Buscar a unidade do usuário logado
   const { unidades, isLoading: unidadesLoading } = useUnidades()
   const unidadeDoUsuario = unidades?.[0] // Para usuário de unidade, sempre há apenas uma unidade

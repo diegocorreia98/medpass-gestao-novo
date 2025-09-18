@@ -23,6 +23,7 @@ import UnidadeCancelamento from "./pages/unidade/UnidadeCancelamento";
 import GestaoCliente from "./pages/unidade/GestaoCliente";
 import Carteira from "./pages/unidade/Carteira";
 import Relatorios from "./pages/unidade/Relatorios";
+import NotificacoesHistorico from "./pages/unidade/NotificacoesHistorico";
 
 
 import Profile from "./pages/Profile";
@@ -42,6 +43,7 @@ import { AcceptInvite } from "./pages/auth/AcceptInvite";
 import Franquias from "./pages/Franquias";
 import Checkout from "./pages/Checkout";
 import TransparentCheckout from "./pages/TransparentCheckout";
+import NotificationTest from "./pages/NotificationTest";
 
 const queryClient = new QueryClient();
 
@@ -138,7 +140,12 @@ const App = () => (
                   <Layout><GestaoEmpresas /></Layout>
                 </ProtectedRoute>
               } />
-              
+              <Route path="/notification-test" element={
+                <ProtectedRoute requiredUserType="matriz">
+                  <Layout><NotificationTest /></Layout>
+                </ProtectedRoute>
+              } />
+
               {/* Protected Routes - Unidade */}
               <Route path="/unidade" element={
                 <ProtectedRoute requiredUserType="unidade">
@@ -175,7 +182,12 @@ const App = () => (
                   <Layout><Relatorios /></Layout>
                 </ProtectedRoute>
               } />
-              
+              <Route path="/unidade/notificacoes" element={
+                <ProtectedRoute requiredUserType="unidade">
+                  <Layout><NotificacoesHistorico /></Layout>
+                </ProtectedRoute>
+              } />
+
               {/* Shared Protected Routes */}
               <Route path="/perfil" element={
                 <ProtectedRoute>

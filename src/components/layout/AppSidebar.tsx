@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch } from "lucide-react";
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +49,10 @@ const adminItems = [{
   title: "Gestão de Unidades",
   url: "/gestao-unidades",
   icon: Users
+}, {
+  title: "Teste Notificações",
+  url: "/notification-test",
+  icon: Bell
 }];
 export function AppSidebar() {
   const {
