@@ -824,6 +824,7 @@ export type Database = {
           franquia_id: string | null
           id: string
           nome: string
+          rms_plan_code: string | null
           updated_at: string
           valor: number
           vindi_plan_id: number | null
@@ -840,6 +841,7 @@ export type Database = {
           franquia_id?: string | null
           id?: string
           nome: string
+          rms_plan_code?: string | null
           updated_at?: string
           valor: number
           vindi_plan_id?: number | null
@@ -856,6 +858,7 @@ export type Database = {
           franquia_id?: string | null
           id?: string
           nome?: string
+          rms_plan_code?: string | null
           updated_at?: string
           valor?: number
           vindi_plan_id?: number | null

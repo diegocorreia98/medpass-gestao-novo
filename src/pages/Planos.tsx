@@ -27,6 +27,7 @@ interface PlanoForm {
   descricao: string
   vindi_product_id: string
   vindi_plan_id: string
+  rms_plan_code: string
 }
 
 export default function Planos() {
@@ -51,7 +52,8 @@ export default function Planos() {
     vigencia: "",
     descricao: "",
     vindi_product_id: "",
-    vindi_plan_id: ""
+    vindi_plan_id: "",
+    rms_plan_code: ""
   })
   
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -72,7 +74,8 @@ export default function Planos() {
         vigencia: "12", // Campo vigência não existe na tabela atual
         descricao: plano.descricao || "",
         vindi_product_id: (plano as any).vindi_product_id || "",
-        vindi_plan_id: (plano as any).vindi_plan_id?.toString() || ""
+        vindi_plan_id: (plano as any).vindi_plan_id?.toString() || "",
+        rms_plan_code: (plano as any).rms_plan_code || ""
       })
     } else {
       setEditingId(null)
@@ -86,7 +89,8 @@ export default function Planos() {
         vigencia: "",
         descricao: "",
         vindi_product_id: "",
-        vindi_plan_id: ""
+        vindi_plan_id: "",
+        rms_plan_code: ""
       })
     }
     setDialogOpen(true)
@@ -111,8 +115,13 @@ export default function Planos() {
       comissao_recorrente_percentual: parseFloat(formData.comissao_recorrente_percentual),
       descricao: formData.descricao || null,
       vindi_product_id: formData.vindi_product_id || null,
-      vindi_plan_id: formData.vindi_plan_id ? parseInt(formData.vindi_plan_id) : null
+      vindi_plan_id: formData.vindi_plan_id ? parseInt(formData.vindi_plan_id) : null,
+      rms_plan_code: formData.rms_plan_code || null
     }
+
+    // Log para debug
+    console.log('💾 Salvando plano com dados:', planoData);
+    console.log('🔍 Campo rms_plan_code:', formData.rms_plan_code);
 
     if (editingId) {
       updatePlano.mutate({ id: editingId, updates: planoData })
@@ -131,7 +140,8 @@ export default function Planos() {
       vigencia: "",
       descricao: "",
       vindi_product_id: "",
-      vindi_plan_id: ""
+      vindi_plan_id: "",
+      rms_plan_code: ""
     })
   }
 
@@ -248,31 +258,48 @@ export default function Planos() {
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-sm text-muted-foreground border-b pb-2">Integrações Externas</h4>
+
                   <div>
-                    <Label htmlFor="vindi_product_id">ID do Produto na Vindi</Label>
+                    <Label htmlFor="rms_plan_code">Código do Plano RMS</Label>
                     <Input
-                      id="vindi_product_id"
-                      value={formData.vindi_product_id}
-                      onChange={(e) => setFormData({ ...formData, vindi_product_id: e.target.value })}
-                      placeholder="Ex: prod_123abc"
+                      id="rms_plan_code"
+                      value={formData.rms_plan_code}
+                      onChange={(e) => setFormData({ ...formData, rms_plan_code: e.target.value })}
+                      placeholder="Ex: PLAN001, BASICO_FAMILIAR"
                     />
                     <div className="text-xs text-muted-foreground mt-1">
-                      ID do produto cadastrado na plataforma Vindi
+                      Código do plano correspondente na API RMS para integração de adesões
                     </div>
                   </div>
-                  
-                  <div>
-                    <Label htmlFor="vindi_plan_id">ID do Plano na Vindi</Label>
-                    <Input
-                      id="vindi_plan_id"
-                      type="number"
-                      value={formData.vindi_plan_id}
-                      onChange={(e) => setFormData({ ...formData, vindi_plan_id: e.target.value })}
-                      placeholder="Ex: 12345"
-                    />
-                    <div className="text-xs text-muted-foreground mt-1">
-                      ID do plano de assinatura cadastrado na plataforma Vindi
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="vindi_product_id">ID do Produto na Vindi</Label>
+                      <Input
+                        id="vindi_product_id"
+                        value={formData.vindi_product_id}
+                        onChange={(e) => setFormData({ ...formData, vindi_product_id: e.target.value })}
+                        placeholder="Ex: prod_123abc"
+                      />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        ID do produto cadastrado na plataforma Vindi
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="vindi_plan_id">ID do Plano na Vindi</Label>
+                      <Input
+                        id="vindi_plan_id"
+                        type="number"
+                        value={formData.vindi_plan_id}
+                        onChange={(e) => setFormData({ ...formData, vindi_plan_id: e.target.value })}
+                        placeholder="Ex: 12345"
+                      />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        ID do plano de assinatura cadastrado na plataforma Vindi
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -404,6 +431,11 @@ export default function Planos() {
                     <Badge variant={plano.ativo ? "default" : "secondary"}>
                       {plano.ativo ? "Ativo" : "Inativo"}
                     </Badge>
+                    {(plano as any).rms_plan_code && (
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                        RMS
+                      </Badge>
+                    )}
                     {((plano as any).vindi_plan_id || (plano as any).vindi_product_id) && (
                       <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                         Vindi
@@ -432,17 +464,28 @@ export default function Planos() {
                   )}
                 </div>
                 
-                {/* Mostrar informação do Vindi se configurado */}
-                {((plano as any).vindi_plan_id || (plano as any).vindi_product_id) && (
-                  <div className="text-center py-2 px-3 bg-blue-50 rounded-lg border border-blue-200 space-y-1">
-                    {(plano as any).vindi_product_id && (
-                      <div className="text-xs font-medium text-blue-700">
-                        ID Produto: {(plano as any).vindi_product_id}
+                {/* Mostrar informações das integrações se configuradas */}
+                {((plano as any).rms_plan_code || (plano as any).vindi_plan_id || (plano as any).vindi_product_id) && (
+                  <div className="space-y-2">
+                    {(plano as any).rms_plan_code && (
+                      <div className="text-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="text-xs font-medium text-orange-700">
+                          Código RMS: {(plano as any).rms_plan_code}
+                        </div>
                       </div>
                     )}
-                    {(plano as any).vindi_plan_id && (
-                      <div className="text-xs font-medium text-blue-700">
-                        ID Plano: {(plano as any).vindi_plan_id}
+                    {((plano as any).vindi_plan_id || (plano as any).vindi_product_id) && (
+                      <div className="text-center py-2 px-3 bg-blue-50 rounded-lg border border-blue-200 space-y-1">
+                        {(plano as any).vindi_product_id && (
+                          <div className="text-xs font-medium text-blue-700">
+                            ID Produto: {(plano as any).vindi_product_id}
+                          </div>
+                        )}
+                        {(plano as any).vindi_plan_id && (
+                          <div className="text-xs font-medium text-blue-700">
+                            ID Plano: {(plano as any).vindi_plan_id}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -534,20 +577,27 @@ export default function Planos() {
                       <div className="text-base mt-1 p-3 bg-muted rounded-lg">{selectedPlano.descricao}</div>
                     </div>
                   )}
-                  {/* Informações da Vindi */}
-                  {((selectedPlano as any).vindi_product_id || (selectedPlano as any).vindi_plan_id) && (
+                  {/* Informações das Integrações */}
+                  {((selectedPlano as any).rms_plan_code || (selectedPlano as any).vindi_product_id || (selectedPlano as any).vindi_plan_id) && (
                     <div className="space-y-3">
-                      <Label className="text-sm font-medium text-muted-foreground">Integração Vindi</Label>
+                      <Label className="text-sm font-medium text-muted-foreground">Integrações Externas</Label>
                       <div className="grid grid-cols-1 gap-3">
+                        {(selectedPlano as any).rms_plan_code && (
+                          <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                            <div className="text-xs font-medium text-orange-700 mb-1">Código do Plano RMS</div>
+                            <div className="text-base font-mono">{(selectedPlano as any).rms_plan_code}</div>
+                            <div className="text-xs text-orange-600 mt-1">Usado para integração de adesões com API RMS</div>
+                          </div>
+                        )}
                         {(selectedPlano as any).vindi_product_id && (
                           <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Produto</div>
+                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Produto Vindi</div>
                             <div className="text-base font-mono">{(selectedPlano as any).vindi_product_id}</div>
                           </div>
                         )}
                         {(selectedPlano as any).vindi_plan_id && (
                           <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Plano</div>
+                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Plano Vindi</div>
                             <div className="text-base font-mono">{(selectedPlano as any).vindi_plan_id}</div>
                           </div>
                         )}

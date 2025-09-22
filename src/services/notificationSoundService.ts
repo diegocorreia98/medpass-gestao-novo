@@ -13,8 +13,15 @@ class NotificationSoundService {
     // Create audio context on first user interaction
     const initContext = () => {
       if (!this.audioContext) {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        console.log('🎵 Audio context initialized');
+        try {
+          this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          console.log('🎵 Audio context initialized successfully', {
+            state: this.audioContext.state,
+            sampleRate: this.audioContext.sampleRate
+          });
+        } catch (error) {
+          console.error('❌ Failed to initialize audio context:', error);
+        }
       }
     };
 
@@ -26,7 +33,7 @@ class NotificationSoundService {
 
   private async loadAudio(url: string): Promise<AudioBuffer> {
     if (!this.audioContext) {
-      await this.resumeAudioContext();
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
 
     if (this.audioCache.has(url)) {
@@ -36,7 +43,13 @@ class NotificationSoundService {
     try {
       const response = await fetch(url);
       const arrayBuffer = await response.arrayBuffer();
-      const audioBuffer = await this.audioContext!.decodeAudioData(arrayBuffer);
+
+      // Verificar se audioContext ainda existe antes de usar
+      if (!this.audioContext) {
+        throw new Error('AudioContext não está disponível');
+      }
+
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
       this.audioCache.set(url, audioBuffer);
       console.log(`🎵 Audio loaded and cached: ${url}`);
@@ -56,6 +69,13 @@ class NotificationSoundService {
   }
 
   async playSound(soundUrl: string, options: { volume?: number; force?: boolean } = {}) {
+    console.log(`🎵 Attempting to play sound: ${soundUrl}`, {
+      isEnabled: this.isEnabled,
+      force: options.force,
+      volume: options.volume ?? this.volume,
+      audioContextState: this.audioContext?.state
+    });
+
     // Check if sounds are enabled (unless forced)
     if (!this.isEnabled && !options.force) {
       console.log('🔇 Sounds are disabled');
@@ -87,12 +107,19 @@ class NotificationSoundService {
 
       // Fallback to HTML5 Audio API
       try {
+        console.log('🔄 Trying HTML5 Audio fallback...');
         const audio = new Audio(soundUrl);
         audio.volume = options.volume ?? this.volume;
-        await audio.play();
-        console.log(`🎵 Fallback audio played: ${soundUrl}`);
+
+        // Wait for audio to be ready
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+        }
+
+        console.log(`🎵 Fallback HTML5 audio played successfully: ${soundUrl}`);
       } catch (fallbackError) {
-        console.error('❌ Fallback audio also failed:', fallbackError);
+        console.error('❌ HTML5 Audio fallback also failed:', fallbackError);
 
         // Final fallback: generated beep sound for payment success
         if (soundUrl.includes('payment-success')) {
@@ -166,11 +193,18 @@ class NotificationSoundService {
 
   // Preload sounds for better performance
   async preloadSounds() {
+    // Só tentar preload se tivermos contexto de áudio
+    if (!this.audioContext) {
+      console.log('🎵 Skipping sound preload - no audio context yet');
+      return;
+    }
+
     try {
       await this.loadAudio('/sounds/payment-success.mp3');
       console.log('🎵 Notification sounds preloaded');
     } catch (error) {
       console.warn('⚠️ Could not preload notification sounds:', error);
+      // Não quebrar a aplicação se o preload falhar
     }
   }
 

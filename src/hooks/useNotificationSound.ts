@@ -100,9 +100,18 @@ export function usePaymentNotificationSound() {
   const { playPaymentSuccessSound, isEnabled, volume } = useNotificationSound();
 
   const notifyPaymentSuccess = useCallback(async (beneficiaryName?: string) => {
-    console.log(`🎵 Playing payment success sound for: ${beneficiaryName || 'unknown'}`);
-    await playPaymentSuccessSound();
-  }, [playPaymentSuccessSound]);
+    console.log(`🎵 Playing payment success sound for: ${beneficiaryName || 'unknown'}`, {
+      isEnabled,
+      volume
+    });
+
+    try {
+      await playPaymentSuccessSound();
+      console.log('✅ Payment success sound completed');
+    } catch (error) {
+      console.error('❌ Error in notifyPaymentSuccess:', error);
+    }
+  }, [playPaymentSuccessSound, isEnabled, volume]);
 
   return {
     notifyPaymentSuccess,

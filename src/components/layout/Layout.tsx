@@ -12,6 +12,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { DashboardPopupManager } from "@/components/notifications/PopupNotificationManager";
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -127,6 +128,16 @@ export function Layout({
             {children}
           </main>
         </div>
+
+        {/* Popup Notifications Manager for Dashboard - Only for Matriz users */}
+        {currentPanel === 'matriz' && profile?.user_type === 'matriz' && (
+          <DashboardPopupManager
+            onEvent={(event) => {
+              console.log('Dashboard popup event:', event);
+              // Handle popup events if needed
+            }}
+          />
+        )}
       </div>
     </SidebarProvider>;
 }

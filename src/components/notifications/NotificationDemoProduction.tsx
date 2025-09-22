@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { NotificationSoundSettings } from "./NotificationSoundSettings";
 import { createMissingProfile, createTestUnidadeUser } from "@/utils/createMissingProfile";
 import { debugNotificationIssue } from "@/utils/debugNotificationIssue";
+import { usePaymentNotificationSound } from "@/hooks/useNotificationSound";
 import type { NotificationType } from "@/services/notificationService";
 
 export function NotificationDemoProduction() {
@@ -24,6 +25,7 @@ export function NotificationDemoProduction() {
 
   const { profile } = useAuth();
   const { createSystemNotification } = useNotificationService();
+  const { notifyPaymentSuccess } = usePaymentNotificationSound();
 
   const isMatriz = profile?.user_type === "matriz";
 
@@ -70,6 +72,16 @@ export function NotificationDemoProduction() {
       setActionLabel("");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTestPaymentSound = async () => {
+    console.log('🧪 Testing payment sound manually...');
+    try {
+      await notifyPaymentSuccess('João da Silva (Teste)');
+      console.log('✅ Payment sound test completed');
+    } catch (error) {
+      console.error('❌ Payment sound test failed:', error);
     }
   };
 
@@ -169,13 +181,22 @@ export function NotificationDemoProduction() {
             </div>
           </div>
 
-          <Button
-            onClick={handleCreateNotification}
-            disabled={!title || !message || isLoading}
-            className="w-full"
-          >
-            {isLoading ? "Enviando..." : "Enviar Notificação"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleCreateNotification}
+              disabled={!title || !message || isLoading}
+              className="flex-1"
+            >
+              {isLoading ? "Enviando..." : "Enviar Notificação"}
+            </Button>
+            <Button
+              onClick={handleTestPaymentSound}
+              variant="outline"
+              className="px-4"
+            >
+              🎵 Testar Som
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

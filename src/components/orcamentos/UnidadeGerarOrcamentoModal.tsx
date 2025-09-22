@@ -95,18 +95,18 @@ export default function UnidadeGerarOrcamentoModal({ open, onOpenChange }: Unida
 
   // Calcular comissão interna baseada nos percentuais dos planos
   const calcularComissaoInterna = () => {
-    let comissaoAdesao = 0
-    let comissaoRecorrente = 0
+    let comissaoAdesao = 0 // Primeiro mês
+    let comissaoRecorrente = 0 // 11 meses seguintes
 
     itens.forEach(item => {
       if (item.plano_id && planos) {
         const plano = planos.find(p => p.id === item.plano_id)
         if (plano) {
-          // Comissão de adesão (100% do valor para cada titular)
+          // Comissão de adesão: primeiro mês
           comissaoAdesao += item.valor_total * (Number(plano.comissao_adesao_percentual || 100) / 100)
-          
-          // Comissão recorrente mensal (30% do valor)
-          comissaoRecorrente += item.valor_total * (Number(plano.comissao_recorrente_percentual || 30) / 100)
+
+          // Comissão recorrente: 11 meses seguintes
+          comissaoRecorrente += (item.valor_total * (Number(plano.comissao_recorrente_percentual || 30) / 100)) * 11
         }
       }
     })
@@ -398,11 +398,11 @@ export default function UnidadeGerarOrcamentoModal({ open, onOpenChange }: Unida
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Comissão Adesão:</span>
+                  <span>Comissão Adesão (1º mês):</span>
                   <span>R$ {comissaoAdesao.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Comissão Recorrente:</span>
+                  <span>Comissão Recorrente (11 meses):</span>
                   <span>R$ {comissaoRecorrente.toFixed(2)}</span>
                 </div>
                 <hr />

@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth, UserType } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { Building2, Store, Loader2, AlertCircle } from 'lucide-react';
+import { LoginPopupManager } from '@/components/notifications/PopupNotificationManager';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -16,6 +17,7 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<UserType>('matriz');
+  const [showPopups, setShowPopups] = useState(false);
 
   const { signIn, user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -32,8 +34,16 @@ export const Login: React.FC = () => {
   useEffect(() => {
     // Aguarda o loading e profile para redirecionar
     if (!authLoading && user && profile) {
-      const redirectPath = profile.user_type === 'matriz' ? '/dashboard' : '/unidade';
-      navigate(redirectPath, { replace: true });
+      // Show popups after successful login but before redirect
+      setShowPopups(true);
+
+      // Small delay to allow popup to show before redirect
+      const timer = setTimeout(() => {
+        const redirectPath = profile.user_type === 'matriz' ? '/dashboard' : '/unidade';
+        navigate(redirectPath, { replace: true });
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
   }, [user, profile, authLoading, navigate]);
 
@@ -80,7 +90,7 @@ export const Login: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/lovable-uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">
@@ -168,6 +178,16 @@ export const Login: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Popup Notifications Manager for Login */}
+      {showPopups && user && profile && (
+        <LoginPopupManager
+          onEvent={(event) => {
+            console.log('Login popup event:', event);
+            // Handle popup events if needed
+          }}
+        />
+      )}
     </div>
   );
 };

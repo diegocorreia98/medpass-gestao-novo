@@ -1,0 +1,248 @@
+{
+  "tech_stack": [
+    "TypeScript",
+    "React 18",
+    "Vite",
+    "Tailwind CSS",
+    "Supabase",
+    "React Router DOM",
+    "React Query",
+    "Shadcn/ui",
+    "Radix UI",
+    "React Hook Form",
+    "Zod validation"
+  ],
+  "features": [
+    {
+      "name": "Authentication System",
+      "description": "Complete authentication system with login, password reset, and user management. Supports matrix (admin) and unit (franchise) user types.",
+      "files": [
+        "src/contexts/AuthContext.tsx",
+        "src/components/auth/ProtectedRoute.tsx",
+        "src/pages/auth/Login.tsx",
+        "src/pages/auth/ForgotPassword.tsx",
+        "src/pages/auth/ResetPassword.tsx",
+        "src/pages/auth/AcceptInvite.tsx"
+      ]
+    },
+    {
+      "name": "Dashboard System",
+      "description": "Dual dashboard system - matrix panel for administration and unit panel for franchises. Includes KPIs, charts, and analytics.",
+      "files": [
+        "src/pages/Dashboard.tsx",
+        "src/pages/unidade/UnidadeDashboard.tsx",
+        "src/hooks/useDashboard.ts",
+        "src/components/charts/ChartAreaInteractive.tsx"
+      ]
+    },
+    {
+      "name": "Health Plan Management (Adesões)",
+      "description": "Complete health plan membership management with enrollment, cancellation, and renewal processes. Includes batch import and Google Sheets integration.",
+      "files": [
+        "src/pages/Adesao.tsx",
+        "src/pages/unidade/UnidadeAdesao.tsx",
+        "src/components/adesao/AdesaoModal.tsx",
+        "src/components/adesao/AdesoesDataTable.tsx",
+        "src/components/adesao/ImportacaoLoteModal.tsx",
+        "src/components/adesao/GoogleSheetsTab.tsx",
+        "src/hooks/useBeneficiarios.ts"
+      ]
+    },
+    {
+      "name": "Cancellation Management",
+      "description": "Health plan cancellation system with automated workflows and status tracking.",
+      "files": [
+        "src/pages/Cancelamento.tsx",
+        "src/pages/unidade/UnidadeCancelamento.tsx",
+        "src/components/adesao/CancelarAdesaoModal.tsx",
+        "src/hooks/useCancelamentos.ts",
+        "src/hooks/useAdesoesCancelamentos.ts"
+      ]
+    },
+    {
+      "name": "Course Management System",
+      "description": "Complete e-learning platform with course creation, content management, progress tracking, and certificate generation. Dual panel system for content creation (matrix) and consumption (unit).",
+      "files": [
+        "src/pages/courses/CoursesPage.tsx",
+        "src/pages/courses/CreateCoursePage.tsx",
+        "src/pages/courses/EditCoursePage.tsx",
+        "src/pages/courses/CourseDetailPage.tsx",
+        "src/pages/learn/LearnPage.tsx",
+        "src/pages/learn/CourseViewerPage.tsx",
+        "src/pages/learn/CertificatesPage.tsx",
+        "src/components/courses/CourseForm.tsx",
+        "src/components/courses/CourseList.tsx",
+        "src/components/courses/CourseDetail.tsx",
+        "src/components/courses/VideoPlayer.tsx",
+        "src/components/courses/CreateCategoryDialog.tsx",
+        "src/components/courses/CertificatesList.tsx",
+        "src/hooks/useCourses.ts",
+        "src/hooks/useCourseCategories.ts",
+        "src/hooks/useCourseModules.ts",
+        "src/hooks/useCourseLessons.ts",
+        "src/hooks/useCertificates.ts"
+      ]
+    },
+    {
+      "name": "Company Management",
+      "description": "Enterprise management system for handling companies, employees, and organizational structure.",
+      "files": [
+        "src/pages/GestaoEmpresas.tsx",
+        "src/components/empresas/EmpresaCard.tsx",
+        "src/components/empresas/EmpresaFormModal.tsx",
+        "src/components/empresas/ColaboradoresTab.tsx",
+        "src/components/empresas/ResponsaveisTab.tsx",
+        "src/hooks/useEmpresas.ts",
+        "src/hooks/useColaboradoresEmpresa.ts",
+        "src/hooks/useResponsaveisEmpresa.ts"
+      ]
+    },
+    {
+      "name": "Franchise Management",
+      "description": "Comprehensive franchise management system with unit tracking, franchisee management, and territorial mapping.",
+      "files": [
+        "src/pages/Franquias.tsx",
+        "src/pages/Franqueados.tsx",
+        "src/pages/FranqueadoDetalhes.tsx",
+        "src/pages/GestaoUnidades.tsx",
+        "src/components/franquias/FranquiaCard.tsx",
+        "src/components/franquias/FranquiaForm.tsx",
+        "src/components/franqueados/FranqueadoCard.tsx",
+        "src/components/franqueados/FranqueadoForm.tsx",
+        "src/components/unidades/*.tsx",
+        "src/hooks/useFranquias.ts",
+        "src/hooks/useUnidades.ts",
+        "src/components/maps/BrazilMap.tsx"
+      ]
+    },
+    {
+      "name": "Payment & Checkout System",
+      "description": "Complete payment processing system with multiple payment methods, subscription management, and transparent checkout.",
+      "files": [
+        "src/pages/Checkout.tsx",
+        "src/pages/SubscriptionCheckout.tsx",
+        "src/pages/TransparentCheckout.tsx",
+        "src/components/checkout/CheckoutForm.tsx",
+        "src/components/checkout/CardForm.tsx",
+        "src/components/checkout/CustomerForm.tsx",
+        "src/components/checkout/PaymentMethodSelector.tsx",
+        "src/components/checkout/TransparentCheckout.tsx",
+        "src/hooks/usePaymentStatus.ts"
+      ]
+    },
+    {
+      "name": "Quote Management",
+      "description": "Health plan quotation system with pricing calculations and proposal generation.",
+      "files": [
+        "src/pages/Orcamento.tsx",
+        "src/pages/Orcamentos.tsx",
+        "src/pages/unidade/UnidadeOrcamento.tsx",
+        "src/components/orcamentos/*.tsx",
+        "src/hooks/useOrcamentos.ts"
+      ]
+    },
+    {
+      "name": "Plans Management",
+      "description": "Health plan configuration and management system with pricing and benefits.",
+      "files": [
+        "src/pages/Planos.tsx",
+        "src/hooks/usePlanos.ts"
+      ]
+    },
+    {
+      "name": "Transaction Management",
+      "description": "Financial transaction tracking and management system with detailed reporting.",
+      "files": [
+        "src/pages/Transacoes.tsx",
+        "src/components/transactions/*.tsx"
+      ]
+    },
+    {
+      "name": "Client Management",
+      "description": "Customer relationship management system for franchises.",
+      "files": [
+        "src/pages/unidade/GestaoCliente.tsx",
+        "src/pages/unidade/Carteira.tsx"
+      ]
+    },
+    {
+      "name": "Notification System",
+      "description": "Real-time notification system with sound alerts, push notifications, and notification history.",
+      "files": [
+        "src/pages/NotificationTest.tsx",
+        "src/pages/unidade/NotificacoesHistorico.tsx",
+        "src/components/notifications/*.tsx",
+        "src/hooks/useNotifications.ts",
+        "src/hooks/useNotificationService.ts",
+        "src/hooks/useNotificationSound.ts",
+        "src/services/notificationService.ts",
+        "src/services/notificationSoundService.ts"
+      ]
+    },
+    {
+      "name": "Reporting System",
+      "description": "Comprehensive reporting and analytics system with various report types.",
+      "files": [
+        "src/pages/unidade/Relatorios.tsx"
+      ]
+    },
+    {
+      "name": "API Management & Monitoring",
+      "description": "API logging, monitoring, and testing system with webhook management.",
+      "files": [
+        "src/pages/ApiLogs.tsx",
+        "src/components/api-logs/*.tsx",
+        "src/hooks/useApiLogs.ts",
+        "src/hooks/useWebhookStats.ts",
+        "src/services/logs.ts"
+      ]
+    },
+    {
+      "name": "User Profile & Settings",
+      "description": "User profile management with settings and preferences.",
+      "files": [
+        "src/pages/Profile.tsx",
+        "src/pages/Settings.tsx",
+        "src/components/profile/*.tsx",
+        "src/hooks/useProfile.ts",
+        "src/hooks/useUserSettings.ts"
+      ]
+    },
+    {
+      "name": "Admin Panel",
+      "description": "Administrative panel with user management and system controls.",
+      "files": [
+        "src/pages/Admin.tsx",
+        "src/components/admin/AdminUsersTab.tsx",
+        "src/hooks/useAdminUsers.ts"
+      ]
+    },
+    {
+      "name": "Security Management",
+      "description": "Security features including access control, data protection, and audit trails.",
+      "files": [
+        "src/components/security/*.tsx",
+        "src/utils/apiSecurity.ts",
+        "src/utils/testSecurity.ts",
+        "src/services/beneficiarios-secure.ts"
+      ]
+    },
+    {
+      "name": "Layout & Navigation",
+      "description": "Responsive layout system with dual panel navigation (matrix/unit) and theming support.",
+      "files": [
+        "src/components/layout/*.tsx",
+        "src/components/theme/*.tsx",
+        "src/contexts/PanelContext.tsx"
+      ]
+    },
+    {
+      "name": "UI Components Library",
+      "description": "Comprehensive UI component library based on Shadcn/ui and Radix UI with custom styling.",
+      "files": [
+        "src/components/ui/*.tsx",
+        "src/lib/utils.ts"
+      ]
+    }
+  ]
+}

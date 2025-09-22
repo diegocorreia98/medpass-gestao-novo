@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:8080",
+  "loginUser": "marketing@franquiascotafacil.com.br",
+  "loginPassword": "12345678",
+  "executionArgs": {
+    "projectName": "medpass-gestao",
+    "projectPath": "/Users/diegocorreia/Documents/www/MedPass/medpass-gestao",
+    "testIds": [],
+    "additionalInstruction": "Focus on testing the main user workflows including authentication, course management system, health plan management, and franchise operations. Pay special attention to the dual panel system (matrix vs unit users) and ensure proper access control is working.",
+    "envs": {
+      "API_KEY": "sk-user-ZB3iry3jli4CIKYIDlu3qrUYrN06AAUMhDWFCtQ-PJIWv9A57viHPg8X6qMTMBzrCZd29zvcRSeMA8OxAmz88M0dO5mG1DpDv8vmHxhfamnw9dKfaGQDncHkxLfy05JSobo"
+    }
+  },
+  "proxy": "http://bb5fd37b-2d9c-427d-9c55-bfca8da594fc:RsoR6BsoerghlqiHVuB5pJjnLBlOsYOU@tun.testsprite.com:8080"
+}

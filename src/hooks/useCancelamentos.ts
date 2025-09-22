@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { createSystemNotification } from '@/services/notificationService';
 import type { CancelamentoInsert } from '@/types/database';
 
 export const useCancelamentos = () => {
@@ -84,21 +83,8 @@ export const useCancelamentos = () => {
         });
       }
 
-      // 5. Criar notificação para usuários matriz sobre o cancelamento
-      try {
-        await createSystemNotification({
-          title: 'Cancelamento Realizado',
-          message: `Beneficiário ${beneficiario.nome} (CPF: ${beneficiario.cpf}) foi cancelado. Motivo: ${motivo}`,
-          type: 'warning',
-          userType: 'matriz',
-          actionUrl: '/cancelamento',
-          actionLabel: 'Ver Cancelamentos'
-        });
-        console.log('✅ Notificação de cancelamento criada para usuários matriz');
-      } catch (notificationError: any) {
-        console.error('⚠️ Erro ao criar notificação de cancelamento:', notificationError);
-        // Não falhar a operação principal
-      }
+      // 5. Notificação será criada automaticamente pelo trigger do banco de dados
+      console.log('✅ Cancelamento concluído - notificação será criada pelo trigger do banco');
 
       return true;
     },
