@@ -631,28 +631,29 @@ serve(async (req) => {
         if (charge?.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
 
-          // ✅ BUSCA EXPANDIDA POR DADOS PIX
-          const qrUrl = gwFields.qrcode_path || gwFields.qr_code_url || gwFields.qr_code_image_url || gwFields.pix_qr_code_url;
-          const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
-          const pixCode = gwFields.qrcode_original_path || gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
-          const qrcodeSvg = gwFields.qrcode_path || gwFields.qr_code_svg || gwFields.svg || gwFields.qrcode_svg || gwFields.pix_qr_svg;
+          // ✅ MAPEAMENTO EXATO DOS CAMPOS DA VINDI CONFORME RESPOSTA REAL
+          const qrcodeSvg = gwFields.qrcode_path; // URL do SVG do QR Code
+          const pixCode = gwFields.qrcode_original_path; // Código PIX copia-e-cola completo
+          const printUrl = gwFields.print_url; // URL para impressão
+          const dueAt = gwFields.max_days_to_keep_waiting_payment; // Data de expiração
 
           logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
-            hasQrUrl: !!qrUrl,
-            hasQrBase64: !!qrBase64,
+            hasQrcodeSvg: !!qrcodeSvg,
             hasPixCode: !!pixCode,
-            hasQrSvg: !!qrcodeSvg,
-            qrUrlValue: qrUrl ? `${qrUrl.substring(0, 100)}...` : null,
-            pixCodeLength: pixCode?.length || 0
+            hasPrintUrl: !!printUrl,
+            hasDueAt: !!dueAt,
+            qrcodeSvgValue: qrcodeSvg ? `${qrcodeSvg.substring(0, 100)}...` : null,
+            pixCodeLength: pixCode?.length || 0,
+            printUrlValue: printUrl ? `${printUrl.substring(0, 100)}...` : null
           });
 
-          if (qrUrl || qrBase64 || pixCode || qrcodeSvg) {
+          if (qrcodeSvg || pixCode || printUrl) {
             pixData = {
-              qrUrl,
-              qrBase64,
-              pixCode,
-              qrcodeSvg,
-              dueAt: billData.bill?.due_at || gwFields.expires_at || gwFields.expiration_date || gwFields.expiration_time
+              qrUrl: printUrl, // URL para impressão como fallback
+              qrBase64: null, // Vindi não retorna base64, só URL do SVG
+              pixCode: pixCode, // Código copia-e-cola
+              qrcodeSvg: qrcodeSvg, // URL do SVG
+              dueAt: dueAt || billData.bill?.due_at
             };
             logStep('✅ DADOS PIX ENCONTRADOS!', pixData);
             break;
@@ -681,23 +682,37 @@ serve(async (req) => {
         }
       }
 
-      // ✅ APLICAR DADOS PIX AO RESPONSE
+      // ✅ APLICAR DADOS PIX AO RESPONSE CONFORME CAMPOS DA VINDI
       if (pixData) {
-        if (pixData.qrUrl) responseData.pix_qr_code_url = pixData.qrUrl;
-        if (pixData.qrBase64) responseData.pix_qr_code = pixData.qrBase64;
+        // Campo principal: URL do SVG do QR Code
+        if (pixData.qrcodeSvg) {
+          responseData.pix_qr_svg = pixData.qrcodeSvg;
+          responseData.pix_qr_code_url = pixData.qrcodeSvg; // Compatibilidade
+        }
+
+        // Campo principal: Código PIX copia-e-cola
         if (pixData.pixCode) {
           responseData.pix_code = pixData.pixCode;
           responseData.pix_copia_cola = pixData.pixCode;
         }
-        if (pixData.qrcodeSvg) responseData.pix_qr_svg = pixData.qrcodeSvg;
-        if (pixData.dueAt) responseData.due_at = pixData.dueAt;
+
+        // URL para impressão como fallback
+        if (pixData.qrUrl) {
+          responseData.pix_print_url = pixData.qrUrl;
+        }
+
+        // Data de expiração
+        if (pixData.dueAt) {
+          responseData.due_at = pixData.dueAt;
+        }
 
         logStep('🎉 PIX RESPONSE PREPARADO COM SUCESSO', {
-          hasQrUrl: !!responseData.pix_qr_code_url,
-          hasQrBase64: !!responseData.pix_qr_code,
+          hasQrSvg: !!responseData.pix_qr_svg,
           hasPixCode: !!responseData.pix_code,
-          hasSvg: !!responseData.pix_qr_svg,
-          hasDueAt: !!responseData.due_at
+          hasPrintUrl: !!responseData.pix_print_url,
+          hasDueAt: !!responseData.due_at,
+          qrSvgUrl: responseData.pix_qr_svg,
+          pixCodeLength: responseData.pix_code?.length || 0
         });
       } else {
         logStep('❌ NENHUM DADO PIX ENCONTRADO APÓS TODAS AS TENTATIVAS', {
