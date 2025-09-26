@@ -551,51 +551,168 @@ serve(async (req) => {
     };
 
     if (paymentData.paymentMethod === 'pix') {
-      const gwFields = billData.bill?.charges?.[0]?.last_transaction?.gateway_response_fields || {};
-      const qrUrl = gwFields.qr_code_url || gwFields.qr_code_image_url || gwFields.pix_qr_code_url;
-      const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
-      const pixCode = gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
-      
-      // 🎯 CAMPOS CORRETOS DA VINDI - VÁRIAS POSSIBILIDADES
-      const qrcodeSvg = gwFields.qrcode_path || gwFields.qr_code_svg || gwFields.svg || gwFields.qrcode_svg || gwFields.pix_qr_svg; // SVG do QR Code
-      const pixCopiaCola = gwFields.qrcode_original_path || gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code; // Código PIX copia e cola
+      logStep('🎯 INICIANDO PROCESSAMENTO PIX', {
+        billId: billData.bill.id,
+        billStatus: billData.bill.status,
+        chargesCount: billData.bill.charges?.length || 0
+      });
 
-      if (qrUrl) responseData.pix_qr_code_url = qrUrl;
-      if (qrBase64) responseData.pix_qr_code = qrBase64;
-      if (pixCode) responseData.pix_code = pixCode;
-      
-      // ✅ ADICIONAR SVG E COPIA E COLA AO RESPONSE
-      if (qrcodeSvg) {
-        responseData.pix_qr_svg = qrcodeSvg;
-        logStep('SVG QR Code found and included', {
-          svgLength: qrcodeSvg.length,
-          svgPreview: qrcodeSvg.substring(0, 200) + '...'
+      // ✅ LOG COMPLETO DA ESTRUTURA PARA DEBUG
+      if (billData.bill.charges?.[0]) {
+        const charge = billData.bill.charges[0];
+        logStep('📊 CHARGE COMPLETA', {
+          chargeId: charge.id,
+          chargeStatus: charge.status,
+          chargeAmount: charge.amount,
+          hasLastTransaction: !!charge.last_transaction,
+          lastTransactionId: charge.last_transaction?.id,
+          transactionStatus: charge.last_transaction?.status,
+          hasGatewayFields: !!charge.last_transaction?.gateway_response_fields,
+          allChargeFields: Object.keys(charge),
+          transactionFields: charge.last_transaction ? Object.keys(charge.last_transaction) : []
+        });
+
+        if (charge.last_transaction?.gateway_response_fields) {
+          const gwFields = charge.last_transaction.gateway_response_fields;
+          logStep('🔍 GATEWAY_RESPONSE_FIELDS COMPLETO', {
+            availableFields: Object.keys(gwFields),
+            fieldValues: gwFields,
+            totalFields: Object.keys(gwFields).length
+          });
+        } else {
+          logStep('❌ GATEWAY_RESPONSE_FIELDS VAZIO OU INEXISTENTE');
+        }
+      }
+
+      // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
+      let attempts = 0;
+      let maxAttempts = 3;
+      let pixData = null;
+
+      while (attempts < maxAttempts && !pixData) {
+        attempts++;
+        logStep(`🔄 TENTATIVA ${attempts}/${maxAttempts} de buscar dados PIX`);
+
+        if (attempts > 1) {
+          // Aguardar antes de retry
+          logStep('⏳ Aguardando 3 segundos antes de retry...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          // Refetch bill details
+          try {
+            const billRefreshResponse = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (billRefreshResponse.ok) {
+              const refreshedBill = await billRefreshResponse.json();
+              billData = refreshedBill;
+              logStep('✅ Bill atualizada com sucesso', {
+                chargesCount: billData.bill.charges?.length || 0
+              });
+            }
+          } catch (refreshError) {
+            logStep('❌ Erro ao refetch bill', { error: refreshError.message });
+          }
+        }
+
+        // Tentar extrair dados PIX
+        const charge = billData.bill?.charges?.[0];
+        if (charge?.last_transaction?.gateway_response_fields) {
+          const gwFields = charge.last_transaction.gateway_response_fields;
+
+          // ✅ BUSCA EXPANDIDA POR DADOS PIX
+          const qrUrl = gwFields.qrcode_path || gwFields.qr_code_url || gwFields.qr_code_image_url || gwFields.pix_qr_code_url;
+          const qrBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64 || gwFields.qrcode_base64 || gwFields.pix_qr_code_base64;
+          const pixCode = gwFields.qrcode_original_path || gwFields.qr_code_text || gwFields.emv || gwFields.copy_paste || gwFields.pix_code;
+          const qrcodeSvg = gwFields.qrcode_path || gwFields.qr_code_svg || gwFields.svg || gwFields.qrcode_svg || gwFields.pix_qr_svg;
+
+          logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
+            hasQrUrl: !!qrUrl,
+            hasQrBase64: !!qrBase64,
+            hasPixCode: !!pixCode,
+            hasQrSvg: !!qrcodeSvg,
+            qrUrlValue: qrUrl ? `${qrUrl.substring(0, 100)}...` : null,
+            pixCodeLength: pixCode?.length || 0
+          });
+
+          if (qrUrl || qrBase64 || pixCode || qrcodeSvg) {
+            pixData = {
+              qrUrl,
+              qrBase64,
+              pixCode,
+              qrcodeSvg,
+              dueAt: billData.bill?.due_at || gwFields.expires_at || gwFields.expiration_date || gwFields.expiration_time
+            };
+            logStep('✅ DADOS PIX ENCONTRADOS!', pixData);
+            break;
+          }
+        }
+
+        // Tentar buscar diretamente da charge (não da transaction)
+        if (!pixData && charge) {
+          logStep('🔍 Tentando buscar dados PIX diretamente da charge...');
+          const directFields = {
+            qrUrl: charge.pix_qr_url || charge.qr_code_url,
+            qrBase64: charge.pix_qr_code || charge.qr_code_base64,
+            pixCode: charge.pix_code || charge.pix_copia_cola,
+            qrcodeSvg: charge.pix_qr_svg
+          };
+
+          if (directFields.qrUrl || directFields.qrBase64 || directFields.pixCode) {
+            pixData = directFields;
+            logStep('✅ Dados PIX encontrados diretamente na charge!', directFields);
+            break;
+          }
+        }
+
+        if (attempts < maxAttempts) {
+          logStep(`⏳ Tentativa ${attempts} falhou, aguardando retry...`);
+        }
+      }
+
+      // ✅ APLICAR DADOS PIX AO RESPONSE
+      if (pixData) {
+        if (pixData.qrUrl) responseData.pix_qr_code_url = pixData.qrUrl;
+        if (pixData.qrBase64) responseData.pix_qr_code = pixData.qrBase64;
+        if (pixData.pixCode) {
+          responseData.pix_code = pixData.pixCode;
+          responseData.pix_copia_cola = pixData.pixCode;
+        }
+        if (pixData.qrcodeSvg) responseData.pix_qr_svg = pixData.qrcodeSvg;
+        if (pixData.dueAt) responseData.due_at = pixData.dueAt;
+
+        logStep('🎉 PIX RESPONSE PREPARADO COM SUCESSO', {
+          hasQrUrl: !!responseData.pix_qr_code_url,
+          hasQrBase64: !!responseData.pix_qr_code,
+          hasPixCode: !!responseData.pix_code,
+          hasSvg: !!responseData.pix_qr_svg,
+          hasDueAt: !!responseData.due_at
         });
       } else {
-        logStep('❌ SVG QR Code NOT FOUND', {
-          searchedFields: ['qrcode_path', 'qr_code_svg', 'svg', 'qrcode_svg', 'pix_qr_svg'],
-          availableGwFields: Object.keys(gwFields),
-          gwFieldsValues: gwFields
+        logStep('❌ NENHUM DADO PIX ENCONTRADO APÓS TODAS AS TENTATIVAS', {
+          attempts: maxAttempts,
+          billId: billData.bill.id,
+          chargesCount: billData.bill.charges?.length || 0
         });
-      }
-      
-      if (pixCopiaCola) {
-        responseData.pix_copia_cola = pixCopiaCola;
-        responseData.pix_code = pixCopiaCola; // Override com valor correto
-        logStep('PIX copia e cola found and included', { 
-          copiaColaLength: pixCopiaCola.length,
-          copiaColaStart: pixCopiaCola.substring(0, 50) + '...'
-        });
-      }
 
-      responseData.due_at = billData.bill?.due_at || gwFields.expires_at || gwFields.expiration_date || gwFields.expiration_time;
-      
-      logStep('PIX response prepared', {
-        hasPixCode: !!pixCode,
-        hasQrUrl: !!qrUrl,
-        hasQrBase64: !!qrBase64,
-        hasQrSvg: !!qrcodeSvg
-      });
+        // ✅ VALIDAÇÃO ROBUSTA E FEEDBACK PARA O USUÁRIO
+        logStep('⚠️ AVISO: PIX criado mas dados não encontrados', {
+          possibleCauses: [
+            'Vindi ainda processando PIX',
+            'Campos de resposta mudaram',
+            'Gateway demorou para processar'
+          ],
+          recommendation: 'Usuário pode tentar novamente em alguns minutos'
+        });
+
+        responseData.warning = "PIX foi criado mas o QR Code pode demorar alguns minutos para aparecer. Tente atualizar a página.";
+        responseData.bill_id = billData.bill.id; // Para permitir consulta posterior
+      }
     }
 
     logStep("Payment processed successfully", { billId: billData.bill.id, status: billData.bill.status });
