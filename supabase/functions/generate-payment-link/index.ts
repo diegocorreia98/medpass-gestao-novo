@@ -400,7 +400,10 @@ serve(async (req) => {
         metadata: {
           plan_name: beneficiario.plano.nome,
           plan_price: beneficiario.valor_plano,
-          generated_from: 'generate-payment-link'
+          generated_from: 'generate-payment-link',
+          vindi_customer_id: vindiCustomerId,
+          vindi_plan_id: Number(vindiPlanId),
+          vindi_product_id: beneficiario.plano.vindi_product_id
         }
       })
       .select()

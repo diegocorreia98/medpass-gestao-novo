@@ -537,6 +537,11 @@ serve(async (req) => {
 
     logStep("Transaction saved successfully");
 
+    // Validate billData exists
+    if (!billData || !billData.bill) {
+      throw new Error("Fatura não encontrada após processamento");
+    }
+
     // Prepare response based on payment method
     const responseData: any = {
       success: true,
