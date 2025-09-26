@@ -204,14 +204,3 @@ class NotificationService {
 }
 
 export const notificationService = new NotificationService();
-
-// Export individual functions for easier imports
-export const createNotification = (params: CreateNotificationParams) => notificationService.createNotification(params);
-export const createSystemNotification = (params: SystemNotificationParams) => notificationService.createSystemNotification(params);
-export const notifyPaymentConfirmed = (userId: string, beneficiaryName: string, planName: string) => notificationService.notifyPaymentConfirmed(userId, beneficiaryName, planName);
-export const notifyPaymentFailed = (userId: string, beneficiaryName: string, planName: string) => notificationService.notifyPaymentFailed(userId, beneficiaryName, planName);
-export const notifyNewBeneficiary = (userId: string, beneficiaryName: string) => notificationService.notifyNewBeneficiary(userId, beneficiaryName);
-export const notifyCancellation = (userId: string, beneficiaryName: string, reason: string) => notificationService.notifyCancellation(userId, beneficiaryName, reason);
-export const notifySystemMaintenance = () => notificationService.notifySystemMaintenance();
-export const notifyNewFeature = (featureName: string, description: string) => notificationService.notifyNewFeature(featureName, description);
-export const notifySecurityAlert = (userType?: "matriz" | "unidade") => notificationService.notifySecurityAlert(userType);

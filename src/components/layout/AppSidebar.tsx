@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, BookOpen, Award } from "lucide-react";
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -24,15 +24,6 @@ const mainItems = [{
   title: "Gestão de Empresas",
   url: "/gestao-empresas",
   icon: Building2
-}];
-const capacitacaoItems = [{
-  title: "Cursos",
-  url: "/courses",
-  icon: BookOpen
-}, {
-  title: "Templates de Certificados",
-  url: "/admin/certificate-templates",
-  icon: Award
 }];
 const adminItems = [{
   title: "Painel Admin",
@@ -79,10 +70,6 @@ export function AppSidebar() {
   } = useToast();
   const isActive = (path: string) => {
     if (path === "/dashboard") return currentPath === "/dashboard";
-    if (path === "/courses") {
-      // Para rotas de cursos, deve ser mais específico para evitar conflitos
-      return currentPath === "/courses" || currentPath.startsWith("/courses/");
-    }
     return currentPath.startsWith(path);
   };
   const getNavCls = ({
@@ -121,7 +108,7 @@ export function AppSidebar() {
         <div className="p-4 border-b border-border py-[12px]">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 flex items-center justify-center">
-              <img src="/uploads/faf8903f-46bf-4454-8de4-8d6f6002cab5.png" alt="MedPass Logo" className="w-8 h-8 object-contain" />
+              <img src="/lovable-uploads/faf8903f-46bf-4454-8de4-8d6f6002cab5.png" alt="MedPass Logo" className="w-8 h-8 object-contain" />
             </div>
             {!isCollapsed && <div>
                 <h2 className="font-bold text-foreground">Painel Matriz</h2>
@@ -138,27 +125,6 @@ export function AppSidebar() {
               {mainItems.map(item => <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end={item.url === "/dashboard"} className={({
-                  isActive
-                }) => getNavCls({
-                  isActive
-                })}>
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Capacitação Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Capacitação</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {capacitacaoItems.map(item => <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={({
                   isActive
                 }) => getNavCls({
                   isActive

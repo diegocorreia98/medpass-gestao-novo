@@ -10,14 +10,13 @@ import { Badge } from "@/components/ui/badge"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Server,
-  TestTube,
-  Eye,
+import { 
+  Server, 
+  TestTube, 
+  Eye, 
   EyeOff,
   FileText,
   User,
-  Users,
   UserX
 } from "lucide-react"
 
@@ -34,8 +33,7 @@ interface TestData {
   codigoExterno: string
   idBeneficiarioTipo: number
   tipoPlano: number
-  cpfTitular: string // CPF do titular (obrigatório para dependentes)
-
+  
   // Campos para cancelamento
   motivo: string
   dataCancelamento: string
@@ -57,7 +55,6 @@ export default function RealDataTestCard() {
     codigoExterno: "",
     idBeneficiarioTipo: 1,
     tipoPlano: 102303,
-    cpfTitular: "",
     motivo: "",
     dataCancelamento: new Date().toISOString().split('T')[0]
   })
@@ -103,9 +100,7 @@ export default function RealDataTestCard() {
         uf: testData.uf,
         codigoExterno: testData.codigoExterno,
         idBeneficiarioTipo: testData.idBeneficiarioTipo,
-        tipoPlano: testData.tipoPlano,
-        // Incluir cpfTitular se for dependente (tipo 3)
-        ...(testData.idBeneficiarioTipo === 3 && testData.cpfTitular && { cpfTitular: testData.cpfTitular })
+        tipoPlano: testData.tipoPlano
       }
       
       console.log('Dados que serão enviados:', JSON.stringify(dataToSend, null, 2))
@@ -197,44 +192,19 @@ export default function RealDataTestCard() {
       codigoExterno: "EXT123456",
       idBeneficiarioTipo: 1,
       tipoPlano: 102303,
-      cpfTitular: "12345678901", // CPF do titular (para quando testar dependente)
       motivo: "Teste de cancelamento",
       dataCancelamento: new Date().toISOString().split('T')[0] // Data atual
     })
-
+    
     toast({
       title: "Dados de Exemplo",
       description: "Dados de exemplo carregados com sucesso (CPF válido para teste)",
     })
   }
 
-  const loadDependenteExample = () => {
-    setTestData({
-      nome: "Maria Silva Dependente",
-      cpf: "22255588844", // CPF válido para teste do dependente
-      dataNascimento: "2010-05-20", // Dependente menor de idade
-      celular: "11988887777",
-      email: "maria.dependente@email.com",
-      cep: "01234567",
-      numero: "123",
-      uf: "SP",
-      codigoExterno: "EXTDEP123",
-      idBeneficiarioTipo: 3, // Dependente
-      tipoPlano: 102304, // Plano Familiar
-      cpfTitular: "11144477735", // CPF do titular
-      motivo: "Teste de cancelamento de dependente",
-      dataCancelamento: new Date().toISOString().split('T')[0]
-    })
-
-    toast({
-      title: "Dados de Dependente",
-      description: "Dados de exemplo para teste de dependente carregados com sucesso",
-    })
-  }
-
   const getJsonPreview = (operation: 'adesao' | 'cancelamento') => {
     if (operation === 'adesao') {
-      const baseJson = {
+      return {
         idClienteContrato: "{{ID_CLIENTE_CONTRATO}}",
         idBeneficiarioTipo: testData.idBeneficiarioTipo,
         nome: testData.nome,
@@ -249,26 +219,19 @@ export default function RealDataTestCard() {
         uf: testData.uf,
         tipoPlano: testData.tipoPlano
       }
-
-      // Adicionar cpfTitular se for dependente
-      if (testData.idBeneficiarioTipo === 3 && testData.cpfTitular) {
-        return { ...baseJson, cpfTitular: testData.cpfTitular }
-      }
-
-      return baseJson
     } else {
       return {
         idClienteContrato: "{{ID_CLIENTE_CONTRATO}}",
-        idCliente: "{{ID_CLIENTE}}",
         codigoExterno: testData.codigoExterno,
-        cpf: testData.cpf
+        cpf: testData.cpf,
+        motivo: testData.motivo,
+        dataCancelamento: convertDateToDDMMYYYY(testData.dataCancelamento)
       }
     }
   }
 
-  const isAdesaoValid = testData.nome && testData.cpf && testData.email && testData.codigoExterno &&
-    (testData.idBeneficiarioTipo !== 3 || testData.cpfTitular) // Para dependentes, cpfTitular é obrigatório
-  const isCancelamentoValid = testData.codigoExterno && testData.cpf
+  const isAdesaoValid = testData.nome && testData.cpf && testData.email && testData.codigoExterno
+  const isCancelamentoValid = testData.codigoExterno && testData.cpf && testData.motivo
 
   return (
     <Card>
@@ -278,20 +241,10 @@ export default function RealDataTestCard() {
           Teste com Dados Reais
         </CardTitle>
         <CardDescription>
-          Teste a API externa com dados reais para validar o funcionamento completo. Suporte a titulares e dependentes (datas em formato DDMMYYYY)
+          Teste a API externa com dados reais para validar o funcionamento completo (datas em formato DDMMYYYY)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Informação sobre dependentes */}
-        {testData.idBeneficiarioTipo === 3 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <h4 className="text-sm font-medium text-blue-800 mb-1">Teste de Dependente</h4>
-            <p className="text-xs text-blue-700">
-              Para testes de dependentes, é obrigatório informar o CPF do titular. O tipo de plano deve ser Familiar (102304) e o tipo de beneficiário deve ser Dependente (3).
-            </p>
-          </div>
-        )}
-
         {/* Formulário de Dados */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
@@ -398,22 +351,10 @@ export default function RealDataTestCard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="1">Titular (1)</SelectItem>
-                <SelectItem value="3">Dependente (3)</SelectItem>
+                <SelectItem value="2">Dependente (2)</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
-          {/* Campo CPF Titular - só aparece se for dependente */}
-          {testData.idBeneficiarioTipo === 3 && (
-            <div className="space-y-2">
-              <Label>CPF do Titular * <span className="text-xs text-muted-foreground">(obrigatório para dependentes)</span></Label>
-              <Input
-                value={testData.cpfTitular}
-                onChange={(e) => setTestData(prev => ({ ...prev, cpfTitular: e.target.value }))}
-                placeholder="12345678901"
-              />
-            </div>
-          )}
         </div>
 
         {/* Campos para Cancelamento */}
@@ -444,13 +385,8 @@ export default function RealDataTestCard() {
         {/* Ações */}
         <div className="flex flex-wrap gap-2">
           <Button onClick={loadExampleData} variant="outline" size="sm">
-            <User className="h-4 w-4 mr-2" />
-            Exemplo Titular
-          </Button>
-
-          <Button onClick={loadDependenteExample} variant="outline" size="sm">
-            <Users className="h-4 w-4 mr-2" />
-            Exemplo Dependente
+            <FileText className="h-4 w-4 mr-2" />
+            Carregar Exemplo
           </Button>
           
           <Button 

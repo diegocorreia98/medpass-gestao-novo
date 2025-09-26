@@ -4,20 +4,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { beneficiariosSecureService, type SecureBeneficiario } from '@/services/beneficiarios-secure';
-import { usePaymentNotificationSound } from '@/hooks/useNotificationSound';
-import type {
-  Beneficiario,
-  BeneficiarioInsert,
-  BeneficiarioUpdate,
+import type { 
+  Beneficiario, 
+  BeneficiarioInsert, 
+  BeneficiarioUpdate, 
   BeneficiarioCompleto,
-  BeneficiarioFilters
+  BeneficiarioFilters 
 } from '@/types/database';
 
 export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: string }) => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { notifyPaymentSuccess } = usePaymentNotificationSound();
 
   // ✅ Real-time subscription for beneficiarios updates (especially payment_status)
   useEffect(() => {
@@ -56,23 +54,6 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
                 title: "Pagamento Confirmado! 🎉",
                 description: `O pagamento do beneficiário ${updatedBeneficiario.nome} foi confirmado.`,
               });
-
-              // 🎵 Play payment success sound
-              notifyPaymentSuccess(updatedBeneficiario.nome).catch(soundError => {
-                console.error('⚠️ Erro ao tocar som de pagamento confirmado:', soundError);
-              });
-
-              // Notificação será criada automaticamente pelo trigger do banco de dados
-              console.log('✅ Pagamento confirmado - notificação será criada pelo trigger do banco');
-            } else if (updatedBeneficiario.payment_status === 'failed') {
-              toast({
-                title: "Pagamento Falhado ⚠️",
-                description: `O pagamento do beneficiário ${updatedBeneficiario.nome} falhou.`,
-                variant: "destructive"
-              });
-
-              // Notificação será criada automaticamente pelo trigger do banco de dados
-              console.log('✅ Pagamento falhado - notificação será criada pelo trigger do banco');
             }
 
             // Invalidate and refetch beneficiarios data
@@ -100,12 +81,6 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
       console.log('[USE-BENEFICIARIOS] Executando query para user:', user?.id);
       console.log('[USE-BENEFICIARIOS] Profile type:', profile?.user_type);
       console.log('[USE-BENEFICIARIOS] Filtros aplicados:', filters);
-      console.log('[USE-BENEFICIARIOS] Estratégia de filtro:',
-        profile?.user_type === 'unidade' && filters?.unidadeId
-          ? 'unidade_id (permite adesões de qualquer usuário)'
-          : profile?.user_type === 'unidade'
-            ? 'user_id (apenas adesões do próprio usuário)'
-            : 'sem filtro de usuário (matriz)');
 
       let query = supabase
         .from('beneficiarios')
@@ -117,34 +92,10 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
         `)
         .order('created_at', { ascending: false });
 
-      // 🔒 SECURITY: Para usuários unidade, priorizar filtro por unidade_id
+      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
       if (profile?.user_type === 'unidade') {
         console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade');
-
-        // Se foi passado unidadeId, filtrar por unidade ao invés de user_id
-        // Isso permite que adesões criadas por matriz ou sistema apareçam na unidade correta
-        if (filters?.unidadeId) {
-          console.log('[SECURITY] Filtrando por unidade_id:', filters.unidadeId);
-          query = query.eq('unidade_id', filters.unidadeId);
-
-          // Adicionar validação extra: verificar se a unidade realmente pertence ao usuário
-          const { data: unidadeCheck } = await supabase
-            .from('unidades')
-            .select('id, user_id')
-            .eq('id', filters.unidadeId)
-            .eq('user_id', user?.id)
-            .single();
-
-          if (!unidadeCheck) {
-            console.warn('[SECURITY] Usuário tentando acessar unidade que não pertence a ele');
-            throw new Error('Acesso negado: Unidade não pertence ao usuário');
-          }
-          console.log('[SECURITY] Validação de propriedade da unidade aprovada');
-        } else {
-          // Fallback: usar user_id apenas se não tiver unidadeId especificado
-          console.log('[SECURITY] Filtrando por user_id (fallback)');
-          query = query.eq('user_id', user?.id);
-        }
+        query = query.eq('user_id', user?.id);
       }
       // Para usuários matriz, permitir acesso a todos os dados
 
@@ -179,40 +130,29 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
       console.log('[USE-BENEFICIARIOS] Data count:', data?.length || 0);
       console.log('[USE-BENEFICIARIOS] Data sample:', data?.slice(0, 2));
       
-      // ✅ DEBUG ADICIONAL: Diagnosticar problemas de visibilidade
+      // ✅ DEBUG ADICIONAL: Verificar se existe Diego Beu Correia
       if (data && data.length === 0 && filters?.unidadeId) {
-        console.log('🔍 [DEBUG] Query retornou vazia, diagnosticando...');
-        console.log('🔍 [DEBUG] User ID:', user?.id);
-        console.log('🔍 [DEBUG] Unidade ID:', filters.unidadeId);
-        console.log('🔍 [DEBUG] Profile type:', profile?.user_type);
-
-        // Verificar beneficiários na unidade (independente de user_id)
+        console.log('🔍 [DEBUG] Query retornou vazia, verificando beneficiários da unidade...');
+        
+        // Query sem filtros para debug
         const { data: debugData, error: debugError } = await supabase
           .from('beneficiarios')
-          .select('id, nome, unidade_id, user_id, status, email, created_at')
+          .select('id, nome, unidade_id, user_id, status')
           .eq('unidade_id', filters.unidadeId)
-          .limit(10);
-
-        console.log('🔍 [DEBUG] Beneficiários na unidade (todos):', debugData);
-        console.log('🔍 [DEBUG] Total na unidade:', debugData?.length || 0);
-
-        if (debugData && debugData.length > 0) {
-          const userIds = [...new Set(debugData.map(b => b.user_id))];
-          console.log('🔍 [DEBUG] User IDs únicos que criaram adesões:', userIds);
-          console.log('🔍 [DEBUG] Atual user_id é:', user?.id);
-          console.log('🔍 [DEBUG] Problema: filtro anterior por user_id impediria acesso a:',
-            debugData.filter(b => b.user_id !== user?.id).map(b => ({ nome: b.nome, email: b.email, user_id: b.user_id })));
-        }
-
-        // Verificar beneficiários criados pelo usuário atual (independente de unidade)
+          .limit(5);
+          
+        console.log('🔍 [DEBUG] Beneficiários na unidade:', debugData);
+        console.log('🔍 [DEBUG] Error na query debug:', debugError);
+        
+        // Query de todos os beneficiários do usuário
         const { data: userBenef, error: userError } = await supabase
           .from('beneficiarios')
           .select('id, nome, unidade_id, user_id, status')
           .eq('user_id', user?.id)
           .limit(5);
-
-        console.log('🔍 [DEBUG] Beneficiários criados pelo usuário atual:', userBenef);
-        console.log('🔍 [DEBUG] Diagnóstico completo realizado');
+          
+        console.log('🔍 [DEBUG] Beneficiários do usuário:', userBenef);
+        console.log('🔍 [DEBUG] Error user query:', userError);
       }
       
       if (error) {
@@ -243,10 +183,7 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
       // Beneficiário criado com sucesso
       // A sincronização com API externa será feita após confirmação de pagamento
       console.log("✅ Beneficiário criado com sucesso");
-
-      // 2. Notificação será criada automaticamente pelo trigger do banco de dados
-      console.log('✅ Beneficiário criado - notificação será criada pelo trigger do banco');
-
+      
       return data;
     },
     onSuccess: () => {

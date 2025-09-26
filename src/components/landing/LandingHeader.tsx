@@ -11,7 +11,7 @@ export function LandingHeader() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/uploads/6063e8a5-a834-41f5-8331-f30fbef51860.png" alt="Logo" className="h-8 w-auto" />
+            <img src="/lovable-uploads/6063e8a5-a834-41f5-8331-f30fbef51860.png" alt="Logo" className="h-8 w-auto" />
           </div>
           
           {/* Desktop Navigation */}

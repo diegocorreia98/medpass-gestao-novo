@@ -31,15 +31,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // Se o usuário existe mas o profile ainda está carregando, aguarda
-  if (user && !profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Carregando perfil...</span>
-        </div>
-      </div>
-    );
+  if (!profile && !loading) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
   if (requiredUserType && profile.user_type !== requiredUserType) {

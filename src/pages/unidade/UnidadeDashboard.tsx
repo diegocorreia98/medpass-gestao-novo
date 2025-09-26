@@ -14,17 +14,13 @@ import { useComissoes } from "@/hooks/useComissoes"
 import { useUnidades } from "@/hooks/useUnidades"
 import { ChartAreaInteractive } from "@/components/charts/ChartAreaInteractive"
 import { testUnidadeDataSecurity } from "@/utils/testSecurity"
-import { convertToMatriz, convertToUnidade } from "@/utils/convertUserType"
 import { useEffect } from "react"
 
 export default function UnidadeDashboard() {
-  // Make security test and user conversion available in console
+  // Make security test available in console
   useEffect(() => {
     (window as any).testSecurity = testUnidadeDataSecurity;
-    (window as any).convertToMatriz = convertToMatriz;
-    (window as any).convertToUnidade = convertToUnidade;
     console.log("🔒 Teste de segurança disponível! Digite 'testSecurity()' no console para testar");
-    console.log("🔄 Conversão de usuário disponível! Digite 'convertToMatriz()' para virar matriz ou 'convertToUnidade()' para virar unidade");
   }, []);
 
   // Buscar a unidade do usuário logado

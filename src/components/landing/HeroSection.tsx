@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Shield, Heart } from "lucide-react";
 export function HeroSection() {
   return <section className="relative overflow-hidden py-20 lg:py-32" style={{
-    backgroundImage: 'url(/uploads/a8b83fa3-7de7-487a-a542-7e6046cc3ec9.png)',
+    backgroundImage: 'url(/lovable-uploads/a8b83fa3-7de7-487a-a542-7e6046cc3ec9.png)',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat'

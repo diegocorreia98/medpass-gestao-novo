@@ -44,17 +44,6 @@ import Franquias from "./pages/Franquias";
 import Checkout from "./pages/Checkout";
 import TransparentCheckout from "./pages/TransparentCheckout";
 import NotificationTest from "./pages/NotificationTest";
-import CoursesPage from "./pages/courses/CoursesPage";
-import CreateCoursePage from "./pages/courses/CreateCoursePage";
-import EditCoursePage from "./pages/courses/EditCoursePage";
-import CourseDetailPage from "./pages/courses/CourseDetailPage";
-import LearnPage from "./pages/learn/LearnPage";
-import CourseViewerPage from "./pages/learn/CourseViewerPage";
-import CertificatesPage from "./pages/learn/CertificatesPage";
-import CertificateTemplates from "./pages/admin/CertificateTemplates";
-import EditCertificateTemplate from "./pages/admin/EditCertificateTemplate";
-import TestCertificates from "./pages/TestCertificates";
-import TestCourses from "./pages/TestCourses";
 
 const queryClient = new QueryClient();
 
@@ -116,16 +105,6 @@ const App = () => (
                   <Layout><Admin /></Layout>
                 </ProtectedRoute>
               } />
-              <Route path="/admin/certificate-templates" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><CertificateTemplates /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/admin/certificate-templates/:templateId/edit" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><EditCertificateTemplate /></Layout>
-                </ProtectedRoute>
-              } />
               <Route path="/gestao-unidades" element={
                 <ProtectedRoute requiredUserType="matriz">
                   <Layout><GestaoUnidades /></Layout>
@@ -164,38 +143,6 @@ const App = () => (
               <Route path="/notification-test" element={
                 <ProtectedRoute requiredUserType="matriz">
                   <Layout><NotificationTest /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/test-certificates" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><TestCertificates /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/test-courses" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><TestCourses /></Layout>
-                </ProtectedRoute>
-              } />
-
-              {/* Courses Routes - Matriz */}
-              <Route path="/courses" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><CoursesPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/courses/new" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><CreateCoursePage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/courses/:courseId" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><CourseDetailPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/courses/:courseId/edit" element={
-                <ProtectedRoute requiredUserType="matriz">
-                  <Layout><EditCoursePage /></Layout>
                 </ProtectedRoute>
               } />
 
@@ -238,23 +185,6 @@ const App = () => (
               <Route path="/unidade/notificacoes" element={
                 <ProtectedRoute requiredUserType="unidade">
                   <Layout><NotificacoesHistorico /></Layout>
-                </ProtectedRoute>
-              } />
-
-              {/* Learning Routes - Unidade */}
-              <Route path="/learn" element={
-                <ProtectedRoute requiredUserType="unidade">
-                  <Layout><LearnPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/learn/courses/:courseId" element={
-                <ProtectedRoute requiredUserType="unidade">
-                  <Layout><CourseViewerPage /></Layout>
-                </ProtectedRoute>
-              } />
-              <Route path="/learn/certificates" element={
-                <ProtectedRoute requiredUserType="unidade">
-                  <Layout><CertificatesPage /></Layout>
                 </ProtectedRoute>
               } />
 

@@ -221,13 +221,35 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       if (error) throw error;
 
       if (data.success) {
+        // 🔍 DEBUG: Log detalhado da resposta do backend
+        console.log('🔍 [PAYMENT DEBUG] Resposta completa do backend:', data);
+        console.log('🔍 [PAYMENT DEBUG] Campos PIX na resposta:', {
+          pix_qr_svg: data.pix_qr_svg ? `${data.pix_qr_svg.substring(0, 100)}...` : 'VAZIO',
+          pix_qr_code_url: data.pix_qr_code_url || 'VAZIO',
+          pix_qr_code: data.pix_qr_code ? `${data.pix_qr_code.substring(0, 50)}...` : 'VAZIO',
+          pix_code: data.pix_code || 'VAZIO',
+          pix_copia_cola: data.pix_copia_cola || 'VAZIO',
+          pix_print_url: data.pix_print_url || 'VAZIO',
+          pix_qr_base64: data.pix_qr_base64 ? `${data.pix_qr_base64.substring(0, 50)}...` : 'VAZIO',
+          due_at: data.due_at || 'VAZIO',
+          pix_object: data.pix || 'VAZIO'
+        });
+
         setPaymentResult(data);
-        
+
         if (selectedPaymentMethod === 'pix') {
           setCurrentStep('awaiting-payment');
+
+          // 🔍 DEBUG TEMPORÁRIO: Toast com dados PIX para debug
+          const pixDebugInfo = [
+            `SVG: ${data.pix_qr_svg ? 'SIM' : 'NÃO'}`,
+            `URL: ${data.pix_qr_code_url ? 'SIM' : 'NÃO'}`,
+            `PIX: ${data.pix_code || data.pix_copia_cola ? 'SIM' : 'NÃO'}`
+          ].join(' | ');
+
           toast({
             title: "PIX Gerado!",
-            description: "Escaneie o QR Code ou copie o código para pagar.",
+            description: `${pixDebugInfo} - Escaneie o QR Code ou copie o código para pagar.`,
           });
         } else {
           // For credit card, check status immediately
@@ -267,12 +289,25 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE RESPONSIVO
+  // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE COM DEBUG DETALHADO
   const renderPixQr = useCallback((r: PaymentResult) => {
+    // 🔍 DEBUG: Log detalhado dos dados PIX recebidos
+    console.log('🔍 [PIX DEBUG] renderPixQr chamada!');
+    console.log('🔍 [PIX DEBUG] PaymentResult completo:', r);
+    console.log('🔍 [PIX DEBUG] Campos PIX disponíveis:', {
+      pix_qr_svg: r.pix_qr_svg ? `${r.pix_qr_svg.substring(0, 100)}...` : 'VAZIO',
+      pix_qr_code_url: r.pix_qr_code_url || 'VAZIO',
+      pix_qr_code: r.pix_qr_code ? `${r.pix_qr_code.substring(0, 50)}...` : 'VAZIO',
+      pix_code: r.pix_code || 'VAZIO',
+      pix_copia_cola: r.pix_copia_cola || 'VAZIO',
+      due_at: r.due_at || 'VAZIO'
+    });
+
     const s = (r.pix_qr_svg || '').trim();
 
     // 1) Se vier MARKUP SVG, injeta como HTML
     if (s.startsWith('<svg')) {
+      console.log('✅ [PIX DEBUG] Renderizando QR Code como SVG inline');
       return (
         <div
           className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 p-2 bg-white border rounded-lg flex items-center justify-center mx-auto touch-manipulation"
@@ -283,23 +318,15 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
 
     // 2) Se vier DATA URI (svg ou png), usa <img>
     if (s.startsWith('data:image/')) {
+      console.log('✅ [PIX DEBUG] Renderizando QR Code como Data URI');
       return (
         <img
           src={s}
           alt="QR Code PIX"
           className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
-        />
-      );
-    }
-
-    // 3) Se vier URL http(s) (como no seu caso), usa <img>
-    if (/^https?:\/\//i.test(s)) {
-      return (
-        <img
-          src={s}
-          alt="QR Code PIX"
-          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
+          onLoad={() => console.log('✅ [PIX DEBUG] QR Code Data URI carregou com sucesso')}
           onError={(e) => {
+            console.error('❌ [PIX DEBUG] Erro ao carregar QR Code Data URI:', e);
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
           }}
@@ -307,14 +334,35 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       );
     }
 
-    // 4) Fallbacks já existentes
+    // 3) Se vier URL http(s), usa <img>
+    if (/^https?:\/\//i.test(s)) {
+      console.log('✅ [PIX DEBUG] Renderizando QR Code como URL HTTP:', s);
+      return (
+        <img
+          src={s}
+          alt="QR Code PIX"
+          className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
+          onLoad={() => console.log('✅ [PIX DEBUG] QR Code URL carregou com sucesso')}
+          onError={(e) => {
+            console.error('❌ [PIX DEBUG] Erro ao carregar QR Code URL:', s, e);
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
+      );
+    }
+
+    // 4) Fallback para pix_qr_code_url
     if (r.pix_qr_code_url) {
+      console.log('✅ [PIX DEBUG] Usando fallback pix_qr_code_url:', r.pix_qr_code_url);
       return (
         <img
           src={r.pix_qr_code_url}
           alt="QR Code PIX"
           className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
+          onLoad={() => console.log('✅ [PIX DEBUG] QR Code URL fallback carregou com sucesso')}
           onError={(e) => {
+            console.error('❌ [PIX DEBUG] Erro ao carregar QR Code URL fallback:', r.pix_qr_code_url, e);
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';
           }}
@@ -322,25 +370,79 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       );
     }
 
+    // 5) Fallback para pix_qr_code (base64)
     if (r.pix_qr_code) {
       const src = r.pix_qr_code.startsWith('data:')
         ? r.pix_qr_code
         : `data:image/png;base64,${r.pix_qr_code}`;
+      console.log('✅ [PIX DEBUG] Usando fallback pix_qr_code (base64)');
       return (
         <img
           src={src}
           alt="QR Code PIX"
           className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
+          onLoad={() => console.log('✅ [PIX DEBUG] QR Code base64 carregou com sucesso')}
+          onError={(e) => {
+            console.error('❌ [PIX DEBUG] Erro ao carregar QR Code base64:', e);
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
         />
       );
     }
 
-    // sem nada: placeholder
+    // 6) NOVO: Tentar buscar em campos alternativos que podem existir
+    const alternativeFields = [
+      r.pix?.qr_code_url,
+      r.pix?.qr_code_svg,
+      r.pix?.qr_code_base64,
+      (r as unknown as { qr_code_url?: string }).qr_code_url,
+      (r as unknown as { qr_code_svg?: string }).qr_code_svg,
+      (r as unknown as { qr_code_base64?: string }).qr_code_base64
+    ].filter(Boolean);
+
+    if (alternativeFields.length > 0) {
+      console.log('✅ [PIX DEBUG] Tentando campos alternativos:', alternativeFields);
+      const altField = alternativeFields[0];
+
+      if (typeof altField === 'string') {
+        if (altField.startsWith('data:image/') || /^https?:\/\//i.test(altField)) {
+          return (
+            <img
+              src={altField}
+              alt="QR Code PIX"
+              className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 border rounded-lg bg-white p-2 mx-auto touch-manipulation"
+              onLoad={() => console.log('✅ [PIX DEBUG] QR Code campo alternativo carregou com sucesso')}
+              onError={(e) => {
+                console.error('❌ [PIX DEBUG] Erro ao carregar QR Code campo alternativo:', altField, e);
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
+          );
+        }
+      }
+    }
+
+    // 7) Nenhum QR Code encontrado: placeholder com debug
+    console.warn('⚠️ [PIX DEBUG] Nenhum QR Code encontrado em nenhum campo! Mostrando placeholder.');
+    console.warn('⚠️ [PIX DEBUG] Dados completos do PaymentResult:', JSON.stringify(r, null, 2));
+
+    // 🔍 DEBUG TEMPORÁRIO: Mostrar dados no placeholder para debug
+    const debugInfo = [
+      `SVG: ${r.pix_qr_svg ? 'SIM' : 'NÃO'}`,
+      `URL: ${r.pix_qr_code_url ? 'SIM' : 'NÃO'}`,
+      `B64: ${r.pix_qr_code ? 'SIM' : 'NÃO'}`,
+      `PIX: ${r.pix_code || r.pix_copia_cola ? 'SIM' : 'NÃO'}`
+    ];
+
     return (
       <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border mx-auto">
-        <QrCode className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mb-2" />
-        <span className="text-xs text-muted-foreground text-center px-2">
-          QR Code não disponível<br />Use o código PIX abaixo
+        <QrCode className="h-6 w-6 sm:h-8 sm:w-8 lg:h-10 lg:w-10 text-gray-400 mb-1" />
+        <span className="text-xs text-muted-foreground text-center px-1 leading-tight">
+          QR Code não disponível<br />
+          {debugInfo.join(' | ')}<br />
+          <span className="text-xs opacity-70">Use código abaixo</span>
         </span>
       </div>
     );

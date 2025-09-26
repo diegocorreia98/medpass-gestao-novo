@@ -379,7 +379,7 @@ export function AcceptInvite() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/lovable-uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
         <Card className="w-full max-w-md">
           <CardContent className="flex items-center justify-center p-8">
             <Loader2 className="h-8 w-8 animate-spin" />
@@ -392,7 +392,7 @@ export function AcceptInvite() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/lovable-uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
@@ -414,7 +414,7 @@ export function AcceptInvite() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 to-primary/10 flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: 'url(/lovable-uploads/f72f8f93-e250-4870-9d33-41b5e3e657f9.png)' }}>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />

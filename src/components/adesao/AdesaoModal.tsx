@@ -86,7 +86,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
     "RS", "RO", "RR", "SC", "SP", "SE", "TO"
   ];
 
-  const onSubmit = async (values: any) => {
+  const onSubmit = async (values: BeneficiarioFormData) => {
     try {
       setIsCreating(true);
       
@@ -127,33 +127,11 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
 
       console.log('Beneficiário salvo com sucesso:', beneficiarioData);
 
-      // Now prepare subscription request for Vindi payment flow
-      const subscriptionRequest = {
-        customer: {
-          name: values.nome,
-          email: values.email || '',
-          document: values.cpf,
-          phone: values.telefone || '',
-          birth_date: values.data_nascimento || null,
-          address: {
-            street: values.endereco || '',
-            city: values.cidade || '',
-            state: values.estado || '',
-            zipcode: values.cep || ''
-          }
-        },
-        plan_id: values.plano_id,
-        unidade_id: values.unidade_id,
-        empresa_id: values.empresa_id || null,
-        payment_method: 'credit_card', // Default payment method
-        installments: 1
-      };
+      console.log('Generating payment link for beneficiary:', beneficiarioData.id);
 
-      console.log('Creating Vindi subscription for checkout link:', subscriptionRequest);
-
-      // Call process-vindi-subscription to create checkout link
-      const { data: vindiData, error: vindiError } = await supabase.functions.invoke('process-vindi-subscription', {
-        body: subscriptionRequest
+      // Call generate-payment-link to create subscription checkout link
+      const { data: vindiData, error: vindiError } = await supabase.functions.invoke('generate-payment-link', {
+        body: { beneficiario_id: beneficiarioData.id }
       });
 
       if (vindiError) {
@@ -223,11 +201,11 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
       });
       setDependentes([]);
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao criar adesão:', error);
       toast({
         title: "Erro ao criar adesão",
-        description: error.message || "Ocorreu um erro inesperado",
+        description: error instanceof Error ? error.message : "Ocorreu um erro inesperado",
         variant: "destructive"
       });
     } finally {

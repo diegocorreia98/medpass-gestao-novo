@@ -47,7 +47,7 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
   const { empresas, isLoading: isLoadingEmpresas } = useEmpresas();
     const [isCreating, setIsCreating] = useState(false);
 
-    const onSubmit = async (values: any) => {
+    const onSubmit = async (values: BeneficiarioFormData) => {
       try {
         setIsCreating(true);
         
@@ -99,37 +99,15 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
         console.log('✅ [UNIDADE-ADESAO] Beneficiário salvo com sucesso:', beneficiarioData.id);
 
-        // ✅ STEP 2: USAR MESMA LÓGICA DO PAINEL MATRIZ - process-vindi-subscription
+        // ✅ STEP 2: Generate payment link using generate-payment-link function
         let checkoutUrl = null;
 
-        // Prepare subscription request (IGUAL AO PAINEL MATRIZ)
-        const subscriptionRequest = {
-          customer: {
-            name: values.nome,
-            email: values.email || '',
-            document: values.cpf,
-            phone: values.telefone || '',
-            birth_date: values.data_nascimento || null,
-            address: {
-              street: values.endereco || '',
-              city: values.cidade || '',
-              state: values.estado || '',
-              zipcode: values.cep || ''
-            }
-          },
-          plan_id: values.plano_id,
-          unidade_id: minhaUnidade?.id || null,
-          empresa_id: values.empresa_id || null,
-          payment_method: 'bank_slip', // Boleto/PIX
-          installments: 1
-        };
-
-        console.log('🔄 [UNIDADE-ADESAO] Creating Vindi subscription for checkout link:', subscriptionRequest);
+        console.log('🔄 [UNIDADE-ADESAO] Generating payment link for beneficiary:', beneficiarioData.id);
 
         try {
-          // Call process-vindi-subscription to create checkout link (IGUAL AO PAINEL MATRIZ)
-          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('process-vindi-subscription', {
-            body: subscriptionRequest
+          // Call generate-payment-link to create subscription checkout link
+          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('generate-payment-link', {
+            body: { beneficiario_id: beneficiarioData.id }
           });
 
           if (vindiError) {
@@ -208,11 +186,11 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
           empresa_id: "",
         });
         onClose();
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Erro ao criar adesão:', error);
         toast({
           title: "Erro ao criar adesão",
-          description: error.message || "Ocorreu um erro inesperado",
+          description: error instanceof Error ? error.message : "Ocorreu um erro inesperado",
           variant: "destructive"
         });
       } finally {

@@ -83,9 +83,6 @@ export const useCancelamentos = () => {
         });
       }
 
-      // 5. Notificação será criada automaticamente pelo trigger do banco de dados
-      console.log('✅ Cancelamento concluído - notificação será criada pelo trigger do banco');
-
       return true;
     },
     onSuccess: () => {

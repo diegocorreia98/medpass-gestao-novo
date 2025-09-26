@@ -155,61 +155,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    let isInitialLoad = true;
-
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state change:', event, session?.user?.id);
-
-        // Skip if this is the initial SIGNED_IN event to avoid double fetching
-        if (isInitialLoad && event === 'SIGNED_IN') {
-          isInitialLoad = false;
-          return;
-        }
-
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-
+        
         if (session?.user) {
-          console.log('Fetching profile for user:', session.user.id);
-          const profileData = await fetchProfile(session.user.id);
-          console.log('Profile fetched:', profileData);
-          setProfile(profileData);
+          // Defer profile fetching to prevent deadlocks
+          setTimeout(async () => {
+            const profileData = await fetchProfile(session.user.id);
+            setProfile(profileData);
 
-          // Auto-update invite status when user logs in
-          if (profileData && session.user.email) {
-            await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
-          }
+            // Auto-update invite status when user logs in
+            if (profileData && session.user.email) {
+              await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
+            }
+          }, 0);
         } else {
-          console.log('No session, clearing profile');
           setProfile(null);
         }
-
+        
         setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('Checking existing session:', session?.user?.id);
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-
+      
       if (session?.user) {
-        console.log('Fetching profile for existing session:', session.user.id);
-        const profileData = await fetchProfile(session.user.id);
-        console.log('Profile fetched for existing session:', profileData);
-        setProfile(profileData);
+        setTimeout(async () => {
+          const profileData = await fetchProfile(session.user.id);
+          setProfile(profileData);
 
-        // Auto-update invite status when checking existing session
-        if (profileData && session.user.email) {
-          await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
-        }
+          // Auto-update invite status when checking existing session
+          if (profileData && session.user.email) {
+            await autoUpdateInviteStatus(session.user.email, session.user.id, profileData.user_type);
+          }
+        }, 0);
       }
-
+      
       setLoading(false);
-      isInitialLoad = false;
     });
 
     return () => subscription.unsubscribe();

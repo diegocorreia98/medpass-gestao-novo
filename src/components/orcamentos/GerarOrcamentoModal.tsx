@@ -94,22 +94,20 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
   }
 
   const calcularComissaoInterna = () => {
-    let comissaoAdesao = 0 // Primeiro mês
-    let comissaoRecorrente = 0 // 11 meses seguintes
-
+    let comissaoAdesao = 0
+    let comissaoRecorrente = 0
+    
     itens.forEach(item => {
       if (item.plano_id) {
         const plano = planos?.find(p => p.id === item.plano_id)
         if (plano) {
           const valorItem = item.valor_total
-          // Comissão de adesão: primeiro mês
           comissaoAdesao += valorItem * (Number(plano.comissao_adesao_percentual || 100) / 100)
-          // Comissão recorrente: 11 meses seguintes
-          comissaoRecorrente += (valorItem * (Number(plano.comissao_recorrente_percentual || 30) / 100)) * 11
+          comissaoRecorrente += valorItem * (Number(plano.comissao_recorrente_percentual || 30) / 100)
         }
       }
     })
-
+    
     return { comissaoAdesao, comissaoRecorrente, total: comissaoAdesao + comissaoRecorrente }
   }
 
@@ -379,11 +377,11 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
                   <div className="bg-muted p-3 rounded-md space-y-2">
                     <div className="text-sm font-medium text-muted-foreground">Comissões (Interno)</div>
                     <div className="flex justify-between text-sm">
-                      <span>Adesão (1º mês):</span>
+                      <span>Adesão:</span>
                       <span>R$ {calcularComissaoInterna().comissaoAdesao.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>Recorrente (11 meses):</span>
+                      <span>Recorrente:</span>
                       <span>R$ {calcularComissaoInterna().comissaoRecorrente.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium">

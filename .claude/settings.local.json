@@ -19,8 +19,7 @@
       "Bash(supabase db:*)",
       "Bash(git add:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx supabase:*)",
-      "mcp__supabase__apply_migration"
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

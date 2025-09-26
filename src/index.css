@@ -111,15 +111,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Animação personalizada para o badge NOVO */
-@keyframes pulse-glow {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
-  }
-}

@@ -3,8 +3,7 @@ import { useLocation, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
-import { Home, Calculator, UserPlus, Users, Wallet, FileText, User, Settings, LogOut, Building2, Bell, BookOpen, Award } from "lucide-react";
+import { Home, Calculator, UserPlus, UserMinus, Users, Wallet, FileText, User, Settings, LogOut, Heart, Building2, Bell } from "lucide-react";
 const mainItems = [{
   title: "Dashboard",
   url: "/unidade",
@@ -17,15 +16,6 @@ const mainItems = [{
   title: "Adesão",
   url: "/unidade/adesao",
   icon: UserPlus
-}];
-const capacitacaoItems = [{
-  title: "Cursos",
-  url: "/learn",
-  icon: BookOpen
-}, {
-  title: "Certificados",
-  url: "/learn/certificates",
-  icon: Award
 }];
 const gestaoItems = [{
   title: "Gestão de Cliente",
@@ -75,13 +65,6 @@ export function UnidadeSidebar() {
     if (path === '/unidade') {
       return location.pathname === '/unidade';
     }
-    if (path === '/learn') {
-      // Para a rota /learn, só deve estar ativa se for exatamente /learn, não subrotas
-      return location.pathname === '/learn';
-    }
-    if (path === '/learn/certificates') {
-      return location.pathname === '/learn/certificates';
-    }
     return location.pathname.startsWith(path);
   };
   const getNavCls = ({
@@ -117,7 +100,7 @@ export function UnidadeSidebar() {
   return <Sidebar variant="sidebar" collapsible="icon" className={`border-r ${collapsed ? "w-16" : "w-64"}`}>
       <SidebarHeader className="border-b p-4 py-[20px] px-[11px]">
         <div className="flex items-center gap-2">
-          <img src="/uploads/a0aab2d0-5286-4fc7-a719-8f4ae1aa104c.png" alt="Medpass Logo" className="h-6 w-auto" />
+          <img src="/lovable-uploads/a0aab2d0-5286-4fc7-a719-8f4ae1aa104c.png" alt="Medpass Logo" className="h-6 w-auto" />
           {!collapsed && <div>
               <h2 className="font-semibold text-foreground">Painel MedPass</h2>
               
@@ -131,32 +114,6 @@ export function UnidadeSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map(item => <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={getNavCls({
-                  isActive: isActive(item.url)
-                })}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2">
-            Capacitação
-            <Badge
-              variant="secondary"
-              className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-900 border-green-200 hover:bg-green-100"
-            >
-              NOVO ⭐️
-            </Badge>
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {capacitacaoItems.map(item => <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavCls({
                   isActive: isActive(item.url)

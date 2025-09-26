@@ -301,24 +301,6 @@ export default function GestaoCliente() {
   }
 
   const sendDependenteToRMS = async (dependente: DependenteFormData, titular: BeneficiarioCompleto, index: number) => {
-    console.log('=== ENVIANDO DEPENDENTE PARA RMS ===');
-    console.log('Dependente:', dependente);
-    console.log('Titular:', titular);
-    console.log('Index:', index);
-
-    // Validações básicas
-    if (!dependente.nome || !dependente.cpf || !dependente.email) {
-      throw new Error('Dados do dependente incompletos: nome, CPF e email são obrigatórios');
-    }
-
-    if (!titular.plano_id) {
-      throw new Error('Titular não possui plano_id válido');
-    }
-
-    if (!titular.cpf) {
-      throw new Error('CPF do titular é obrigatório para dependentes');
-    }
-
     // Format date for RMS (ddMMyyyy)
     const formatDateForRMS = (dateStr: string) => {
       if (!dateStr) return '01011990'
@@ -342,22 +324,19 @@ export default function GestaoCliente() {
 
     const dependenteData = {
       id: `${titular.id}_DEP_${index + 1}`, // Generate a unique ID for the dependent
-      nome: dependente.nome.trim(),
-      cpf: dependente.cpf.replace(/\D/g, ''), // Remove formatação do CPF
+      nome: dependente.nome,
+      cpf: dependente.cpf,
       data_nascimento: formatDateForRMS(dependente.data_nascimento),
       telefone: dependente.telefone?.replace(/\D/g, '') || '11999999999',
-      email: dependente.email.trim(),
-      cep: titular.cep?.replace(/\D/g, '') || '01234567',
+      email: dependente.email,
+      cep: titular.cep || '01234567',
       numero_endereco: titular.numero_endereco || '123',
       estado: titular.estado || 'SP',
       plano_id: titular.plano_id,
       id_beneficiario_tipo: 3, // 3 = Dependente para RMS
       codigo_externo: generateDependenteCode(titular, index),
-      cpf_titular: titular.cpf.replace(/\D/g, '') // CPF do titular sem formatação
+      cpf_titular: titular.cpf // CPF do titular (obrigatório para dependentes)
     }
-
-    console.log('=== DADOS DO DEPENDENTE PREPARADOS ===');
-    console.log('dependenteData:', JSON.stringify(dependenteData, null, 2));
 
     const { data, error } = await supabase.functions.invoke('notify-external-api', {
       body: {
@@ -432,17 +411,15 @@ export default function GestaoCliente() {
 
         console.log(`Total dependents: ${dependentes.length}, Existing: ${existingDependentes.length}, New: ${newDependentes.length}`)
 
-        // Initialize counters for RMS sync
-        let successCount = 0
-        let errorCount = 0
-        const errors: string[] = []
-
         if (newDependentes.length === 0) {
           toast({
             title: "Nenhum dependente novo",
             description: "Todos os dependentes já foram enviados para o RMS anteriormente",
           })
         } else {
+          let successCount = 0
+          let errorCount = 0
+          const errors: string[] = []
 
           // Initialize progress tracking for new dependents only
           setRmsSyncProgress({ current: 0, total: newDependentes.length, currentName: '' })
@@ -461,7 +438,7 @@ export default function GestaoCliente() {
               console.log(`Dependente ${dependente.nome} enviado para RMS com sucesso`)
             } catch (error) {
               errorCount++
-              const errorMessage = (error as any)?.message || `Erro ao enviar ${dependente.nome}`
+              const errorMessage = error.message || `Erro ao enviar ${dependente.nome}`
               errors.push(`${dependente.nome}: ${errorMessage}`)
               console.error(`Erro ao enviar dependente ${dependente.nome} para RMS:`, error)
             }

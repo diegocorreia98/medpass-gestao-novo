@@ -7,7 +7,7 @@ export function LandingFooter() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <img 
-                src="/uploads/17bddd1a-b658-4657-bc0f-8199a43e2129.png" 
+                src="/lovable-uploads/17bddd1a-b658-4657-bc0f-8199a43e2129.png" 
                 alt="medpass Multi Benefícios" 
                 className="h-8"
               />
