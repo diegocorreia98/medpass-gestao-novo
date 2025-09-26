@@ -239,9 +239,17 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
 
         if (selectedPaymentMethod === 'pix') {
           setCurrentStep('awaiting-payment');
+
+          // 🔍 DEBUG TEMPORÁRIO: Toast com dados PIX para debug
+          const pixDebugInfo = [
+            `SVG: ${data.pix_qr_svg ? 'SIM' : 'NÃO'}`,
+            `URL: ${data.pix_qr_code_url ? 'SIM' : 'NÃO'}`,
+            `PIX: ${data.pix_code || data.pix_copia_cola ? 'SIM' : 'NÃO'}`
+          ].join(' | ');
+
           toast({
             title: "PIX Gerado!",
-            description: "Escaneie o QR Code ou copie o código para pagar.",
+            description: `${pixDebugInfo} - Escaneie o QR Code ou copie o código para pagar.`,
           });
         } else {
           // For credit card, check status immediately
@@ -284,6 +292,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
   // 🎯 FUNÇÃO PARA RENDERIZAR QR CODE COM DEBUG DETALHADO
   const renderPixQr = useCallback((r: PaymentResult) => {
     // 🔍 DEBUG: Log detalhado dos dados PIX recebidos
+    console.log('🔍 [PIX DEBUG] renderPixQr chamada!');
     console.log('🔍 [PIX DEBUG] PaymentResult completo:', r);
     console.log('🔍 [PIX DEBUG] Campos PIX disponíveis:', {
       pix_qr_svg: r.pix_qr_svg ? `${r.pix_qr_svg.substring(0, 100)}...` : 'VAZIO',
@@ -417,11 +426,23 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
 
     // 7) Nenhum QR Code encontrado: placeholder com debug
     console.warn('⚠️ [PIX DEBUG] Nenhum QR Code encontrado em nenhum campo! Mostrando placeholder.');
+    console.warn('⚠️ [PIX DEBUG] Dados completos do PaymentResult:', JSON.stringify(r, null, 2));
+
+    // 🔍 DEBUG TEMPORÁRIO: Mostrar dados no placeholder para debug
+    const debugInfo = [
+      `SVG: ${r.pix_qr_svg ? 'SIM' : 'NÃO'}`,
+      `URL: ${r.pix_qr_code_url ? 'SIM' : 'NÃO'}`,
+      `B64: ${r.pix_qr_code ? 'SIM' : 'NÃO'}`,
+      `PIX: ${r.pix_code || r.pix_copia_cola ? 'SIM' : 'NÃO'}`
+    ];
+
     return (
       <div className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 bg-gray-100 flex flex-col items-center justify-center rounded-lg border mx-auto">
-        <QrCode className="h-8 w-8 sm:h-12 sm:w-12 lg:h-16 lg:w-16 text-gray-400 mb-2" />
-        <span className="text-xs text-muted-foreground text-center px-2">
-          QR Code não disponível<br />Use o código PIX abaixo
+        <QrCode className="h-6 w-6 sm:h-8 sm:w-8 lg:h-10 lg:w-10 text-gray-400 mb-1" />
+        <span className="text-xs text-muted-foreground text-center px-1 leading-tight">
+          QR Code não disponível<br />
+          {debugInfo.join(' | ')}<br />
+          <span className="text-xs opacity-70">Use código abaixo</span>
         </span>
       </div>
     );

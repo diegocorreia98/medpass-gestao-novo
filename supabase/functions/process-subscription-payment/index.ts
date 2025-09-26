@@ -731,7 +731,9 @@ serve(async (req) => {
           hasQrBase64: !!responseData.pix_qr_base64,
           hasDueAt: !!responseData.due_at,
           qrSvgUrl: responseData.pix_qr_svg,
-          pixCodeLength: responseData.pix_code?.length || 0
+          pixCodeLength: responseData.pix_code?.length || 0,
+          // 🔍 LOGS ADICIONAIS PARA DEBUG
+          completeResponseData: responseData
         });
       } else {
         logStep('❌ NENHUM DADO PIX ENCONTRADO APÓS TODAS AS TENTATIVAS', {
