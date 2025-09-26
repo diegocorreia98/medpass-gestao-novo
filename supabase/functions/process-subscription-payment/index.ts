@@ -249,7 +249,7 @@ serve(async (req) => {
     }
 
     // Check if subscription already has a bill in Vindi
-    let billData = null;
+    let billData: any = null;
     let isExistingBill = false;
 
     if (vindiSubscriptionId) {
@@ -587,7 +587,13 @@ serve(async (req) => {
       // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
       let attempts = 0;
       let maxAttempts = 3;
-      let pixData = null;
+      let pixData: {
+        qrUrl?: any;
+        qrBase64?: any;
+        pixCode?: any;
+        qrcodeSvg?: any;
+        dueAt?: any;
+      } | null = null;
 
       while (attempts < maxAttempts && !pixData) {
         attempts++;
