@@ -586,7 +586,7 @@ serve(async (req) => {
 
       // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
       let attempts = 0;
-      let maxAttempts = 3;
+      const maxAttempts = 3;
       let pixData: {
         qrUrl?: any;
         qrBase64?: any;
@@ -631,29 +631,33 @@ serve(async (req) => {
         if (charge?.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
 
-          // ✅ MAPEAMENTO EXATO DOS CAMPOS DA VINDI CONFORME RESPOSTA REAL
-          const qrcodeSvg = gwFields.qrcode_path; // URL do SVG do QR Code
-          const pixCode = gwFields.qrcode_original_path; // Código PIX copia-e-cola completo
+          // ✅ MAPEAMENTO CORRETO DOS CAMPOS DA VINDI - qrcode_path contém o SVG
+          const qrcodeSvgContent = gwFields.qrcode_path; // ✅ SVG do QR Code
+          const pixCode = gwFields.qrcode_original_path; // ✅ Código PIX copia-e-cola
+          const qrCodeUrl = gwFields.qr_code_url || gwFields.qr_code_image_url; // URL da imagem do QR Code
           const printUrl = gwFields.print_url; // URL para impressão
-          const dueAt = gwFields.max_days_to_keep_waiting_payment; // Data de expiração
+          const qrCodeBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64; // QR Code em base64
+          const dueAt = gwFields.max_days_to_keep_waiting_payment || billData.bill?.due_at; // Data de expiração
 
           logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
-            hasQrcodeSvg: !!qrcodeSvg,
+            hasQrcodeSvg: !!qrcodeSvgContent,
             hasPixCode: !!pixCode,
+            hasQrCodeUrl: !!qrCodeUrl,
             hasPrintUrl: !!printUrl,
+            hasQrCodeBase64: !!qrCodeBase64,
             hasDueAt: !!dueAt,
-            qrcodeSvgValue: qrcodeSvg ? `${qrcodeSvg.substring(0, 100)}...` : null,
+            qrcodeSvgLength: qrcodeSvgContent?.length || 0,
             pixCodeLength: pixCode?.length || 0,
             printUrlValue: printUrl ? `${printUrl.substring(0, 100)}...` : null
           });
 
-          if (qrcodeSvg || pixCode || printUrl) {
+          if (qrcodeSvgContent || pixCode || qrCodeUrl || printUrl || qrCodeBase64) {
             pixData = {
-              qrUrl: printUrl, // URL para impressão como fallback
-              qrBase64: null, // Vindi não retorna base64, só URL do SVG
+              qrUrl: qrCodeUrl || printUrl, // URL da imagem do QR Code
+              qrBase64: qrCodeBase64, // QR Code em base64 se disponível
               pixCode: pixCode, // Código copia-e-cola
-              qrcodeSvg: qrcodeSvg, // URL do SVG
-              dueAt: dueAt || billData.bill?.due_at
+              qrcodeSvg: qrcodeSvgContent, // ✅ SVG content do qrcode_path
+              dueAt: dueAt
             };
             logStep('✅ DADOS PIX ENCONTRADOS!', pixData);
             break;
@@ -684,24 +688,35 @@ serve(async (req) => {
 
       // ✅ APLICAR DADOS PIX AO RESPONSE CONFORME CAMPOS DA VINDI
       if (pixData) {
-        // Campo principal: URL do SVG do QR Code
+        // Estrutura PIX para compatibilidade com o frontend
+        responseData.pix = {
+          qr_code: pixData.pixCode,
+          qr_code_url: pixData.qrUrl,
+          qr_code_base64: pixData.qrBase64,
+          qr_code_svg: pixData.qrcodeSvg,
+          pix_copia_cola: pixData.pixCode,
+          expires_at: pixData.dueAt
+        };
+
+        // Campos diretos para compatibilidade
         if (pixData.qrcodeSvg) {
           responseData.pix_qr_svg = pixData.qrcodeSvg;
-          responseData.pix_qr_code_url = pixData.qrcodeSvg; // Compatibilidade
+          responseData.pix_qr_code_url = pixData.qrcodeSvg;
         }
 
-        // Campo principal: Código PIX copia-e-cola
         if (pixData.pixCode) {
           responseData.pix_code = pixData.pixCode;
           responseData.pix_copia_cola = pixData.pixCode;
         }
 
-        // URL para impressão como fallback
         if (pixData.qrUrl) {
           responseData.pix_print_url = pixData.qrUrl;
         }
 
-        // Data de expiração
+        if (pixData.qrBase64) {
+          responseData.pix_qr_base64 = pixData.qrBase64;
+        }
+
         if (pixData.dueAt) {
           responseData.due_at = pixData.dueAt;
         }
@@ -710,6 +725,7 @@ serve(async (req) => {
           hasQrSvg: !!responseData.pix_qr_svg,
           hasPixCode: !!responseData.pix_code,
           hasPrintUrl: !!responseData.pix_print_url,
+          hasQrBase64: !!responseData.pix_qr_base64,
           hasDueAt: !!responseData.due_at,
           qrSvgUrl: responseData.pix_qr_svg,
           pixCodeLength: responseData.pix_code?.length || 0

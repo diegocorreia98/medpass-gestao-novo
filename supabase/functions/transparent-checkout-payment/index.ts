@@ -244,7 +244,7 @@ serve(async (req) => {
       throw new Error(errorMessage);
     }
 
-    const billResult = await vindiBillResponse.json();
+    let billResult = await vindiBillResponse.json();
     logStep("Vindi bill created successfully", { 
       billId: billResult.bill.id, 
       status: billResult.bill.status 
@@ -315,37 +315,115 @@ serve(async (req) => {
       status: billResult.bill.status,
     };
 
-    // Extract PIX data from Vindi response
+    // Extract PIX data from Vindi response with retry logic
     if (paymentData.payment_method === 'pix' && billResult.bill.charges?.[0]) {
-      const charge = billResult.bill.charges[0];
-      const gatewayFields = charge.last_transaction?.gateway_response_fields;
-      
-      if (gatewayFields) {
-        // 🎯 CAMPOS CORRETOS DA VINDI
-        const qrcodeSvg = gatewayFields.qrcode_path; // SVG do QR Code
-        const pixCopiaCola = gatewayFields.qrcode_original_path; // Código PIX copia e cola
-        
+      logStep("🎯 INICIANDO EXTRAÇÃO DOS DADOS PIX", {
+        billId: billResult.bill.id,
+        chargesCount: billResult.bill.charges?.length || 0
+      });
+
+      // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
+      let attempts = 0;
+      const maxAttempts = 3;
+      let pixDataFound = false;
+
+      while (attempts < maxAttempts && !pixDataFound) {
+        attempts++;
+        logStep(`🔄 TENTATIVA ${attempts}/${maxAttempts} de buscar dados PIX`);
+
+        if (attempts > 1) {
+          // Aguardar antes de retry
+          logStep('⏳ Aguardando 3 segundos antes de retry...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          // Refetch bill details
+          try {
+            const billRefreshResponse = await fetch(`${vindiApiUrl}/bills/${billResult.bill.id}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+                'Content-Type': 'application/json'
+              }
+            });
+
+            if (billRefreshResponse.ok) {
+              const refreshedBill = await billRefreshResponse.json();
+              billResult = refreshedBill;
+              logStep('✅ Bill atualizada com sucesso', {
+                chargesCount: billResult.bill.charges?.length || 0
+              });
+            }
+          } catch (refreshError) {
+            logStep('❌ Erro ao refetch bill', { error: refreshError.message });
+          }
+        }
+
+        const charge = billResult.bill.charges?.[0];
+        const gatewayFields = charge?.last_transaction?.gateway_response_fields;
+
+        if (gatewayFields) {
+          // ✅ MAPEAMENTO CORRETO DOS CAMPOS DA VINDI - qrcode_path contém o SVG
+          const qrcodeSvgContent = gatewayFields.qrcode_path; // ✅ SVG do QR Code
+          const pixCopiaCola = gatewayFields.qrcode_original_path; // ✅ Código PIX copia-e-cola
+          const qrCodeUrl = gatewayFields.qr_code_url || gatewayFields.qr_code_image_url;
+          const qrCodeBase64 = gatewayFields.qr_code_base64 || gatewayFields.qr_code_png_base64;
+          const printUrl = gatewayFields.print_url;
+
+          logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
+            hasQrcodeSvg: !!qrcodeSvgContent,
+            hasPixCode: !!pixCopiaCola,
+            hasQrCodeUrl: !!qrCodeUrl,
+            hasQrCodeBase64: !!qrCodeBase64,
+            hasPrintUrl: !!printUrl,
+            qrcodeSvgLength: qrcodeSvgContent?.length || 0,
+            pixCodeLength: pixCopiaCola?.length || 0
+          });
+
+          if (qrcodeSvgContent || pixCopiaCola || qrCodeUrl || qrCodeBase64) {
+            responseData.pix = {
+              qr_code: pixCopiaCola,
+              qr_code_url: qrCodeUrl || printUrl,
+              qr_code_base64: qrCodeBase64,
+              qr_code_svg: qrcodeSvgContent, // ✅ SVG content do qrcode_path
+              pix_copia_cola: pixCopiaCola,
+              expires_at: gatewayFields.expires_at || charge.due_at || billResult.bill.due_at
+            };
+
+            pixDataFound = true;
+            logStep('✅ DADOS PIX ENCONTRADOS!', {
+              hasQrCode: !!responseData.pix.qr_code,
+              hasQrCodeUrl: !!responseData.pix.qr_code_url,
+              hasQrCodeBase64: !!responseData.pix.qr_code_base64,
+              hasQrCodeSvg: !!responseData.pix.qr_code_svg,
+              hasPixCopiaCola: !!responseData.pix.pix_copia_cola,
+              qrCodeSvgLength: responseData.pix.qr_code_svg?.length || 0
+            });
+            break;
+          }
+        }
+
+        if (attempts < maxAttempts && !pixDataFound) {
+          logStep(`⏳ Tentativa ${attempts} falhou, aguardando retry...`);
+        }
+      }
+
+      if (!pixDataFound) {
+        logStep('❌ NENHUM DADO PIX ENCONTRADO APÓS TODAS AS TENTATIVAS', {
+          attempts: maxAttempts,
+          billId: billResult.bill.id,
+          chargesCount: billResult.bill.charges?.length || 0
+        });
+
+        // Dados PIX básicos mesmo se não encontrados
         responseData.pix = {
-          qr_code: pixCopiaCola || gatewayFields.qr_code_text || gatewayFields.emv || gatewayFields.copy_paste,
-          qr_code_url: gatewayFields.qr_code_url || gatewayFields.qr_code_image_url,
-          qr_code_base64: gatewayFields.qr_code_base64 || gatewayFields.qrcode_base64,
-          qr_code_svg: qrcodeSvg, // ✅ SVG QR Code da Vindi
-          pix_copia_cola: pixCopiaCola, // ✅ Código PIX copia e cola
-          expires_at: gatewayFields.expires_at || charge.due_at
+          qr_code: null,
+          qr_code_url: null,
+          qr_code_base64: null,
+          qr_code_svg: null,
+          pix_copia_cola: null,
+          expires_at: billResult.bill.due_at
         };
-        
-        logStep("PIX data extracted successfully", { 
-          hasQrCode: !!responseData.pix.qr_code,
-          hasQrCodeUrl: !!responseData.pix.qr_code_url,
-          hasQrCodeBase64: !!responseData.pix.qr_code_base64,
-          hasQrCodeSvg: !!responseData.pix.qr_code_svg,
-          qrcodeSvgLength: qrcodeSvg ? qrcodeSvg.length : 0
-        });
-      } else {
-        logStep("Warning: PIX data not found in Vindi response", { 
-          charge: charge,
-          lastTransaction: charge.last_transaction
-        });
+        responseData.warning = "PIX foi criado mas o QR Code pode demorar alguns minutos para aparecer. Tente atualizar a página.";
       }
     }
 
