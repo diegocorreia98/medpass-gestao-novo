@@ -701,7 +701,8 @@ serve(async (req) => {
         // Campos diretos para compatibilidade
         if (pixData.qrcodeSvg) {
           responseData.pix_qr_svg = pixData.qrcodeSvg;
-          responseData.pix_qr_code_url = pixData.qrcodeSvg;
+          // ✅ CORREÇÃO: Não sobrescrever pix_qr_code_url com SVG
+          // responseData.pix_qr_code_url = pixData.qrcodeSvg; // ❌ REMOVIDO: estava sobrescrevendo incorretamente
         }
 
         if (pixData.pixCode) {
@@ -711,10 +712,12 @@ serve(async (req) => {
 
         if (pixData.qrUrl) {
           responseData.pix_print_url = pixData.qrUrl;
+          responseData.pix_qr_code_url = pixData.qrUrl; // ✅ URL correta para o QR Code
         }
 
         if (pixData.qrBase64) {
           responseData.pix_qr_base64 = pixData.qrBase64;
+          responseData.pix_qr_code = pixData.qrBase64; // ✅ Base64 para compatibilidade
         }
 
         if (pixData.dueAt) {
