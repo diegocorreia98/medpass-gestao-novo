@@ -399,16 +399,34 @@ serve(async (req) => {
 
     // Create new bill only if no pending bill exists
     if (!billData) {
-       const billPayload: any = {
+      // ✅ VALIDAÇÃO AMOUNT > 0 conforme documentação
+      const planAmount = Number(subscription.metadata?.plan_price ?? plan.valor ?? 0) || 0;
+
+      if (!planAmount || planAmount <= 0) {
+        logStep("❌ Valor do plano inválido para geração de PIX", {
+          metadataPrice: subscription.metadata?.plan_price,
+          planValue: plan.valor,
+          finalAmount: planAmount
+        });
+        throw new Error("Valor do plano inválido para geração de PIX");
+      }
+
+      const billPayload: any = {
         customer_id: vindiCustomerId,
         payment_method_code: paymentData.paymentMethod,
         bill_items: [
           {
             product_id: vindiProductId,
-            amount: subscription.metadata?.plan_price || 0,
+            amount: planAmount,
           },
         ],
       };
+
+      // Log payment method para validação conforme documentação
+      logStep("🔧 Payment method configurado para Vindi", {
+        payment_method_code: billPayload.payment_method_code,
+        amount: planAmount
+      });
 
       if (paymentProfileId) {
         billPayload.payment_profile = { id: paymentProfileId };
@@ -682,7 +700,7 @@ serve(async (req) => {
 
       // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
       let attempts = 0;
-      const maxAttempts = 5; // Increased from 3 to 5 attempts
+      const maxAttempts = 8; // Increased to 8 attempts per documentation
       let pixData: {
         qrUrl?: any;
         qrBase64?: any;
@@ -700,8 +718,9 @@ serve(async (req) => {
           logStep('⏳ Aguardando 5 segundos antes de retry...');
           await new Promise(resolve => setTimeout(resolve, 5000));
 
-          // Refetch bill details
+          // Refetch bill details e consultas adicionais conforme documentação
           try {
+            // 1) Refetch bill principal
             const billRefreshResponse = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}`, {
               method: 'GET',
               headers: {
@@ -717,6 +736,73 @@ serve(async (req) => {
                 chargesCount: billData.bill.charges?.length || 0
               });
             }
+
+            // 2) Consultas adicionais conforme documentação - charges e transactions
+            const chargeId = billData.bill?.charges?.[0]?.id;
+            if (chargeId) {
+              logStep('🔄 Consultando charge e transactions adicionalmente', { chargeId });
+
+              // Consultar charge específica
+              try {
+                const chargeResp = await fetch(`${vindiApiUrl}/charges/${chargeId}`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+
+                if (chargeResp.ok) {
+                  const chargeData = await chargeResp.json();
+                  if (chargeData.charge?.last_transaction?.gateway_response_fields) {
+                    // Merge dados adicionais se encontrados
+                    const additionalFields = chargeData.charge.last_transaction.gateway_response_fields;
+                    if (billData.bill.charges[0]?.last_transaction) {
+                      billData.bill.charges[0].last_transaction.gateway_response_fields = {
+                        ...billData.bill.charges[0].last_transaction.gateway_response_fields,
+                        ...additionalFields
+                      };
+                      logStep('✅ Merged additional gateway fields from charge endpoint');
+                    }
+                  }
+                }
+              } catch (chargeError) {
+                logStep('⚠️ Erro ao consultar charge adicional', { error: chargeError.message });
+              }
+
+              // Consultar transactions específicas
+              try {
+                const txsResp = await fetch(`${vindiApiUrl}/charges/${chargeId}/transactions`, {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+
+                if (txsResp.ok) {
+                  const txsData = await txsResp.json();
+                  if (txsData.transactions?.length > 0) {
+                    logStep('✅ Found additional transactions', { count: txsData.transactions.length });
+                    // Se houver transações mais recentes com dados PIX
+                    const latestTx = txsData.transactions[0];
+                    if (latestTx.gateway_response_fields) {
+                      const txFields = latestTx.gateway_response_fields;
+                      if (billData.bill.charges[0]?.last_transaction) {
+                        billData.bill.charges[0].last_transaction.gateway_response_fields = {
+                          ...billData.bill.charges[0].last_transaction.gateway_response_fields,
+                          ...txFields
+                        };
+                        logStep('✅ Merged additional gateway fields from transactions endpoint');
+                      }
+                    }
+                  }
+                }
+              } catch (txError) {
+                logStep('⚠️ Erro ao consultar transactions adicionais', { error: txError.message });
+              }
+            }
+
           } catch (refreshError) {
             logStep('❌ Erro ao refetch bill', { error: refreshError.message });
           }
@@ -727,35 +813,81 @@ serve(async (req) => {
         if (charge?.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
 
-          // ✅ MAPEAMENTO CORRETO DOS CAMPOS DA VINDI - qrcode_path contém o SVG
-          const qrcodeSvgContent = gwFields.qrcode_path; // ✅ SVG do QR Code
-          const pixCode = gwFields.qrcode_original_path; // ✅ Código PIX copia-e-cola
-          const qrCodeUrl = gwFields.qr_code_url || gwFields.qr_code_image_url; // URL da imagem do QR Code
-          const printUrl = gwFields.print_url; // URL para impressão
-          const qrCodeBase64 = gwFields.qr_code_base64 || gwFields.qr_code_png_base64; // QR Code em base64
-          const dueAt = gwFields.max_days_to_keep_waiting_payment || billData.bill?.due_at; // Data de expiração
+          // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO: Priorizar campos textuais reais
+          // 1) EMV/Código PIX: preferir campos de texto direto
+          const pixCode =
+            gwFields.qr_code_text ||
+            gwFields.emv ||
+            gwFields.copy_paste ||
+            gwFields.pix_copia_cola ||
+            null;
+
+          // 2) QR Code Image: preferir URLs e base64 diretos
+          let qrCodeUrl =
+            gwFields.qr_code_image_url ||
+            gwFields.qr_code_url ||
+            null;
+
+          const qrCodeBase64 =
+            gwFields.qr_code_base64 ||
+            gwFields.qr_code_png_base64 ||
+            null;
+
+          const printUrl = gwFields.print_url || null;
+          const dueAt = gwFields.expires_at || billData.bill?.due_at || null;
+
+          // 3) Fallback: se só vierem paths, construir URL absoluta
+          const assetsBase = vindiApiUrl.replace('/api/v1', ''); // ex.: https://app.vindi.com.br
+          if (!qrCodeUrl && gwFields.qrcode_path) {
+            qrCodeUrl = assetsBase + gwFields.qrcode_path;
+            logStep("🔄 Construindo URL absoluta do QR Code a partir do path", { qrCodeUrl });
+          }
+
+          // 4) Tentativa de buscar EMV via path (se necessário)
+          let fetchedPixCode = pixCode;
+          if (!pixCode && gwFields.qrcode_original_path) {
+            try {
+              logStep("🔄 Tentando buscar EMV via path relativo", { path: gwFields.qrcode_original_path });
+              const emvUrl = assetsBase + gwFields.qrcode_original_path;
+              const emvResp = await fetch(emvUrl);
+              if (emvResp.ok) {
+                const emvText = await emvResp.text();
+                if (emvText && emvText.length > 10) {
+                  fetchedPixCode = emvText.trim();
+                  logStep("✅ EMV obtido via fetch do path", { emvLength: fetchedPixCode.length });
+                }
+              }
+            } catch (fetchError) {
+              logStep("⚠️ Falha ao buscar EMV via path", { error: fetchError.message });
+            }
+          }
 
           logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
-            hasQrcodeSvg: !!qrcodeSvgContent,
-            hasPixCode: !!pixCode,
+            hasPixCode: !!(fetchedPixCode || pixCode),
             hasQrCodeUrl: !!qrCodeUrl,
-            hasPrintUrl: !!printUrl,
             hasQrCodeBase64: !!qrCodeBase64,
+            hasPrintUrl: !!printUrl,
             hasDueAt: !!dueAt,
-            qrcodeSvgLength: qrcodeSvgContent?.length || 0,
-            pixCodeLength: pixCode?.length || 0,
-            printUrlValue: printUrl ? `${printUrl.substring(0, 100)}...` : null
+            pixCodeLength: (fetchedPixCode || pixCode)?.length || 0,
+            qrCodeUrlValue: qrCodeUrl ? `${qrCodeUrl.substring(0, 100)}...` : null,
+            printUrlValue: printUrl ? `${printUrl.substring(0, 100)}...` : null,
+            // Debug adicional dos campos recebidos
+            availableGwFields: Object.keys(gwFields)
           });
 
-          if (qrcodeSvgContent || pixCode || qrCodeUrl || printUrl || qrCodeBase64) {
+          if ((fetchedPixCode || pixCode) || qrCodeUrl || qrCodeBase64 || printUrl) {
             pixData = {
               qrUrl: qrCodeUrl || printUrl, // URL da imagem do QR Code
               qrBase64: qrCodeBase64, // QR Code em base64 se disponível
-              pixCode: pixCode, // Código copia-e-cola
-              qrcodeSvg: qrcodeSvgContent, // ✅ SVG content do qrcode_path
+              pixCode: fetchedPixCode || pixCode, // Código copia-e-cola (prioriza o buscado)
+              qrcodeSvg: null, // Removido: não usaremos mais paths como SVG
               dueAt: dueAt
             };
-            logStep('✅ DADOS PIX ENCONTRADOS!', pixData);
+            logStep('✅ DADOS PIX ENCONTRADOS!', {
+              pixCodeLength: pixData.pixCode?.length || 0,
+              hasQrUrl: !!pixData.qrUrl,
+              hasQrBase64: !!pixData.qrBase64
+            });
             break;
           }
         }
@@ -794,12 +926,8 @@ serve(async (req) => {
           expires_at: pixData.dueAt
         };
 
-        // Campos diretos para compatibilidade
-        if (pixData.qrcodeSvg) {
-          responseData.pix_qr_svg = pixData.qrcodeSvg;
-          // ✅ CORREÇÃO: Não sobrescrever pix_qr_code_url com SVG
-          // responseData.pix_qr_code_url = pixData.qrcodeSvg; // ❌ REMOVIDO: estava sobrescrevendo incorretamente
-        }
+        // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO: Não usar mais SVG de paths
+        // Removido mapeamento incorreto de qrcode_path como SVG
 
         if (pixData.pixCode) {
           responseData.pix_code = pixData.pixCode;
@@ -821,15 +949,19 @@ serve(async (req) => {
         }
 
         logStep('🎉 PIX RESPONSE PREPARADO COM SUCESSO', {
-          hasQrSvg: !!responseData.pix_qr_svg,
           hasPixCode: !!responseData.pix_code,
+          hasQrCodeUrl: !!responseData.pix_qr_code_url,
           hasPrintUrl: !!responseData.pix_print_url,
           hasQrBase64: !!responseData.pix_qr_base64,
           hasDueAt: !!responseData.due_at,
-          qrSvgUrl: responseData.pix_qr_svg,
           pixCodeLength: responseData.pix_code?.length || 0,
+          qrCodeUrl: responseData.pix_qr_code_url ? `${responseData.pix_qr_code_url.substring(0, 100)}...` : null,
           // 🔍 LOGS ADICIONAIS PARA DEBUG
-          completeResponseData: responseData
+          pixResponseSummary: {
+            pixCode: !!responseData.pix_code,
+            qrUrl: !!responseData.pix_qr_code_url,
+            qrBase64: !!responseData.pix_qr_base64
+          }
         });
       } else {
         logStep('❌ NENHUM DADO PIX ENCONTRADO APÓS TODAS AS TENTATIVAS', {
