@@ -813,20 +813,61 @@ serve(async (req) => {
         if (charge?.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
 
-          // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO: Priorizar campos textuais reais
-          // 1) EMV/Código PIX: preferir campos de texto direto
-          const pixCode =
+          // ✅ CORREÇÃO HÍBRIDA: Yapay usa campos "path" mas com conteúdo direto
+          // 1) EMV/Código PIX: priorizar campos textuais, mas incluir qrcode_original_path
+          let pixCode =
             gwFields.qr_code_text ||
             gwFields.emv ||
             gwFields.copy_paste ||
             gwFields.pix_copia_cola ||
             null;
 
-          // 2) QR Code Image: preferir URLs e base64 diretos
+          // 2) Verificar se qrcode_original_path é EMV direto (não URL)
+          if (!pixCode && gwFields.qrcode_original_path) {
+            const originalPath = gwFields.qrcode_original_path;
+            // Se começa com "00020101" é EMV válido, não URL
+            if (originalPath && typeof originalPath === 'string' && originalPath.startsWith('00020101')) {
+              pixCode = originalPath;
+              logStep("✅ EMV encontrado em qrcode_original_path", { emvLength: pixCode.length });
+            } else if (originalPath && !originalPath.startsWith('http')) {
+              // Se não é URL, tentar buscar como path relativo
+              try {
+                logStep("🔄 Tentando buscar EMV via path relativo", { path: originalPath });
+                const assetsBase = vindiApiUrl.replace('/api/v1', '');
+                const emvUrl = assetsBase + originalPath;
+                const emvResp = await fetch(emvUrl);
+                if (emvResp.ok) {
+                  const emvText = await emvResp.text();
+                  if (emvText && emvText.length > 10) {
+                    pixCode = emvText.trim();
+                    logStep("✅ EMV obtido via fetch do path", { emvLength: pixCode.length });
+                  }
+                }
+              } catch (fetchError) {
+                logStep("⚠️ Falha ao buscar EMV via path", { error: fetchError.message });
+              }
+            }
+          }
+
+          // 3) QR Code Image: priorizar URLs diretos, incluir qrcode_path
           let qrCodeUrl =
             gwFields.qr_code_image_url ||
             gwFields.qr_code_url ||
             null;
+
+          // 4) Verificar se qrcode_path é URL absoluta (não path relativo)
+          if (!qrCodeUrl && gwFields.qrcode_path) {
+            const qrPath = gwFields.qrcode_path;
+            if (qrPath && typeof qrPath === 'string' && qrPath.startsWith('http')) {
+              qrCodeUrl = qrPath;
+              logStep("✅ QR URL encontrada em qrcode_path", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
+            } else if (qrPath) {
+              // Construir URL absoluta se for path relativo
+              const assetsBase = vindiApiUrl.replace('/api/v1', '');
+              qrCodeUrl = assetsBase + qrPath;
+              logStep("🔄 Construindo URL absoluta do QR Code", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
+            }
+          }
 
           const qrCodeBase64 =
             gwFields.qr_code_base64 ||
@@ -834,59 +875,37 @@ serve(async (req) => {
             null;
 
           const printUrl = gwFields.print_url || null;
-          const dueAt = gwFields.expires_at || billData.bill?.due_at || null;
-
-          // 3) Fallback: se só vierem paths, construir URL absoluta
-          const assetsBase = vindiApiUrl.replace('/api/v1', ''); // ex.: https://app.vindi.com.br
-          if (!qrCodeUrl && gwFields.qrcode_path) {
-            qrCodeUrl = assetsBase + gwFields.qrcode_path;
-            logStep("🔄 Construindo URL absoluta do QR Code a partir do path", { qrCodeUrl });
-          }
-
-          // 4) Tentativa de buscar EMV via path (se necessário)
-          let fetchedPixCode = pixCode;
-          if (!pixCode && gwFields.qrcode_original_path) {
-            try {
-              logStep("🔄 Tentando buscar EMV via path relativo", { path: gwFields.qrcode_original_path });
-              const emvUrl = assetsBase + gwFields.qrcode_original_path;
-              const emvResp = await fetch(emvUrl);
-              if (emvResp.ok) {
-                const emvText = await emvResp.text();
-                if (emvText && emvText.length > 10) {
-                  fetchedPixCode = emvText.trim();
-                  logStep("✅ EMV obtido via fetch do path", { emvLength: fetchedPixCode.length });
-                }
-              }
-            } catch (fetchError) {
-              logStep("⚠️ Falha ao buscar EMV via path", { error: fetchError.message });
-            }
-          }
+          const dueAt = gwFields.expires_at || gwFields.max_days_to_keep_waiting_payment || billData.bill?.due_at || null;
 
           logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
-            hasPixCode: !!(fetchedPixCode || pixCode),
+            hasPixCode: !!pixCode,
             hasQrCodeUrl: !!qrCodeUrl,
             hasQrCodeBase64: !!qrCodeBase64,
             hasPrintUrl: !!printUrl,
             hasDueAt: !!dueAt,
-            pixCodeLength: (fetchedPixCode || pixCode)?.length || 0,
+            pixCodeLength: pixCode?.length || 0,
             qrCodeUrlValue: qrCodeUrl ? `${qrCodeUrl.substring(0, 100)}...` : null,
             printUrlValue: printUrl ? `${printUrl.substring(0, 100)}...` : null,
             // Debug adicional dos campos recebidos
-            availableGwFields: Object.keys(gwFields)
+            availableGwFields: Object.keys(gwFields),
+            // Debug específico dos campos Yapay
+            qrcode_path: gwFields.qrcode_path ? `${gwFields.qrcode_path.substring(0, 100)}...` : null,
+            qrcode_original_path: gwFields.qrcode_original_path ? `${gwFields.qrcode_original_path.substring(0, 100)}...` : null
           });
 
-          if ((fetchedPixCode || pixCode) || qrCodeUrl || qrCodeBase64 || printUrl) {
+          if (pixCode || qrCodeUrl || qrCodeBase64 || printUrl) {
             pixData = {
               qrUrl: qrCodeUrl || printUrl, // URL da imagem do QR Code
               qrBase64: qrCodeBase64, // QR Code em base64 se disponível
-              pixCode: fetchedPixCode || pixCode, // Código copia-e-cola (prioriza o buscado)
-              qrcodeSvg: null, // Removido: não usaremos mais paths como SVG
+              pixCode: pixCode, // Código copia-e-cola EMV
+              qrcodeSvg: qrCodeUrl && qrCodeUrl.endsWith('.svg') ? qrCodeUrl : null, // SVG apenas se for URL SVG
               dueAt: dueAt
             };
             logStep('✅ DADOS PIX ENCONTRADOS!', {
               pixCodeLength: pixData.pixCode?.length || 0,
               hasQrUrl: !!pixData.qrUrl,
-              hasQrBase64: !!pixData.qrBase64
+              hasQrBase64: !!pixData.qrBase64,
+              isSvgUrl: !!pixData.qrcodeSvg
             });
             break;
           }
@@ -926,8 +945,10 @@ serve(async (req) => {
           expires_at: pixData.dueAt
         };
 
-        // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO: Não usar mais SVG de paths
-        // Removido mapeamento incorreto de qrcode_path como SVG
+        // ✅ CORREÇÃO: Incluir SVG apenas quando for URL válida
+        if (pixData.qrcodeSvg) {
+          responseData.pix_qr_svg = pixData.qrcodeSvg;
+        }
 
         if (pixData.pixCode) {
           responseData.pix_code = pixData.pixCode;
@@ -951,15 +972,18 @@ serve(async (req) => {
         logStep('🎉 PIX RESPONSE PREPARADO COM SUCESSO', {
           hasPixCode: !!responseData.pix_code,
           hasQrCodeUrl: !!responseData.pix_qr_code_url,
+          hasQrSvg: !!responseData.pix_qr_svg,
           hasPrintUrl: !!responseData.pix_print_url,
           hasQrBase64: !!responseData.pix_qr_base64,
           hasDueAt: !!responseData.due_at,
           pixCodeLength: responseData.pix_code?.length || 0,
           qrCodeUrl: responseData.pix_qr_code_url ? `${responseData.pix_qr_code_url.substring(0, 100)}...` : null,
+          qrSvgUrl: responseData.pix_qr_svg ? `${responseData.pix_qr_svg.substring(0, 100)}...` : null,
           // 🔍 LOGS ADICIONAIS PARA DEBUG
           pixResponseSummary: {
             pixCode: !!responseData.pix_code,
             qrUrl: !!responseData.pix_qr_code_url,
+            qrSvg: !!responseData.pix_qr_svg,
             qrBase64: !!responseData.pix_qr_base64
           }
         });
