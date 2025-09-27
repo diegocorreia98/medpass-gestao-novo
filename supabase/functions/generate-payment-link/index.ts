@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface GeneratePaymentLinkRequest {
   beneficiario_id: string;
-  payment_method?: 'credit_card' | 'bank_slip';
+  payment_method?: 'credit_card' | 'bank_slip' | 'pix';
 }
 
 serve(async (req) => {
@@ -38,7 +38,7 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    const { beneficiario_id, payment_method = 'bank_slip' } = await req.json() as GeneratePaymentLinkRequest;
+    const { beneficiario_id, payment_method = 'credit_card' } = await req.json() as GeneratePaymentLinkRequest;
 
     if (!beneficiario_id) {
       throw new Error('beneficiario_id is required');
@@ -188,19 +188,64 @@ serve(async (req) => {
     if (existingCustomer) {
       console.log('Found existing Vindi customer:', existingCustomer.id);
       vindiCustomerId = existingCustomer.id;
+
+      // ✅ Update existing customer address if incomplete (required for PIX)
+      const needsAddressUpdate = !existingCustomer.address ||
+        !existingCustomer.address.street ||
+        !existingCustomer.address.zipcode ||
+        !existingCustomer.address.city ||
+        !existingCustomer.address.state ||
+        existingCustomer.address.zipcode.length !== 8;
+
+      if (needsAddressUpdate) {
+        console.log('⚠️ Existing customer has incomplete address, updating for PIX compatibility...');
+
+        const updateCustomerData = {
+          address: {
+            street: existingCustomer.address?.street || beneficiario.endereco || 'Rua Padrão',
+            number: existingCustomer.address?.number || beneficiario.numero || 'S/N',
+            neighborhood: existingCustomer.address?.neighborhood || beneficiario.bairro || 'Centro',
+            city: existingCustomer.address?.city || beneficiario.cidade || 'São Paulo',
+            state: existingCustomer.address?.state || beneficiario.estado || 'SP',
+            zipcode: (existingCustomer.address?.zipcode || beneficiario.cep || '01310100').replace(/\D/g, '').padEnd(8, '0').substring(0, 8),
+            country: 'BR'
+          }
+        };
+
+        try {
+          const updateResponse = await fetch(`${vindiApiUrl}/customers/${vindiCustomerId}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updateCustomerData),
+          });
+
+          if (updateResponse.ok) {
+            console.log('✅ Existing customer address updated successfully');
+          } else {
+            console.log('⚠️ Failed to update existing customer address, continuing...');
+          }
+        } catch (updateError) {
+          console.log('⚠️ Error updating existing customer address:', updateError);
+        }
+      }
     } else {
       console.log('Creating new Vindi customer...');
-      // Create new customer
+      // Create new customer with required address for PIX/Yapay gateway
       const customerData = {
         name: beneficiario.nome,
         email: beneficiario.email,
         registry_code: beneficiario.cpf,
         phone: beneficiario.telefone || '',
         address: {
-          street: beneficiario.endereco || '',
-          city: beneficiario.cidade || '',
-          state: beneficiario.estado || '',
-          zipcode: beneficiario.cep || '',
+          street: beneficiario.endereco || 'Rua Padrão', // Required by Yapay
+          number: beneficiario.numero || 'S/N', // Required by Yapay
+          neighborhood: beneficiario.bairro || 'Centro', // Required by Yapay
+          city: beneficiario.cidade || 'São Paulo', // Required by Yapay
+          state: beneficiario.estado || 'SP', // Required by Yapay
+          zipcode: (beneficiario.cep || '01310100').replace(/\D/g, '').padEnd(8, '0').substring(0, 8), // Ensure 8 digits
           country: 'BR'
         }
       };

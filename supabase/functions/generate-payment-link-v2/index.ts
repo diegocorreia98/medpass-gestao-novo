@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface GeneratePaymentLinkRequest {
   beneficiario_id: string;
-  payment_method?: 'credit_card' | 'bank_slip';
+  payment_method?: 'credit_card' | 'bank_slip' | 'pix';
 }
 
 serve(async (req) => {
@@ -39,7 +39,7 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    const { beneficiario_id, payment_method = 'bank_slip' } = await req.json() as GeneratePaymentLinkRequest;
+    const { beneficiario_id, payment_method = 'credit_card' } = await req.json() as GeneratePaymentLinkRequest;
 
     if (!beneficiario_id) {
       throw new Error('beneficiario_id is required');

@@ -188,6 +188,12 @@ serve(async (req) => {
       
       logStep("Vindi subscription created successfully", { vindiSubscriptionId });
 
+      // ✅ Wait for Vindi to process and generate the first bill with PIX data (if PIX payment)
+      if (paymentData.paymentMethod === 'pix') {
+        logStep("⏳ Aguardando Vindi processar e gerar a fatura com PIX...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+
       // Update our subscription record with the Vindi subscription ID
       await supabaseClient
         .from("subscriptions")
@@ -246,6 +252,90 @@ serve(async (req) => {
       const profileData = await vindiProfileResponse.json();
       paymentProfileId = profileData.payment_profile.id;
       logStep("Created payment profile", { paymentProfileId });
+    }
+
+    // ✅ CRITICAL FIX: Validate and update customer address for PIX payments
+    if (paymentData.paymentMethod === 'pix') {
+      logStep("🔧 Validating customer address for PIX payment", { vindiCustomerId });
+
+      // Check if customer data has address, if not use default
+      let customerAddress = paymentData.customerData?.address;
+
+      if (!customerAddress ||
+          !customerAddress.street ||
+          !customerAddress.zipcode ||
+          !customerAddress.city ||
+          !customerAddress.state) {
+
+        logStep("⚠️ Customer address missing or incomplete, using default address for PIX");
+
+        // Use default address required by Yapay gateway
+        customerAddress = {
+          street: "Rua Padrão",
+          number: "S/N",
+          zipcode: "01310100", // 8 digits required
+          city: "São Paulo",
+          state: "SP"
+        };
+      }
+
+      // Ensure zipcode has exactly 8 digits
+      customerAddress.zipcode = customerAddress.zipcode.replace(/\D/g, '').padEnd(8, '0').substring(0, 8);
+
+      // Update customer in Vindi with complete address
+      const updateCustomerPayload = {
+        address: {
+          street: customerAddress.street,
+          number: customerAddress.number || "S/N",
+          zipcode: customerAddress.zipcode,
+          neighborhood: customerAddress.neighborhood || "Centro",
+          city: customerAddress.city,
+          state: customerAddress.state,
+          country: "BR"
+        }
+      };
+
+      logStep("🔄 Updating Vindi customer with address", {
+        customerId: vindiCustomerId,
+        address: updateCustomerPayload.address
+      });
+
+      try {
+        const updateCustomerResponse = await fetch(`${vindiApiUrl}/customers/${vindiCustomerId}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Basic ${btoa(vindiApiKey + ":")}`,
+          },
+          body: JSON.stringify(updateCustomerPayload)
+        });
+
+        if (updateCustomerResponse.ok) {
+          const updatedCustomer = await updateCustomerResponse.json();
+          logStep("✅ Customer address updated successfully", {
+            customerId: vindiCustomerId,
+            hasAddress: !!updatedCustomer.customer?.address
+          });
+        } else {
+          let errorData;
+          try {
+            errorData = await updateCustomerResponse.json();
+          } catch {
+            errorData = await updateCustomerResponse.text();
+          }
+
+          logStep("❌ Failed to update customer address", {
+            status: updateCustomerResponse.status,
+            error: errorData
+          });
+
+          // Don't throw error, continue with warning
+          logStep("⚠️ Continuing PIX process despite address update failure");
+        }
+      } catch (updateError) {
+        logStep("❌ Error updating customer address", { error: updateError.message });
+        // Continue processing, don't fail the entire payment
+      }
     }
 
     // Check if subscription already has a bill in Vindi
@@ -336,6 +426,12 @@ serve(async (req) => {
       // Force immediate charge processing for credit card
       if (paymentData.paymentMethod === 'credit_card') {
         billPayload.charge = true;
+      }
+
+      // ✅ PIX CORRECTION: Force charge for PIX to ensure proper processing
+      if (paymentData.paymentMethod === 'pix') {
+        billPayload.charge = true;
+        logStep("🔧 Forcing PIX charge processing for proper gateway handling");
       }
 
       logStep("Creating new bill in Vindi", { billPayload });
@@ -586,7 +682,7 @@ serve(async (req) => {
 
       // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
       let attempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5; // Increased from 3 to 5 attempts
       let pixData: {
         qrUrl?: any;
         qrBase64?: any;
@@ -600,9 +696,9 @@ serve(async (req) => {
         logStep(`🔄 TENTATIVA ${attempts}/${maxAttempts} de buscar dados PIX`);
 
         if (attempts > 1) {
-          // Aguardar antes de retry
-          logStep('⏳ Aguardando 3 segundos antes de retry...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          // Aguardar antes de retry (increased from 3s to 5s)
+          logStep('⏳ Aguardando 5 segundos antes de retry...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
 
           // Refetch bill details
           try {

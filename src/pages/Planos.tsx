@@ -27,6 +27,7 @@ interface PlanoForm {
   descricao: string
   vindi_product_id: string
   vindi_plan_id: string
+  rms_plan_code: string
 }
 
 export default function Planos() {
@@ -51,7 +52,8 @@ export default function Planos() {
     vigencia: "",
     descricao: "",
     vindi_product_id: "",
-    vindi_plan_id: ""
+    vindi_plan_id: "",
+    rms_plan_code: ""
   })
   
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -72,7 +74,8 @@ export default function Planos() {
         vigencia: "12", // Campo vigência não existe na tabela atual
         descricao: plano.descricao || "",
         vindi_product_id: (plano as any).vindi_product_id || "",
-        vindi_plan_id: (plano as any).vindi_plan_id?.toString() || ""
+        vindi_plan_id: (plano as any).vindi_plan_id?.toString() || "",
+        rms_plan_code: (plano as any).rms_plan_code || ""
       })
     } else {
       setEditingId(null)
@@ -86,7 +89,8 @@ export default function Planos() {
         vigencia: "",
         descricao: "",
         vindi_product_id: "",
-        vindi_plan_id: ""
+        vindi_plan_id: "",
+        rms_plan_code: ""
       })
     }
     setDialogOpen(true)
@@ -111,7 +115,8 @@ export default function Planos() {
       comissao_recorrente_percentual: parseFloat(formData.comissao_recorrente_percentual),
       descricao: formData.descricao || null,
       vindi_product_id: formData.vindi_product_id || null,
-      vindi_plan_id: formData.vindi_plan_id ? parseInt(formData.vindi_plan_id) : null
+      vindi_plan_id: formData.vindi_plan_id ? parseInt(formData.vindi_plan_id) : null,
+      rms_plan_code: formData.rms_plan_code || null
     }
 
     if (editingId) {
@@ -131,7 +136,8 @@ export default function Planos() {
       vigencia: "",
       descricao: "",
       vindi_product_id: "",
-      vindi_plan_id: ""
+      vindi_plan_id: "",
+      rms_plan_code: ""
     })
   }
 
@@ -276,7 +282,20 @@ export default function Planos() {
                     </div>
                   </div>
                 </div>
-                
+
+                <div>
+                  <Label htmlFor="rms_plan_code">Código do Plano RMS</Label>
+                  <Input
+                    id="rms_plan_code"
+                    value={formData.rms_plan_code}
+                    onChange={(e) => setFormData({ ...formData, rms_plan_code: e.target.value })}
+                    placeholder="Ex: MEDPASS001"
+                  />
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Código identificador do plano na API RMS (idClienteContrato)
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="comissao_adesao_percentual">Comissão Adesão (%) *</Label>
@@ -409,6 +428,11 @@ export default function Planos() {
                         Vindi
                       </Badge>
                     )}
+                    {(plano as any).rms_plan_code && (
+                      <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                        RMS
+                      </Badge>
+                    )}
                   </div>
                   <CardTitle className="text-lg">
                     {plano.nome}
@@ -432,6 +456,15 @@ export default function Planos() {
                   )}
                 </div>
                 
+                {/* Mostrar informação do RMS se configurado */}
+                {(plano as any).rms_plan_code && (
+                  <div className="text-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200 space-y-1">
+                    <div className="text-xs font-medium text-orange-700">
+                      Código RMS: {(plano as any).rms_plan_code}
+                    </div>
+                  </div>
+                )}
+
                 {/* Mostrar informação do Vindi se configurado */}
                 {((plano as any).vindi_plan_id || (plano as any).vindi_product_id) && (
                   <div className="text-center py-2 px-3 bg-blue-50 rounded-lg border border-blue-200 space-y-1">
@@ -534,6 +567,19 @@ export default function Planos() {
                       <div className="text-base mt-1 p-3 bg-muted rounded-lg">{selectedPlano.descricao}</div>
                     </div>
                   )}
+                  {/* Código RMS */}
+                  {(selectedPlano as any).rms_plan_code && (
+                    <div>
+                      <Label className="text-sm font-medium text-muted-foreground">Código RMS</Label>
+                      <div className="text-base font-mono mt-1 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        {(selectedPlano as any).rms_plan_code}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Código identificador usado na integração com a API RMS
+                      </div>
+                    </div>
+                  )}
+
                   {/* Informações da Vindi */}
                   {((selectedPlano as any).vindi_product_id || (selectedPlano as any).vindi_plan_id) && (
                     <div className="space-y-3">
