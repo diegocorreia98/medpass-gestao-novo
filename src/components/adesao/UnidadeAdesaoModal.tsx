@@ -44,7 +44,14 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
   const { user } = useAuth();
   const { planos } = usePlanos();
   const { unidades } = useUnidades();
-  const { empresas, isLoading: isLoadingEmpresas } = useEmpresas();
+
+  // Buscar unidade do usuário logado primeiro
+  const minhaUnidade = unidades.find(u => u.user_id === user?.id);
+
+  // Passar unidadeId para o hook useEmpresas se for usuário de unidade
+  const { empresas, isLoading: isLoadingEmpresas } = useEmpresas(
+    minhaUnidade?.id ? { unidadeId: minhaUnidade.id } : undefined
+  );
     const [isCreating, setIsCreating] = useState(false);
 
     const onSubmit = async (values: BeneficiarioFormData) => {
@@ -223,8 +230,6 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
   const [apiStatus, setApiStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [apiMessage, setApiMessage] = useState('');
 
-  // Buscar unidade do usuário logado
-  const minhaUnidade = unidades.find(u => u.user_id === user?.id);
 
   // Debug logs para verificar unidade
   console.log('[UNIDADE-MODAL] User ID:', user?.id);
