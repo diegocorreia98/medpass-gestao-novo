@@ -68,23 +68,40 @@ serve(async (req) => {
       .single();
 
     if (beneficiarioError || !beneficiario) {
+      logStep("❌ Beneficiário não encontrado", { error: beneficiarioError, beneficiario_id });
       throw new Error('Beneficiário não encontrado ou sem permissão de acesso');
     }
 
+    logStep("📋 Beneficiário encontrado", {
+      id: beneficiario.id,
+      nome: beneficiario.nome?.substring(0, 20) + '...',
+      status: beneficiario.status,
+      hasPlano: !!beneficiario.plano,
+      valorPlano: beneficiario.valor_plano
+    });
+
     if (beneficiario.status !== 'ativo') {
+      logStep("❌ Status inválido", { status: beneficiario.status });
       throw new Error('Beneficiário deve estar ativo para criar cliente');
     }
 
     // Validate required fields
     if (!beneficiario.nome || !beneficiario.cpf || !beneficiario.email) {
+      logStep("❌ Campos obrigatórios ausentes", {
+        hasNome: !!beneficiario.nome,
+        hasCpf: !!beneficiario.cpf,
+        hasEmail: !!beneficiario.email
+      });
       throw new Error('Beneficiário deve ter nome, CPF e email');
     }
 
     if (!beneficiario.plano || !beneficiario.plano.nome) {
+      logStep("❌ Plano não encontrado", { plano: beneficiario.plano });
       throw new Error('Plano do beneficiário não encontrado');
     }
 
     if (!beneficiario.valor_plano || beneficiario.valor_plano <= 0) {
+      logStep("❌ Valor do plano inválido", { valor_plano: beneficiario.valor_plano });
       throw new Error('Valor do plano deve ser maior que zero');
     }
 
@@ -351,8 +368,22 @@ serve(async (req) => {
     // ========================================
     // STEP 4: GENERATE CHECKOUT URL
     // ========================================
-    const baseUrl = req.headers.get('origin') || 'http://localhost:8080';
+    // Priorizar URL de produção sobre headers que podem estar incorretos
+    const origin = req.headers.get('origin');
+    let baseUrl = 'https://www.medpassbeneficios.com.br';
+
+    // Usar origin apenas se for localhost (desenvolvimento)
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      baseUrl = origin;
+    }
+
     const checkoutUrl = `${baseUrl}/subscription-checkout/${checkoutToken}`;
+
+    logStep("🔗 Checkout URL gerada", {
+      origin,
+      baseUrl,
+      checkoutUrl: `${checkoutUrl.substring(0, 80)}...`
+    });
 
     // Update beneficiary with checkout link
     const { error: updateError } = await supabaseService
@@ -389,11 +420,20 @@ serve(async (req) => {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("❌ ERROR in create-vindi-customer", { message: errorMessage });
+    logStep("❌ ERROR in create-vindi-customer", {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      beneficiario_id
+    });
 
     return new Response(JSON.stringify({
       success: false,
-      error: errorMessage
+      error: errorMessage,
+      debug_info: {
+        function: 'create-vindi-customer',
+        beneficiario_id,
+        timestamp: new Date().toISOString()
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

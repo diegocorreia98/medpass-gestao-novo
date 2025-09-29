@@ -113,16 +113,25 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
         try {
           // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
+          console.log('🔄 [UNIDADE-ADESAO] Chamando create-vindi-customer para beneficiário:', beneficiarioData.id);
+
           const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
             body: { beneficiario_id: beneficiarioData.id }
           });
 
+          console.log('📋 [UNIDADE-ADESAO] Resposta da função create-vindi-customer:', {
+            success: vindiData?.success,
+            hasCheckoutUrl: !!vindiData?.checkout_url,
+            error: vindiError?.message,
+            fullResponse: vindiData
+          });
+
           if (vindiError) {
-            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao criar cliente Vindi:', vindiError.message);
+            console.error('❌ [UNIDADE-ADESAO] Erro ao criar cliente Vindi:', vindiError);
             // Don't throw error here, beneficiary is already saved
           }
 
-          if (vindiData?.checkout_url) {
+          if (vindiData?.success && vindiData?.checkout_url) {
             checkoutUrl = vindiData.checkout_url;
             console.log('✅ [UNIDADE-ADESAO] Checkout URL gerada:', checkoutUrl);
 
@@ -136,14 +145,18 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
               .eq('id', beneficiarioData.id);
 
             if (updateError) {
-              console.warn('⚠️ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError.message);
+              console.error('❌ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError);
             } else {
               console.log('✅ [UNIDADE-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
             }
+          } else if (vindiData && !vindiData.success) {
+            console.error('❌ [UNIDADE-ADESAO] Função retornou sucesso = false:', vindiData);
+          } else {
+            console.warn('⚠️ [UNIDADE-ADESAO] Checkout URL não foi gerada - resposta:', vindiData);
           }
 
         } catch (linkError) {
-          console.warn('⚠️ [UNIDADE-ADESAO] Erro na geração de subscription checkout:', linkError);
+          console.error('❌ [UNIDADE-ADESAO] Erro na geração de subscription checkout:', linkError);
           // Beneficiário já foi salvo, não é erro crítico
         }
 
