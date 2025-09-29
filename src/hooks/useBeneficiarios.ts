@@ -39,13 +39,20 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
           const updatedBeneficiario = payload.new as Beneficiario;
           const oldBeneficiario = payload.old as Beneficiario;
 
-          // Check if payment_status changed
-          if (updatedBeneficiario.payment_status !== oldBeneficiario.payment_status) {
-            console.log('[REAL-TIME] Payment status changed:', {
+          // Check if payment_status or checkout_link changed
+          const paymentStatusChanged = updatedBeneficiario.payment_status !== oldBeneficiario.payment_status;
+          const checkoutLinkChanged = updatedBeneficiario.checkout_link !== oldBeneficiario.checkout_link;
+
+          if (paymentStatusChanged || checkoutLinkChanged) {
+            console.log('[REAL-TIME] Beneficiario data changed:', {
               id: updatedBeneficiario.id,
               nome: updatedBeneficiario.nome,
-              old_status: oldBeneficiario.payment_status,
-              new_status: updatedBeneficiario.payment_status
+              payment_status_changed: paymentStatusChanged,
+              checkout_link_changed: checkoutLinkChanged,
+              old_payment_status: oldBeneficiario.payment_status,
+              new_payment_status: updatedBeneficiario.payment_status,
+              old_checkout_link: oldBeneficiario.checkout_link ? 'EXISTS' : 'NULL',
+              new_checkout_link: updatedBeneficiario.checkout_link ? 'EXISTS' : 'NULL'
             });
 
             // Show toast notification for payment status changes
@@ -57,6 +64,12 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
             }
 
             // Invalidate and refetch beneficiarios data
+            queryClient.invalidateQueries({ queryKey: ['beneficiarios'] });
+          }
+
+          // Always invalidate on checkout_link changes to ensure UI update
+          if (checkoutLinkChanged) {
+            console.log('[REAL-TIME] Checkout link changed separately, force refreshing data...');
             queryClient.invalidateQueries({ queryKey: ['beneficiarios'] });
           }
         }

@@ -148,6 +148,23 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
               console.error('❌ [UNIDADE-ADESAO] Erro ao salvar link de checkout:', updateError);
             } else {
               console.log('✅ [UNIDADE-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
+
+              // ✅ DEBUG: Verificar se o campo foi realmente salvo no banco
+              setTimeout(async () => {
+                const { data: checkData, error: checkError } = await supabase
+                  .from('beneficiarios')
+                  .select('id, nome, checkout_link, payment_status')
+                  .eq('id', beneficiarioData.id)
+                  .single();
+
+                console.log('🔍 [UNIDADE-ADESAO] Verificação pós-save no banco:', {
+                  id: checkData?.id,
+                  nome: checkData?.nome,
+                  checkout_link: checkData?.checkout_link,
+                  payment_status: checkData?.payment_status,
+                  error: checkError
+                });
+              }, 1000);
             }
           } else if (vindiData && !vindiData.success) {
             console.error('❌ [UNIDADE-ADESAO] Função retornou sucesso = false:', vindiData);

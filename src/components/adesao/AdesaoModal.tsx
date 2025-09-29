@@ -166,6 +166,23 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
           console.error('❌ [MATRIZ-ADESAO] Erro ao salvar link de checkout:', updateError);
         } else {
           console.log('✅ [MATRIZ-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
+
+          // ✅ DEBUG: Verificar se o campo foi realmente salvo no banco
+          setTimeout(async () => {
+            const { data: checkData, error: checkError } = await supabase
+              .from('beneficiarios')
+              .select('id, nome, checkout_link, payment_status')
+              .eq('id', beneficiarioData.id)
+              .single();
+
+            console.log('🔍 [MATRIZ-ADESAO] Verificação pós-save no banco:', {
+              id: checkData?.id,
+              nome: checkData?.nome,
+              checkout_link: checkData?.checkout_link,
+              payment_status: checkData?.payment_status,
+              error: checkError
+            });
+          }, 1000);
         }
       } else if (vindiData && !vindiData.success) {
         console.error('❌ [MATRIZ-ADESAO] Função retornou sucesso = false:', vindiData);
@@ -175,10 +192,15 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
 
       toast({
         title: "Adesão processada com sucesso",
-        description: checkoutUrl 
-          ? "Beneficiário salvo e link de pagamento gerado!" 
+        description: checkoutUrl
+          ? "Beneficiário salvo e link de pagamento gerado!"
           : "Beneficiário salvo com sucesso!"
       });
+
+      // ✅ Force refresh da tabela para mostrar novo beneficiário
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('refresh-beneficiarios'));
+      }, 2000);
 
       // Show payment link if available
       if (checkoutUrl) {
