@@ -127,26 +127,50 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
 
       console.log('Beneficiário salvo com sucesso:', beneficiarioData);
 
-      console.log('Creating Vindi customer for beneficiary:', beneficiarioData.id);
+      console.log('🔄 [MATRIZ-ADESAO] Creating Vindi customer for beneficiary:', beneficiarioData.id);
 
       // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
+      console.log('🔄 [MATRIZ-ADESAO] Chamando create-vindi-customer para beneficiário:', beneficiarioData.id);
+
       const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
         body: { beneficiario_id: beneficiarioData.id }
       });
 
+      console.log('📋 [MATRIZ-ADESAO] Resposta da função create-vindi-customer:', {
+        success: vindiData?.success,
+        hasCheckoutUrl: !!vindiData?.checkout_url,
+        error: vindiError?.message,
+        fullResponse: vindiData
+      });
+
       if (vindiError) {
-        console.warn('Erro ao criar cliente Vindi:', vindiError.message);
+        console.error('❌ [MATRIZ-ADESAO] Erro ao criar cliente Vindi:', vindiError);
         // Don't throw error here, beneficiary is already saved
       }
 
       let checkoutUrl = null;
-      if (vindiData?.checkout_url) {
+      if (vindiData?.success && vindiData?.checkout_url) {
         checkoutUrl = vindiData.checkout_url;
-        console.log('✅ Cliente Vindi criado e checkout preparado:', {
-          vindiCustomerId: vindiData.vindi_customer_id,
-          checkoutUrl: vindiData.checkout_url,
-          subscriptionId: vindiData.subscription_id
-        });
+        console.log('✅ [MATRIZ-ADESAO] Checkout URL gerada:', checkoutUrl);
+
+        // Update beneficiary with checkout link
+        const { error: updateError } = await supabase
+          .from('beneficiarios')
+          .update({
+            checkout_link: checkoutUrl,
+            payment_status: 'payment_requested'
+          })
+          .eq('id', beneficiarioData.id);
+
+        if (updateError) {
+          console.error('❌ [MATRIZ-ADESAO] Erro ao salvar link de checkout:', updateError);
+        } else {
+          console.log('✅ [MATRIZ-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
+        }
+      } else if (vindiData && !vindiData.success) {
+        console.error('❌ [MATRIZ-ADESAO] Função retornou sucesso = false:', vindiData);
+      } else {
+        console.warn('⚠️ [MATRIZ-ADESAO] Checkout URL não foi gerada - resposta:', vindiData);
       }
 
       toast({

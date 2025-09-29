@@ -577,8 +577,22 @@ serve(async (req) => {
     }
 
     // ✅ STEP 3: Create checkout URL for the client
-    const baseUrl = req.headers.get('origin') || 'http://localhost:8082';
+    // Priorizar URL de produção sobre headers que podem estar incorretos
+    const origin = req.headers.get('origin');
+    let baseUrl = 'https://www.medpassbeneficios.com.br';
+
+    // Usar origin apenas se for localhost (desenvolvimento)
+    if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+      baseUrl = origin;
+    }
+
     const checkoutUrl = `${baseUrl}/subscription-checkout/${checkoutToken}`;
+
+    console.log('🔗 [GENERATE-PAYMENT-LINK] Checkout URL gerada:', {
+      origin,
+      baseUrl,
+      checkoutUrl: `${checkoutUrl.substring(0, 80)}...`
+    });
 
     // ✅ STEP 4: Update beneficiary with checkout URL
     const { error: finalUpdateError } = await supabaseService

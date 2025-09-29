@@ -55,8 +55,18 @@ export function GerarLinkModal({ open, onClose, beneficiarios }: GerarLinkModalP
     setIsLoading(true);
 
     try {
+      console.log('🔄 [GERAR-LINK-MODAL] Chamando generate-payment-link para beneficiário:', selectedBeneficiarioId);
+
       const { data, error } = await supabase.functions.invoke('generate-payment-link', {
         body: { beneficiario_id: selectedBeneficiarioId }
+      });
+
+      console.log('📋 [GERAR-LINK-MODAL] Resposta da função generate-payment-link:', {
+        success: !error && !data?.error,
+        hasPaymentUrl: !!data?.payment_url,
+        hasCheckoutUrl: !!data?.checkout_url,
+        error: error?.message || data?.error,
+        fullResponse: data
       });
 
       if (error) throw error;
@@ -67,6 +77,11 @@ export function GerarLinkModal({ open, onClose, beneficiarios }: GerarLinkModalP
 
       setGeneratedLink(data.payment_url);
       setDueDate(data.due_date);
+
+      console.log('✅ [GERAR-LINK-MODAL] Link gerado com sucesso:', {
+        payment_url: data.payment_url ? `${data.payment_url.substring(0, 80)}...` : null,
+        checkout_url: data.checkout_url ? `${data.checkout_url.substring(0, 80)}...` : null
+      });
       
       toast({
         title: "Link de pagamento gerado!",
