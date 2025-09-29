@@ -17,13 +17,29 @@ const logStep = (step: string, details?: any) => {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  // Envolver toda a função em try/catch para garantir CORS sempre
   try {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     logStep("🚀 CREATE-VINDI-CUSTOMER - Iniciado - Fluxo Correto: Apenas Cliente + Checkout");
+
+    // Validação prévia de variáveis de ambiente críticas
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    for (const envVar of requiredEnvVars) {
+      if (!Deno.env.get(envVar)) {
+        throw new Error(`Missing required environment variable: ${envVar}`);
+      }
+    }
+
+    logStep("🔧 Environment check", {
+      hasVindiKey: !!Deno.env.get('VINDI_PRIVATE_KEY'),
+      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+      hasServiceRole: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      hasAnonKey: !!Deno.env.get('SUPABASE_ANON_KEY')
+    });
 
     // Initialize Supabase client
     const supabaseClient = createClient(
@@ -424,7 +440,7 @@ serve(async (req) => {
     logStep("❌ ERROR in create-vindi-customer", {
       message: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
-      beneficiario_id
+      beneficiario_id: (req as any).beneficiario_id || 'unknown'
     });
 
     return new Response(JSON.stringify({
@@ -432,7 +448,7 @@ serve(async (req) => {
       error: errorMessage,
       debug_info: {
         function: 'create-vindi-customer',
-        beneficiario_id,
+        beneficiario_id: (req as any).beneficiario_id || 'unknown',
         timestamp: new Date().toISOString()
       }
     }), {

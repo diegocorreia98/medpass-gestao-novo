@@ -13,13 +13,29 @@ interface GeneratePaymentLinkRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+  // Envolver toda a função em try/catch para garantir CORS sempre
   try {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     console.log('🔄 [GENERATE-PAYMENT-LINK] Function updated - Version 2.1 - Syntax Fixed');
+
+    // Validação prévia de variáveis de ambiente críticas
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    for (const envVar of requiredEnvVars) {
+      if (!Deno.env.get(envVar)) {
+        throw new Error(`Missing required environment variable: ${envVar}`);
+      }
+    }
+
+    console.log('🔧 [GENERATE-PAYMENT-LINK] Environment check', {
+      hasVindiKey: !!Deno.env.get('VINDI_PRIVATE_KEY'),
+      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+      hasServiceRole: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      hasAnonKey: !!Deno.env.get('SUPABASE_ANON_KEY')
+    });
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -628,8 +644,12 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in generate-payment-link:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message || 'Erro interno do servidor' 
+    return new Response(JSON.stringify({
+      error: error.message || 'Erro interno do servidor',
+      debug_info: {
+        function: 'generate-payment-link',
+        timestamp: new Date().toISOString()
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
