@@ -340,6 +340,9 @@ export default function ApiLogs() {
               <TableRow>
                 <TableHead>Data/Hora</TableHead>
                 <TableHead>Operação</TableHead>
+                <TableHead>Beneficiário</TableHead>
+                <TableHead>Plano</TableHead>
+                <TableHead>Código RMS</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Tentativas</TableHead>
                 <TableHead>Erro</TableHead>
@@ -352,6 +355,29 @@ export default function ApiLogs() {
                   <TableCell>{formatDate(log.created_at)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{log.operation}</Badge>
+                  </TableCell>
+                  <TableCell className="max-w-xs">
+                    {log.beneficiario_nome ? (
+                      <span className="font-medium text-sm">{log.beneficiario_nome}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-xs">
+                    {log.plano_nome ? (
+                      <span className="text-sm">{log.plano_nome}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {log.plano_codigo_rms ? (
+                      <Badge variant="secondary" className="text-xs">
+                        {log.plano_codigo_rms}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
                   </TableCell>
                   <TableCell>{getStatusBadge(log.status)}</TableCell>
                   <TableCell>{log.retry_count}</TableCell>

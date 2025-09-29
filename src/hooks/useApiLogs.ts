@@ -12,6 +12,9 @@ interface ApiLog {
   error_message?: string
   retry_count: number
   created_at: string
+  beneficiario_nome?: string
+  plano_nome?: string
+  plano_codigo_rms?: string
 }
 
 interface ApiLogsFilters {
