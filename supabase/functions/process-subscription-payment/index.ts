@@ -457,6 +457,8 @@ serve(async (req) => {
       }
 
       // ✅ VALIDAÇÃO CRÍTICA: Verificar se payment_method está correto para PIX
+      let finalPaymentMethodCode = paymentData.paymentMethod;
+
       if (paymentData.paymentMethod === 'pix') {
         logStep("🔧 VALIDAÇÃO PIX: Verificando configuração do método", {
           requestedMethod: paymentData.paymentMethod,
@@ -464,11 +466,60 @@ serve(async (req) => {
           amount: planAmount,
           environment: vindiEnvironment
         });
+
+        // ✅ VERIFICAR MÉTODOS PIX DISPONÍVEIS ANTES DE CRIAR BILL
+        try {
+          const paymentMethodsResponse = await fetch(`${vindiApiUrl}/payment_methods`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (paymentMethodsResponse.ok) {
+            const paymentMethodsData = await paymentMethodsResponse.json();
+            const availablePixMethods = paymentMethodsData.payment_methods?.filter((pm: any) =>
+              pm.code?.toLowerCase().includes('pix') || pm.name?.toLowerCase().includes('pix')
+            );
+
+            logStep("🔍 MÉTODOS PIX DISPONÍVEIS NA CONTA", {
+              totalMethods: paymentMethodsData.payment_methods?.length || 0,
+              pixMethods: availablePixMethods?.map((pm: any) => ({
+                id: pm.id,
+                code: pm.code,
+                name: pm.name,
+                status: pm.status
+              })) || []
+            });
+
+            // Se encontrou métodos PIX disponíveis, usar o primeiro ativo
+            if (availablePixMethods && availablePixMethods.length > 0) {
+              const activePixMethod = availablePixMethods.find((pm: any) => pm.status === 'active') || availablePixMethods[0];
+              if (activePixMethod && activePixMethod.code !== 'pix') {
+                finalPaymentMethodCode = activePixMethod.code;
+                logStep("🔄 USANDO MÉTODO PIX ESPECÍFICO DA CONTA", {
+                  originalCode: 'pix',
+                  finalCode: finalPaymentMethodCode,
+                  methodName: activePixMethod.name
+                });
+              }
+            } else {
+              logStep("❌ NENHUM MÉTODO PIX ENCONTRADO NA CONTA", {
+                availableMethods: paymentMethodsData.payment_methods?.map((pm: any) => pm.code) || []
+              });
+              throw new Error("PIX não está configurado/habilitado nesta conta Vindi. Contate o suporte da Vindi para habilitar PIX.");
+            }
+          }
+        } catch (methodCheckError) {
+          logStep("⚠️ Erro ao verificar métodos PIX disponíveis", { error: methodCheckError.message });
+          // Continue com o método original se a verificação falhar
+        }
       }
 
       const billPayload: any = {
         customer_id: vindiCustomerId,
-        payment_method_code: paymentData.paymentMethod,
+        payment_method_code: finalPaymentMethodCode,
         bill_items: [
           {
             product_id: vindiProductId,
@@ -479,7 +530,8 @@ serve(async (req) => {
 
       // Log payment method para validação conforme documentação
       logStep("🔧 Payment method configurado para Vindi", {
-        payment_method_code: billPayload.payment_method_code,
+        requested_method: paymentData.paymentMethod,
+        final_payment_method_code: billPayload.payment_method_code,
         amount: planAmount,
         customer_id: vindiCustomerId,
         product_id: vindiProductId,
