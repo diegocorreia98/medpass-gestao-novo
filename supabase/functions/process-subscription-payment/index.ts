@@ -945,20 +945,24 @@ serve(async (req) => {
           expires_at: pixData.dueAt
         };
 
-        // ✅ CORREÇÃO: Incluir SVG apenas quando for URL válida
-        if (pixData.qrcodeSvg) {
-          responseData.pix_qr_svg = pixData.qrcodeSvg;
-        }
+        // ✅ MAPEAMENTO GARANTIDO: Sempre enviar campos que o frontend espera
+        responseData.pix_qr_svg = pixData.qrcodeSvg || pixData.qrUrl; // SVG URL (prioridade) ou QR URL
+        responseData.pix_qr_code_url = pixData.qrUrl; // URL do QR Code
+        responseData.pix_code = pixData.pixCode; // Código PIX EMV
+        responseData.pix_copia_cola = pixData.pixCode; // Mesmo código para copia-e-cola
+        responseData.pix_print_url = pixData.qrUrl; // URL para impressão
 
-        if (pixData.pixCode) {
-          responseData.pix_code = pixData.pixCode;
-          responseData.pix_copia_cola = pixData.pixCode;
-        }
-
-        if (pixData.qrUrl) {
-          responseData.pix_print_url = pixData.qrUrl;
-          responseData.pix_qr_code_url = pixData.qrUrl; // ✅ URL correta para o QR Code
-        }
+        // Log para debug garantindo que dados estão sendo enviados
+        logStep('🔧 CAMPOS PIX MAPEADOS PARA FRONTEND', {
+          pix_qr_svg_set: !!responseData.pix_qr_svg,
+          pix_qr_code_url_set: !!responseData.pix_qr_code_url,
+          pix_code_set: !!responseData.pix_code,
+          pix_copia_cola_set: !!responseData.pix_copia_cola,
+          valores: {
+            pix_qr_svg: responseData.pix_qr_svg ? `${responseData.pix_qr_svg.substring(0, 100)}...` : null,
+            pix_code_length: responseData.pix_code?.length || 0
+          }
+        });
 
         if (pixData.qrBase64) {
           responseData.pix_qr_base64 = pixData.qrBase64;
