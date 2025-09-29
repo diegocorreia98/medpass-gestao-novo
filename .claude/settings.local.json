@@ -19,7 +19,8 @@
       "Bash(supabase db:*)",
       "Bash(git add:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "mcp__supabase__execute_sql"
     ],
     "deny": [],
     "ask": []
