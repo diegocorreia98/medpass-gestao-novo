@@ -62,8 +62,11 @@ serve(async (req) => {
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
 
     if (userError || !userData.user) {
+      logStep("❌ User authentication failed", { error: userError });
       throw new Error('User not authenticated');
     }
+
+    logStep("✅ User authenticated", { userId: userData.user.id });
 
     if (!beneficiario_id) {
       throw new Error('beneficiario_id is required');
@@ -75,6 +78,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
+
+    logStep("🔍 Buscando beneficiário", { beneficiario_id, user_id: userData.user.id });
 
     // Get beneficiario with plan details
     const { data: beneficiario, error: beneficiarioError } = await supabaseService
@@ -88,7 +93,11 @@ serve(async (req) => {
       .single();
 
     if (beneficiarioError || !beneficiario) {
-      logStep("❌ Beneficiário não encontrado", { error: beneficiarioError, beneficiario_id });
+      logStep("❌ Beneficiário não encontrado", {
+        error: beneficiarioError,
+        beneficiario_id,
+        user_id: userData.user.id
+      });
       throw new Error('Beneficiário não encontrado ou sem permissão de acesso');
     }
 
