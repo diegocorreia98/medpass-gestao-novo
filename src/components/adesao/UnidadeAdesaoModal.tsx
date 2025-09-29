@@ -16,6 +16,7 @@ import { useEmpresas } from "@/hooks/useEmpresas";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiStatusIndicator } from "@/components/adesao/ApiStatusIndicator";
 import { DependentesForm, type DependenteFormData } from "@/components/adesao/DependentesForm";
+import { isValidCPF, formatCPF, validateCPFWithMessage } from "@/utils/cpfValidator";
 
 interface UnidadeAdesaoModalProps {
   open: boolean;
@@ -53,11 +54,24 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
     minhaUnidade?.id ? { unidadeId: minhaUnidade.id } : undefined
   );
     const [isCreating, setIsCreating] = useState(false);
+    const [cpfError, setCpfError] = useState<string>('');
 
     const onSubmit = async (values: BeneficiarioFormData) => {
       try {
         setIsCreating(true);
-        
+
+        // Validate CPF before submitting
+        const cpfValidationError = validateCPFWithMessage(values.cpf);
+        if (cpfValidationError) {
+          setCpfError(cpfValidationError);
+          toast({
+            title: "CPF inválido",
+            description: cpfValidationError,
+            variant: "destructive"
+          });
+          return;
+        }
+
         if (!minhaUnidade?.id && !user?.id) {
           throw new Error('Usuário ou unidade não encontrada');
         }
@@ -367,13 +381,30 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
 
                     <div>
                       <Label htmlFor="cpf">CPF *</Label>
-                      <Input 
-                        id="cpf" 
-                        value={beneficiario.cpf} 
-                        onChange={e => setBeneficiario({...beneficiario, cpf: e.target.value})} 
-                        placeholder="000.000.000-00" 
-                        disabled={isCreating} 
+                      <Input
+                        id="cpf"
+                        value={beneficiario.cpf}
+                        onChange={e => {
+                          const cleanCpf = e.target.value.replace(/\D/g, '');
+                          setBeneficiario({...beneficiario, cpf: cleanCpf});
+
+                          // Clear error when user starts typing
+                          if (cpfError) setCpfError('');
+
+                          // Validate CPF in real-time if has 11 digits
+                          if (cleanCpf.length === 11) {
+                            const error = validateCPFWithMessage(cleanCpf);
+                            setCpfError(error || '');
+                          }
+                        }}
+                        placeholder="00000000000"
+                        maxLength={11}
+                        disabled={isCreating}
+                        className={cpfError ? "border-red-500" : ""}
                       />
+                      {cpfError && (
+                        <p className="text-sm text-red-500 mt-1">{cpfError}</p>
+                      )}
                     </div>
 
                     <div>

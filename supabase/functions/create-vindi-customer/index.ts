@@ -16,6 +16,32 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-VINDI-CUSTOMER] ${step}${detailsStr}`);
 };
 
+// CPF Validation Function
+const isValidCPF = (cpf: string): boolean => {
+  const cleanCPF = cpf.replace(/\D/g, '');
+
+  if (cleanCPF.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cleanCPF)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (10 - i);
+  }
+  let digit1 = 11 - (sum % 11);
+  if (digit1 >= 10) digit1 = 0;
+  if (digit1 !== parseInt(cleanCPF.charAt(9))) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(cleanCPF.charAt(i)) * (11 - i);
+  }
+  let digit2 = 11 - (sum % 11);
+  if (digit2 >= 10) digit2 = 0;
+  if (digit2 !== parseInt(cleanCPF.charAt(10))) return false;
+
+  return true;
+};
+
 serve(async (req) => {
   let beneficiarioIdForErrorLog: string | undefined;
 
@@ -123,6 +149,14 @@ serve(async (req) => {
       });
       throw new Error('Beneficiário deve ter nome, CPF e email');
     }
+
+    // Validate CPF
+    if (!isValidCPF(beneficiario.cpf)) {
+      logStep("❌ CPF inválido", { cpf: beneficiario.cpf });
+      throw new Error(`CPF inválido: ${beneficiario.cpf}. Por favor, verifique o CPF cadastrado.`);
+    }
+
+    logStep("✅ CPF válido", { cpf: beneficiario.cpf });
 
     if (!beneficiario.plano || !beneficiario.plano.nome) {
       logStep("❌ Plano não encontrado", { plano: beneficiario.plano });

@@ -13,6 +13,7 @@ import { useEmpresas } from "@/hooks/useEmpresas";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiStatusIndicator } from "./ApiStatusIndicator";
 import { DependentesForm, type DependenteFormData } from "./DependentesForm";
+import { isValidCPF, formatCPF, validateCPFWithMessage } from "@/utils/cpfValidator";
 
 interface BeneficiarioFormData {
   nome: string;
@@ -48,6 +49,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [apiStatus, setApiStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'partial'>('idle');
   const [apiMessage, setApiMessage] = useState<string>('');
+  const [cpfError, setCpfError] = useState<string>('');
 
   // Filtrar empresas do usuário
   const empresasUsuario = user && profile ? empresas.filter(empresa => 
@@ -89,7 +91,19 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
   const onSubmit = async (values: BeneficiarioFormData) => {
     try {
       setIsCreating(true);
-      
+
+      // Validate CPF before submitting
+      const cpfValidationError = validateCPFWithMessage(values.cpf);
+      if (cpfValidationError) {
+        setCpfError(cpfValidationError);
+        toast({
+          title: "CPF inválido",
+          description: cpfValidationError,
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Get plan details for price
       const planoSelecionado = planos.find(p => p.id === values.plano_id);
       if (!planoSelecionado) {
@@ -306,10 +320,23 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
                 onChange={(e) => {
                   const cleanCpf = e.target.value.replace(/\D/g, '');
                   setBeneficiario({ ...beneficiario, cpf: cleanCpf });
+
+                  // Clear error when user starts typing
+                  if (cpfError) setCpfError('');
+
+                  // Validate CPF in real-time if has 11 digits
+                  if (cleanCpf.length === 11) {
+                    const error = validateCPFWithMessage(cleanCpf);
+                    setCpfError(error || '');
+                  }
                 }}
                 placeholder="00000000000"
                 maxLength={11}
+                className={cpfError ? "border-red-500" : ""}
               />
+              {cpfError && (
+                <p className="text-sm text-red-500 mt-1">{cpfError}</p>
+              )}
             </div>
 
             <div>
