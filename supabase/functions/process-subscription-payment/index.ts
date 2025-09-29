@@ -1307,7 +1307,7 @@ serve(async (req) => {
         };
 
         // ✅ MAPEAMENTO GARANTIDO: Sempre enviar campos que o frontend espera
-        responseData.pix_qr_svg = pixData.qrcodeSvg || pixData.qrUrl; // SVG URL (prioridade) ou QR URL
+        responseData.pix_qr_svg = pixData.qrcodeSvg; // SVG URL de qrcode_path
         responseData.pix_qr_code_url = pixData.qrUrl; // URL do QR Code
         responseData.pix_code = pixData.pixCode; // Código PIX EMV
         responseData.pix_copia_cola = pixData.pixCode; // Mesmo código para copia-e-cola
