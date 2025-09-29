@@ -346,32 +346,16 @@ serve(async (req) => {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
 
-    // Primeiro verificar se a coluna user_id existe
-    let insertData: any = {
+    // Criar dados do checkout link
+    const insertData = {
       token: checkoutToken,
       subscription_id: subscriptionRecord.id,
+      user_id: userData.user.id,
       expires_at: expiresAt.toISOString(),
       is_used: false
     };
 
-    // Tentar incluir user_id se a coluna existir
-    try {
-      // Verificar estrutura da tabela
-      const { data: columns } = await supabaseService
-        .from('information_schema.columns')
-        .select('column_name')
-        .eq('table_name', 'subscription_checkout_links')
-        .eq('column_name', 'user_id');
-
-      if (columns && columns.length > 0) {
-        insertData.user_id = userData.user.id;
-        logStep("✅ Incluindo user_id no checkout link");
-      } else {
-        logStep("⚠️ Coluna user_id não existe na tabela, criando sem user_id");
-      }
-    } catch (columnCheckError) {
-      logStep("⚠️ Erro ao verificar coluna user_id, continuando sem ela", { error: columnCheckError });
-    }
+    logStep("✅ Criando checkout link com user_id");
 
     const { data: checkoutLinkData, error: checkoutError } = await supabaseService
       .from('subscription_checkout_links')
