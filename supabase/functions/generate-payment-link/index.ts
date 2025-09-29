@@ -547,9 +547,6 @@ serve(async (req) => {
         .from('transactions')
         .insert({
           user_id: userData.user.id,
-          beneficiario_id: beneficiario_id,
-          subscription_id: vindiSubscriptionId,
-          vindi_subscription_id: vindiSubscriptionId,
           plan_id: beneficiario.plano.id.toString(),
           plan_name: beneficiario.plano.nome,
           plan_price: beneficiario.valor_plano,
@@ -559,7 +556,6 @@ serve(async (req) => {
           customer_email: beneficiario.email,
           customer_document: beneficiario.cpf,
           vindi_charge_id: vindiChargeId.toString(),
-          transaction_type: 'subscription',
           vindi_response: subscriptionResult,
         });
 
@@ -584,12 +580,11 @@ serve(async (req) => {
     const baseUrl = req.headers.get('origin') || 'http://localhost:8082';
     const checkoutUrl = `${baseUrl}/subscription-checkout/${checkoutToken}`;
 
-    // ✅ STEP 4: Update beneficiary with both URLs
+    // ✅ STEP 4: Update beneficiary with checkout URL
     const { error: finalUpdateError } = await supabaseService
       .from('beneficiarios')
-      .update({ 
-        checkout_link: checkoutUrl,
-        vindi_payment_url: paymentUrl // Backup direct Vindi URL
+      .update({
+        checkout_link: checkoutUrl
       })
       .eq('id', beneficiario_id);
 

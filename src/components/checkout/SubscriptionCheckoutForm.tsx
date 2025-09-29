@@ -214,7 +214,8 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         ...(selectedPaymentMethod === 'credit_card' && { cardData }),
       };
 
-      const { data, error } = await supabase.functions.invoke('process-subscription-payment', {
+      // ✅ USANDO FLUXO CORRETO: process-vindi-subscription (melhor validação + endereço PIX)
+      const { data, error } = await supabase.functions.invoke('process-vindi-subscription', {
         body: paymentData,
       });
 
