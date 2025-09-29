@@ -88,13 +88,18 @@ serve(async (req) => {
       throw new Error('Valor do plano deve ser maior que zero');
     }
 
-    // Validate Vindi plan ID for future subscription
+    // Get Vindi plan ID for future subscription (optional)
     const vindiPlanId = (beneficiario.plano as any).vindi_plan_id;
     const vindiProductId = (beneficiario.plano as any).vindi_product_id;
 
     if (!vindiPlanId) {
-      logStep("❌ Plan missing vindi_plan_id", { plano: beneficiario.plano });
-      throw new Error(`O plano "${beneficiario.plano.nome}" não está configurado na Vindi. Configure primeiro o plano de assinatura.`);
+      logStep("⚠️ Plan missing vindi_plan_id - checkout será criado mas precisará de configuração posterior", {
+        plano: beneficiario.plano.nome,
+        plan_id: beneficiario.plano.id
+      });
+      // Não bloquear a criação do checkout, apenas avisar
+    } else {
+      logStep("✅ Plan has vindi_plan_id configured", { vindi_plan_id: vindiPlanId });
     }
 
     logStep("✅ Beneficiário validado", {
@@ -274,9 +279,10 @@ serve(async (req) => {
         plan_name: beneficiario.plano.nome,
         plan_price: beneficiario.valor_plano,
         vindi_customer_id: vindiCustomerId,
-        vindi_plan_id: vindiPlanId,
-        vindi_product_id: vindiProductId,
-        generated_from: 'create-vindi-customer'
+        vindi_plan_id: vindiPlanId || null,
+        vindi_product_id: vindiProductId || null,
+        generated_from: 'create-vindi-customer',
+        needs_vindi_plan_config: !vindiPlanId
       }
     };
 
@@ -302,15 +308,36 @@ serve(async (req) => {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // Token valid for 24 hours
 
+    // Primeiro verificar se a coluna user_id existe
+    let insertData: any = {
+      token: checkoutToken,
+      subscription_id: subscriptionRecord.id,
+      expires_at: expiresAt.toISOString(),
+      is_used: false
+    };
+
+    // Tentar incluir user_id se a coluna existir
+    try {
+      // Verificar estrutura da tabela
+      const { data: columns } = await supabaseService
+        .from('information_schema.columns')
+        .select('column_name')
+        .eq('table_name', 'subscription_checkout_links')
+        .eq('column_name', 'user_id');
+
+      if (columns && columns.length > 0) {
+        insertData.user_id = userData.user.id;
+        logStep("✅ Incluindo user_id no checkout link");
+      } else {
+        logStep("⚠️ Coluna user_id não existe na tabela, criando sem user_id");
+      }
+    } catch (columnCheckError) {
+      logStep("⚠️ Erro ao verificar coluna user_id, continuando sem ela", { error: columnCheckError });
+    }
+
     const { data: checkoutLinkData, error: checkoutError } = await supabaseService
       .from('subscription_checkout_links')
-      .insert({
-        token: checkoutToken,
-        subscription_id: subscriptionRecord.id,
-        expires_at: expiresAt.toISOString(),
-        is_used: false,
-        user_id: userData.user.id
-      })
+      .insert(insertData)
       .select()
       .single();
 

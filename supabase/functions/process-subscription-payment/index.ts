@@ -146,11 +146,14 @@ serve(async (req) => {
         paymentMethod: paymentData.paymentMethod 
       });
       
+      // ✅ CORREÇÃO 1: Formato envelopado conforme documentação
       const subscriptionPayload = {
-        plan_id: vindiPlanId,
-        customer_id: vindiCustomerId,
-        payment_method_code: paymentData.paymentMethod,
-        installments: subscription.installments || 1,
+        subscription: {
+          plan_id: vindiPlanId,
+          customer_id: vindiCustomerId,
+          payment_method_code: paymentData.paymentMethod,
+          start_at: new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
+        }
       };
       
       const vindiSubscriptionResponse = await fetch(`${vindiApiUrl}/subscriptions`, {
@@ -1011,10 +1014,10 @@ serve(async (req) => {
       throw new Error("Fatura não encontrada após processamento");
     }
 
-    // Prepare response based on payment method
+    // ✅ ESTRUTURA DE RESPOSTA conforme vindi_pix_flow.md
     const responseData: any = {
       success: true,
-      message: "Pagamento processado com sucesso",
+      subscription_id: vindiSubscriptionId,
       bill_id: billData.bill.id,
       status: billData.bill.status,
     };
@@ -1294,15 +1297,13 @@ serve(async (req) => {
         }
       }
 
-      // ✅ APLICAR DADOS PIX AO RESPONSE CONFORME CAMPOS DA VINDI
+      // ✅ ESTRUTURA DE RESPOSTA conforme vindi_pix_flow.md
       if (pixData) {
-        // Estrutura PIX para compatibilidade com o frontend
+        // Estrutura PIX conforme documentação
         responseData.pix = {
-          qr_code: pixData.pixCode,
-          qr_code_url: pixData.qrUrl,
-          qr_code_base64: pixData.qrBase64,
-          qr_code_svg: pixData.qrcodeSvg,
           pix_copia_cola: pixData.pixCode,
+          pix_qr_svg: pixData.qrcodeSvg && pixData.qrcodeSvg.startsWith('<svg') ? pixData.qrcodeSvg : undefined,
+          pix_qr_code_url: pixData.qrUrl && !pixData.qrUrl.startsWith('<svg') ? pixData.qrUrl : undefined,
           expires_at: pixData.dueAt
         };
 
