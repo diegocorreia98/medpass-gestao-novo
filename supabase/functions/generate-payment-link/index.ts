@@ -190,24 +190,37 @@ serve(async (req) => {
       vindiCustomerId = existingCustomer.id;
 
       // ✅ Update existing customer address if incomplete (required for PIX)
-      const needsAddressUpdate = !existingCustomer.address ||
-        !existingCustomer.address.street ||
-        !existingCustomer.address.zipcode ||
-        !existingCustomer.address.city ||
-        !existingCustomer.address.state ||
-        existingCustomer.address.zipcode.length !== 8;
+      const hasCompleteAddress = existingCustomer.address &&
+        existingCustomer.address.street &&
+        existingCustomer.address.zipcode &&
+        existingCustomer.address.city &&
+        existingCustomer.address.state &&
+        existingCustomer.address.zipcode.replace(/\D/g, '').length === 8;
 
-      if (needsAddressUpdate) {
-        console.log('⚠️ Existing customer has incomplete address, updating for PIX compatibility...');
+      if (!hasCompleteAddress) {
+        console.log('⚠️ Existing customer has incomplete address, updating for PIX compatibility...', {
+          currentAddress: existingCustomer.address,
+          missingFields: {
+            street: !existingCustomer.address?.street,
+            zipcode: !existingCustomer.address?.zipcode || existingCustomer.address.zipcode.replace(/\D/g, '').length !== 8,
+            city: !existingCustomer.address?.city,
+            state: !existingCustomer.address?.state
+          }
+        });
 
+        // Use beneficiario data if available, otherwise use default São Paulo address
         const updateCustomerData = {
           address: {
-            street: existingCustomer.address?.street || beneficiario.endereco || 'Rua Padrão',
-            number: existingCustomer.address?.number || beneficiario.numero || 'S/N',
-            neighborhood: existingCustomer.address?.neighborhood || beneficiario.bairro || 'Centro',
+            street: existingCustomer.address?.street || beneficiario.endereco || 'Rua Consolação',
+            number: existingCustomer.address?.number || beneficiario.numero || '100',
+            neighborhood: existingCustomer.address?.neighborhood || beneficiario.bairro || 'Consolação',
             city: existingCustomer.address?.city || beneficiario.cidade || 'São Paulo',
             state: existingCustomer.address?.state || beneficiario.estado || 'SP',
-            zipcode: (existingCustomer.address?.zipcode || beneficiario.cep || '01310100').replace(/\D/g, '').padEnd(8, '0').substring(0, 8),
+            zipcode: (() => {
+              // Priorizar CEP do beneficiário, depois do cliente existente, depois padrão São Paulo
+              const cep = beneficiario.cep || existingCustomer.address?.zipcode || '01302000';
+              return cep.replace(/\D/g, '').padEnd(8, '0').substring(0, 8);
+            })(),
             country: 'BR'
           }
         };
@@ -240,15 +253,37 @@ serve(async (req) => {
         registry_code: beneficiario.cpf,
         phone: beneficiario.telefone || '',
         address: {
-          street: beneficiario.endereco || 'Rua Padrão', // Required by Yapay
-          number: beneficiario.numero || 'S/N', // Required by Yapay
-          neighborhood: beneficiario.bairro || 'Centro', // Required by Yapay
+          street: beneficiario.endereco || 'Rua Consolação', // Valid São Paulo street
+          number: beneficiario.numero || '100', // Valid number
+          neighborhood: beneficiario.bairro || 'Consolação', // Valid neighborhood
           city: beneficiario.cidade || 'São Paulo', // Required by Yapay
           state: beneficiario.estado || 'SP', // Required by Yapay
-          zipcode: (beneficiario.cep || '01310100').replace(/\D/g, '').padEnd(8, '0').substring(0, 8), // Ensure 8 digits
+          zipcode: (() => {
+            // Validate and format zipcode - use São Paulo zipcode as default
+            const cep = beneficiario.cep || '01302000'; // Valid São Paulo zipcode
+            const cleanCep = cep.replace(/\D/g, '');
+            // Ensure exactly 8 digits
+            return cleanCep.length === 8 ? cleanCep : '01302000';
+          })(),
           country: 'BR'
         }
       };
+
+      // Validate customer data before sending to Vindi
+      console.log('🔍 Customer data validation:', {
+        hasName: !!customerData.name,
+        hasEmail: !!customerData.email,
+        hasCpf: !!customerData.registry_code,
+        addressValidation: {
+          street: customerData.address.street,
+          streetLength: customerData.address.street.length,
+          zipcode: customerData.address.zipcode,
+          zipcodeLength: customerData.address.zipcode.length,
+          city: customerData.address.city,
+          state: customerData.address.state,
+          isZipcodeValid: /^\d{8}$/.test(customerData.address.zipcode)
+        }
+      });
 
       console.log('Customer data:', customerData);
 

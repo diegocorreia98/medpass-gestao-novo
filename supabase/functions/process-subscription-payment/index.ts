@@ -258,29 +258,64 @@ serve(async (req) => {
     if (paymentData.paymentMethod === 'pix') {
       logStep("🔧 Validating customer address for PIX payment", { vindiCustomerId });
 
+      // First, fetch current customer data from Vindi to check existing address
+      let currentCustomer = null;
+      try {
+        const customerResponse = await fetch(`${vindiApiUrl}/customers/${vindiCustomerId}`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Basic ${btoa(vindiApiKey + ":")}`,
+          }
+        });
+
+        if (customerResponse.ok) {
+          const customerData = await customerResponse.json();
+          currentCustomer = customerData.customer;
+          logStep("🔍 Current customer data fetched", {
+            hasAddress: !!currentCustomer?.address,
+            addressFields: currentCustomer?.address ? Object.keys(currentCustomer.address) : []
+          });
+        }
+      } catch (fetchError) {
+        logStep("⚠️ Could not fetch current customer data", { error: fetchError.message });
+      }
+
       // Check if customer data has address, if not use default
-      let customerAddress = paymentData.customerData?.address;
+      let customerAddress = paymentData.customerData?.address || currentCustomer?.address;
 
-      if (!customerAddress ||
-          !customerAddress.street ||
-          !customerAddress.zipcode ||
-          !customerAddress.city ||
-          !customerAddress.state) {
+      // Validate required fields for Yapay gateway
+      const isAddressComplete = customerAddress &&
+        customerAddress.street &&
+        customerAddress.zipcode &&
+        customerAddress.city &&
+        customerAddress.state &&
+        customerAddress.zipcode.replace(/\D/g, '').length === 8;
 
-        logStep("⚠️ Customer address missing or incomplete, using default address for PIX");
+      if (!isAddressComplete) {
+        logStep("⚠️ Customer address missing or incomplete, using default address for PIX", {
+          providedAddress: customerAddress,
+          missingFields: {
+            street: !customerAddress?.street,
+            zipcode: !customerAddress?.zipcode || customerAddress.zipcode.replace(/\D/g, '').length !== 8,
+            city: !customerAddress?.city,
+            state: !customerAddress?.state
+          }
+        });
 
-        // Use default address required by Yapay gateway
+        // Use default address required by Yapay gateway (São Paulo address)
         customerAddress = {
-          street: "Rua Padrão",
-          number: "S/N",
-          zipcode: "01310100", // 8 digits required
+          street: customerAddress?.street || "Rua Consolação",
+          number: customerAddress?.number || "100",
+          zipcode: "01302000", // Valid São Paulo zipcode
+          neighborhood: "Consolação",
           city: "São Paulo",
           state: "SP"
         };
+      } else {
+        // Ensure zipcode has exactly 8 digits
+        customerAddress.zipcode = customerAddress.zipcode.replace(/\D/g, '').padEnd(8, '0').substring(0, 8);
       }
-
-      // Ensure zipcode has exactly 8 digits
-      customerAddress.zipcode = customerAddress.zipcode.replace(/\D/g, '').padEnd(8, '0').substring(0, 8);
 
       // Update customer in Vindi with complete address
       const updateCustomerPayload = {
@@ -295,9 +330,17 @@ serve(async (req) => {
         }
       };
 
-      logStep("🔄 Updating Vindi customer with address", {
+      logStep("🔄 Updating Vindi customer with validated address", {
         customerId: vindiCustomerId,
-        address: updateCustomerPayload.address
+        address: updateCustomerPayload.address,
+        addressValidation: {
+          streetLength: updateCustomerPayload.address.street.length,
+          zipcodeLength: updateCustomerPayload.address.zipcode.length,
+          hasAllRequiredFields: !!(updateCustomerPayload.address.street &&
+                                  updateCustomerPayload.address.zipcode &&
+                                  updateCustomerPayload.address.city &&
+                                  updateCustomerPayload.address.state)
+        }
       });
 
       try {
@@ -314,7 +357,8 @@ serve(async (req) => {
           const updatedCustomer = await updateCustomerResponse.json();
           logStep("✅ Customer address updated successfully", {
             customerId: vindiCustomerId,
-            hasAddress: !!updatedCustomer.customer?.address
+            hasAddress: !!updatedCustomer.customer?.address,
+            addressData: updatedCustomer.customer?.address
           });
         } else {
           let errorData;
@@ -326,15 +370,16 @@ serve(async (req) => {
 
           logStep("❌ Failed to update customer address", {
             status: updateCustomerResponse.status,
+            statusText: updateCustomerResponse.statusText,
             error: errorData
           });
 
-          // Don't throw error, continue with warning
-          logStep("⚠️ Continuing PIX process despite address update failure");
+          // For PIX payments, address is critical - throw error if update fails
+          throw new Error(`Erro ao atualizar endereço do cliente: ${JSON.stringify(errorData)}`);
         }
       } catch (updateError) {
         logStep("❌ Error updating customer address", { error: updateError.message });
-        // Continue processing, don't fail the entire payment
+        throw new Error(`Erro crítico: Endereço obrigatório para PIX não pode ser atualizado - ${updateError.message}`);
       }
     }
 
@@ -700,7 +745,7 @@ serve(async (req) => {
 
       // ✅ AGUARDAR E RETRY PARA DADOS PIX (pode demorar para gerar)
       let attempts = 0;
-      const maxAttempts = 8; // Increased to 8 attempts per documentation
+      const maxAttempts = 10; // Increased to 10 attempts for better reliability
       let pixData: {
         qrUrl?: any;
         qrBase64?: any;
@@ -714,9 +759,10 @@ serve(async (req) => {
         logStep(`🔄 TENTATIVA ${attempts}/${maxAttempts} de buscar dados PIX`);
 
         if (attempts > 1) {
-          // Aguardar antes de retry (increased from 3s to 5s)
-          logStep('⏳ Aguardando 5 segundos antes de retry...');
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          // Aguardar antes de retry (progressive delay: 3s, 5s, 7s, etc.)
+          const delayMs = 3000 + (attempts - 2) * 2000; // 3s, 5s, 7s, 9s...
+          logStep(`⏳ Aguardando ${delayMs/1000} segundos antes de retry...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
 
           // Refetch bill details e consultas adicionais conforme documentação
           try {
@@ -813,32 +859,33 @@ serve(async (req) => {
         if (charge?.last_transaction?.gateway_response_fields) {
           const gwFields = charge.last_transaction.gateway_response_fields;
 
-          // ✅ CORREÇÃO HÍBRIDA: Yapay usa campos "path" mas com conteúdo direto
-          // 1) EMV/Código PIX: priorizar campos textuais, mas incluir qrcode_original_path
+          // ✅ CORREÇÃO COMPLETA: Yapay/Vindi podem usar diferentes campos
+          // 1) EMV/Código PIX: priorizar campos textuais diretos
           let pixCode =
             gwFields.qr_code_text ||
             gwFields.emv ||
             gwFields.copy_paste ||
             gwFields.pix_copia_cola ||
+            gwFields.pix_code ||
             null;
 
-          // 2) Verificar se qrcode_original_path é EMV direto (não URL)
+          // 2) Verificar se qrcode_original_path contém EMV direto ou é path
           if (!pixCode && gwFields.qrcode_original_path) {
             const originalPath = gwFields.qrcode_original_path;
-            // Se começa com "00020101" é EMV válido, não URL
+            // Se começa com "00020101" é EMV válido direto
             if (originalPath && typeof originalPath === 'string' && originalPath.startsWith('00020101')) {
               pixCode = originalPath;
-              logStep("✅ EMV encontrado em qrcode_original_path", { emvLength: pixCode.length });
+              logStep("✅ EMV encontrado diretamente em qrcode_original_path", { emvLength: pixCode.length });
             } else if (originalPath && !originalPath.startsWith('http')) {
-              // Se não é URL, tentar buscar como path relativo
+              // Se é path relativo, tentar buscar o conteúdo
               try {
                 logStep("🔄 Tentando buscar EMV via path relativo", { path: originalPath });
                 const assetsBase = vindiApiUrl.replace('/api/v1', '');
-                const emvUrl = assetsBase + originalPath;
+                const emvUrl = originalPath.startsWith('/') ? assetsBase + originalPath : `${assetsBase}/${originalPath}`;
                 const emvResp = await fetch(emvUrl);
                 if (emvResp.ok) {
                   const emvText = await emvResp.text();
-                  if (emvText && emvText.length > 10) {
+                  if (emvText && emvText.length > 50 && emvText.startsWith('00020101')) {
                     pixCode = emvText.trim();
                     logStep("✅ EMV obtido via fetch do path", { emvLength: pixCode.length });
                   }
@@ -849,33 +896,37 @@ serve(async (req) => {
             }
           }
 
-          // 3) QR Code Image: priorizar URLs diretos, incluir qrcode_path
+          // 3) QR Code Image: priorizar URLs diretos e construir paths se necessário
           let qrCodeUrl =
             gwFields.qr_code_image_url ||
             gwFields.qr_code_url ||
+            gwFields.qr_code_img_url ||
             null;
 
-          // 4) Verificar se qrcode_path é URL absoluta (não path relativo)
+          // 4) Verificar qrcode_path (pode ser URL absoluta ou path relativo)
           if (!qrCodeUrl && gwFields.qrcode_path) {
             const qrPath = gwFields.qrcode_path;
-            if (qrPath && typeof qrPath === 'string' && qrPath.startsWith('http')) {
-              qrCodeUrl = qrPath;
-              logStep("✅ QR URL encontrada em qrcode_path", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
-            } else if (qrPath) {
-              // Construir URL absoluta se for path relativo
-              const assetsBase = vindiApiUrl.replace('/api/v1', '');
-              qrCodeUrl = assetsBase + qrPath;
-              logStep("🔄 Construindo URL absoluta do QR Code", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
+            if (qrPath && typeof qrPath === 'string') {
+              if (qrPath.startsWith('http')) {
+                qrCodeUrl = qrPath;
+                logStep("✅ QR URL encontrada em qrcode_path", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
+              } else {
+                // Construir URL absoluta se for path relativo
+                const assetsBase = vindiApiUrl.replace('/api/v1', '');
+                qrCodeUrl = qrPath.startsWith('/') ? assetsBase + qrPath : `${assetsBase}/${qrPath}`;
+                logStep("🔄 Construindo URL absoluta do QR Code", { qrCodeUrl: `${qrCodeUrl.substring(0, 100)}...` });
+              }
             }
           }
 
           const qrCodeBase64 =
             gwFields.qr_code_base64 ||
             gwFields.qr_code_png_base64 ||
+            gwFields.qr_code_b64 ||
             null;
 
-          const printUrl = gwFields.print_url || null;
-          const dueAt = gwFields.expires_at || gwFields.max_days_to_keep_waiting_payment || billData.bill?.due_at || null;
+          const printUrl = gwFields.print_url || gwFields.qr_code_print_url || null;
+          const dueAt = gwFields.expires_at || gwFields.due_at || gwFields.max_days_to_keep_waiting_payment || billData.bill?.due_at || null;
 
           logStep(`🔎 TENTATIVA ${attempts} - Dados encontrados:`, {
             hasPixCode: !!pixCode,
