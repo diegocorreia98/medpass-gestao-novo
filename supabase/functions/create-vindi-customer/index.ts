@@ -307,6 +307,7 @@ serve(async (req) => {
       customer_name: beneficiario.nome,
       customer_email: beneficiario.email,
       customer_document: beneficiario.cpf,
+      payment_method: 'pending', // Will be updated when payment method is chosen
       status: 'pending', // Will be 'pending_payment' after choosing payment method
       installments: 1, // Default, can be changed in checkout
       metadata: {
