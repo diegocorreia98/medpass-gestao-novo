@@ -1306,21 +1306,36 @@ serve(async (req) => {
           expires_at: pixData.dueAt
         };
 
-        // ✅ MAPEAMENTO GARANTIDO: Sempre enviar campos que o frontend espera
-        responseData.pix_qr_svg = pixData.qrcodeSvg; // SVG URL de qrcode_path
-        responseData.pix_qr_code_url = pixData.qrUrl; // URL do QR Code
+        // ✅ MAPEAMENTO CORRIGIDO: Diferenciar entre SVG markup e URLs
+        // Se temos uma URL (não SVG markup), colocar no campo correto
+        if (pixData.qrUrl && !pixData.qrUrl.startsWith('<svg')) {
+          // É uma URL de imagem, não SVG markup
+          responseData.pix_qr_code_url = pixData.qrUrl; // URL do QR Code
+          responseData.pix_print_url = pixData.qrUrl; // URL para impressão
+          // Não definir pix_qr_svg para URLs, apenas para markup SVG real
+        } else if (pixData.qrcodeSvg && pixData.qrcodeSvg.startsWith('<svg')) {
+          // É SVG markup real
+          responseData.pix_qr_svg = pixData.qrcodeSvg; // SVG markup
+        }
+
         responseData.pix_code = pixData.pixCode; // Código PIX EMV
         responseData.pix_copia_cola = pixData.pixCode; // Mesmo código para copia-e-cola
-        responseData.pix_print_url = pixData.qrUrl; // URL para impressão
 
         // Log para debug garantindo que dados estão sendo enviados
-        logStep('🔧 CAMPOS PIX MAPEADOS PARA FRONTEND', {
+        logStep('🔧 CAMPOS PIX MAPEADOS PARA FRONTEND (CORRIGIDO)', {
           pix_qr_svg_set: !!responseData.pix_qr_svg,
           pix_qr_code_url_set: !!responseData.pix_qr_code_url,
           pix_code_set: !!responseData.pix_code,
           pix_copia_cola_set: !!responseData.pix_copia_cola,
+          mapping_logic: {
+            hasQrUrl: !!pixData.qrUrl,
+            isQrUrlSvgMarkup: pixData.qrUrl?.startsWith('<svg') || false,
+            hasQrcodeSvg: !!pixData.qrcodeSvg,
+            isQrcodeSvgMarkup: pixData.qrcodeSvg?.startsWith('<svg') || false
+          },
           valores: {
             pix_qr_svg: responseData.pix_qr_svg ? `${responseData.pix_qr_svg.substring(0, 100)}...` : null,
+            pix_qr_code_url: responseData.pix_qr_code_url ? `${responseData.pix_qr_code_url.substring(0, 100)}...` : null,
             pix_code_length: responseData.pix_code?.length || 0
           }
         });
