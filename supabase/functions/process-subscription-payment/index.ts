@@ -559,7 +559,12 @@ serve(async (req) => {
       // ✅ PIX CORRECTION: Force charge for PIX to ensure proper processing
       if (paymentData.paymentMethod === 'pix') {
         billPayload.charge = true;
-        logStep("🔧 Forcing PIX charge processing for proper gateway handling");
+        // Para PIX, é obrigatório 1 parcela
+        billPayload.installments = 1;
+        logStep("🔧 Forcing PIX charge processing for proper gateway handling", {
+          charge: billPayload.charge,
+          installments: billPayload.installments
+        });
       }
 
       logStep("Creating new bill in Vindi", { billPayload });
@@ -598,6 +603,12 @@ serve(async (req) => {
 
       billData = await vindiBillResponse.json();
       logStep("New bill created successfully", { billId: billData.bill.id });
+
+      // ✅ PIX SPECIFIC: Aguardar processamento inicial do gateway
+      if (paymentData.paymentMethod === 'pix') {
+        logStep("⏳ PIX: Aguardando processamento inicial do gateway (5s)...");
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
     }
      logStep(isExistingBill ? "Reused existing bill" : "Bill created successfully", { billId: billData.bill.id });
 
