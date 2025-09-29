@@ -109,16 +109,16 @@ export function UnidadeAdesaoModal({ open, onClose }: UnidadeAdesaoModalProps) {
         // ✅ STEP 2: Generate payment link using generate-payment-link function
         let checkoutUrl = null;
 
-        console.log('🔄 [UNIDADE-ADESAO] Generating payment link for beneficiary:', beneficiarioData.id);
+        console.log('🔄 [UNIDADE-ADESAO] Creating Vindi customer for beneficiary:', beneficiarioData.id);
 
         try {
-          // Call generate-payment-link to create subscription checkout link
-          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('generate-payment-link', {
+          // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
+          const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
             body: { beneficiario_id: beneficiarioData.id }
           });
 
           if (vindiError) {
-            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao gerar link de pagamento:', vindiError.message);
+            console.warn('⚠️ [UNIDADE-ADESAO] Erro ao criar cliente Vindi:', vindiError.message);
             // Don't throw error here, beneficiary is already saved
           }
 

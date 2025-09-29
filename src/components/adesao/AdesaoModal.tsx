@@ -127,33 +127,26 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
 
       console.log('Beneficiário salvo com sucesso:', beneficiarioData);
 
-      console.log('Generating payment link for beneficiary:', beneficiarioData.id);
+      console.log('Creating Vindi customer for beneficiary:', beneficiarioData.id);
 
-      // Call generate-payment-link to create subscription checkout link
-      const { data: vindiData, error: vindiError } = await supabase.functions.invoke('generate-payment-link', {
+      // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
+      const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
         body: { beneficiario_id: beneficiarioData.id }
       });
 
       if (vindiError) {
-        console.warn('Erro ao gerar link de pagamento:', vindiError.message);
+        console.warn('Erro ao criar cliente Vindi:', vindiError.message);
         // Don't throw error here, beneficiary is already saved
       }
 
       let checkoutUrl = null;
       if (vindiData?.checkout_url) {
         checkoutUrl = vindiData.checkout_url;
-        
-        // Update beneficiary with checkout link
-        const { error: updateError } = await supabase
-          .from('beneficiarios')
-          .update({ checkout_link: checkoutUrl })
-          .eq('id', beneficiarioData.id);
-
-        if (updateError) {
-          console.warn('Erro ao salvar link de checkout:', updateError.message);
-        }
-
-        console.log('Link de checkout salvo para beneficiário:', beneficiarioData.id);
+        console.log('✅ Cliente Vindi criado e checkout preparado:', {
+          vindiCustomerId: vindiData.vindi_customer_id,
+          checkoutUrl: vindiData.checkout_url,
+          subscriptionId: vindiData.subscription_id
+        });
       }
 
       toast({
