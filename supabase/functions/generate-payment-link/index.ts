@@ -189,7 +189,8 @@ serve(async (req) => {
       console.log('Found existing Vindi customer:', existingCustomer.id);
       vindiCustomerId = existingCustomer.id;
 
-      // ✅ Update existing customer address if incomplete (required for PIX)
+      // ✅ CRITICAL: Update existing customer address if incomplete (required for PIX/Yapay)
+      // Based on logs analysis: Yapay gateway rejects PIX without complete address
       const hasCompleteAddress = existingCustomer.address &&
         existingCustomer.address.street &&
         existingCustomer.address.zipcode &&
@@ -198,17 +199,19 @@ serve(async (req) => {
         existingCustomer.address.zipcode.replace(/\D/g, '').length === 8;
 
       if (!hasCompleteAddress) {
-        console.log('⚠️ Existing customer has incomplete address, updating for PIX compatibility...', {
+        console.log('🔧 CRÍTICO: Cliente existente tem endereço incompleto - atualizando para compatibilidade PIX/Yapay', {
+          customerId: existingCustomer.id,
           currentAddress: existingCustomer.address,
           missingFields: {
             street: !existingCustomer.address?.street,
             zipcode: !existingCustomer.address?.zipcode || existingCustomer.address.zipcode.replace(/\D/g, '').length !== 8,
             city: !existingCustomer.address?.city,
             state: !existingCustomer.address?.state
-          }
+          },
+          yapayRequirement: "Todos os campos de endereço são obrigatórios para PIX"
         });
 
-        // Use beneficiario data if available, otherwise use default São Paulo address
+        // Use beneficiario data if available, otherwise use valid São Paulo address
         const updateCustomerData = {
           address: {
             street: existingCustomer.address?.street || beneficiario.endereco || 'Rua Consolação',
@@ -217,13 +220,35 @@ serve(async (req) => {
             city: existingCustomer.address?.city || beneficiario.cidade || 'São Paulo',
             state: existingCustomer.address?.state || beneficiario.estado || 'SP',
             zipcode: (() => {
-              // Priorizar CEP do beneficiário, depois do cliente existente, depois padrão São Paulo
-              const cep = beneficiario.cep || existingCustomer.address?.zipcode || '01302000';
-              return cep.replace(/\D/g, '').padEnd(8, '0').substring(0, 8);
+              // Priorizar CEP válido: beneficiário > cliente existente > padrão São Paulo
+              let cep = beneficiario.cep || existingCustomer.address?.zipcode || '01302000';
+              cep = cep.replace(/\D/g, '');
+
+              // Garantir exatamente 8 dígitos (requisito Yapay)
+              if (cep.length !== 8) {
+                cep = '01302000'; // CEP válido de São Paulo
+              }
+              return cep;
             })(),
             country: 'BR'
           }
         };
+
+        // Validate final address before updating
+        console.log('🔍 Validação do endereço antes da atualização:', {
+          addressToUpdate: updateCustomerData.address,
+          validation: {
+            streetLength: updateCustomerData.address.street.length,
+            zipcodeLength: updateCustomerData.address.zipcode.length,
+            zipcodeFormat: /^\d{8}$/.test(updateCustomerData.address.zipcode),
+            hasAllFields: !!(
+              updateCustomerData.address.street &&
+              updateCustomerData.address.zipcode &&
+              updateCustomerData.address.city &&
+              updateCustomerData.address.state
+            )
+          }
+        });
 
         try {
           const updateResponse = await fetch(`${vindiApiUrl}/customers/${vindiCustomerId}`, {
