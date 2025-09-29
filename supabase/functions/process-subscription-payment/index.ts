@@ -456,6 +456,16 @@ serve(async (req) => {
         throw new Error("Valor do plano inválido para geração de PIX");
       }
 
+      // ✅ VALIDAÇÃO CRÍTICA: Verificar se payment_method está correto para PIX
+      if (paymentData.paymentMethod === 'pix') {
+        logStep("🔧 VALIDAÇÃO PIX: Verificando configuração do método", {
+          requestedMethod: paymentData.paymentMethod,
+          customerId: vindiCustomerId,
+          amount: planAmount,
+          environment: vindiEnvironment
+        });
+      }
+
       const billPayload: any = {
         customer_id: vindiCustomerId,
         payment_method_code: paymentData.paymentMethod,
@@ -470,7 +480,10 @@ serve(async (req) => {
       // Log payment method para validação conforme documentação
       logStep("🔧 Payment method configurado para Vindi", {
         payment_method_code: billPayload.payment_method_code,
-        amount: planAmount
+        amount: planAmount,
+        customer_id: vindiCustomerId,
+        product_id: vindiProductId,
+        environment: vindiEnvironment
       });
 
       if (paymentProfileId) {
@@ -540,8 +553,11 @@ serve(async (req) => {
      logStep("🔍 COMPLETE BILL DATA STRUCTURE", {
        billId: billData.bill.id,
        billStatus: billData.bill.status,
+       billAmount: billData.bill.amount,
+       billPaymentMethod: billData.bill.payment_method_code,
        chargesCount: billData.bill.charges?.length || 0,
-       hasCharges: !!(billData.bill.charges && billData.bill.charges.length > 0)
+       hasCharges: !!(billData.bill.charges && billData.bill.charges.length > 0),
+       fullBillStructure: billData.bill
      });
 
      if (billData.bill.charges && billData.bill.charges.length > 0) {
@@ -549,15 +565,27 @@ serve(async (req) => {
        logStep("🔍 CHARGE STRUCTURE", {
          chargeId: charge.id,
          chargeStatus: charge.status,
+         chargeAmount: charge.amount,
+         chargePaymentMethod: charge.payment_method,
+         chargeInstallments: charge.installments,
+         chargeAttemptCount: charge.attempt_count,
          hasLastTransaction: !!charge.last_transaction,
-         transactionId: charge.last_transaction?.id
+         transactionId: charge.last_transaction?.id,
+         completeChargeStructure: charge
        });
 
        if (charge.last_transaction) {
          logStep("🔍 TRANSACTION STRUCTURE", {
            transactionId: charge.last_transaction.id,
            transactionStatus: charge.last_transaction.status,
-           hasGatewayResponseFields: !!charge.last_transaction.gateway_response_fields
+           transactionAmount: charge.last_transaction.amount,
+           gatewayId: charge.last_transaction.gateway?.id,
+           gatewayConnector: charge.last_transaction.gateway?.connector,
+           gatewayMessage: charge.last_transaction.gateway_message,
+           gatewayResponseCode: charge.last_transaction.gateway_response_code,
+           gatewayTransactionId: charge.last_transaction.gateway_transaction_id,
+           hasGatewayResponseFields: !!charge.last_transaction.gateway_response_fields,
+           completeTransactionStructure: charge.last_transaction
          });
 
          if (charge.last_transaction.gateway_response_fields) {
@@ -572,8 +600,40 @@ serve(async (req) => {
             // ✅ LOG COMPLETO DE TODOS OS CAMPOS PARA DEBUG
             allFieldsDetailed: gwFields
            });
+         } else {
+           logStep("❌ GATEWAY_RESPONSE_FIELDS VAZIO", {
+             transactionStatus: charge.last_transaction.status,
+             gatewayMessage: charge.last_transaction.gateway_message,
+             gatewayResponseCode: charge.last_transaction.gateway_response_code,
+             possibleReasons: [
+               "Gateway ainda processando",
+               "PIX não habilitado no gateway",
+               "Falha na configuração do método de pagamento",
+               "Problemas com dados do cliente (endereço, CPF, etc.)"
+             ]
+           });
          }
+       } else {
+         logStep("❌ CHARGE SEM TRANSACTION", {
+           chargeStatus: charge.status,
+           chargePaymentMethod: charge.payment_method,
+           possibleReasons: [
+             "Charge não foi processada ainda",
+             "Método de pagamento inválido",
+             "Falha na criação da transaction"
+           ]
+         });
        }
+     } else {
+       logStep("❌ BILL SEM CHARGES", {
+         billStatus: billData.bill.status,
+         billPaymentMethod: billData.bill.payment_method_code,
+         possibleReasons: [
+           "Bill criada mas charges não foram geradas",
+           "Problemas com método de pagamento",
+           "Configuração incorreta do plano/produto"
+         ]
+       });
      }
 
      // Ensure we have full bill details (including PIX fields) by fetching the bill by ID
@@ -1049,18 +1109,75 @@ serve(async (req) => {
           chargesCount: billData.bill.charges?.length || 0
         });
 
+        // ✅ DIAGNÓSTICO AVANÇADO: Verificar métodos de pagamento disponíveis na Vindi
+        try {
+          logStep('🔍 DIAGNÓSTICO: Verificando métodos de pagamento disponíveis na Vindi');
+
+          const paymentMethodsResponse = await fetch(`${vindiApiUrl}/payment_methods`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${btoa(vindiApiKey + ':')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (paymentMethodsResponse.ok) {
+            const paymentMethodsData = await paymentMethodsResponse.json();
+            const pixMethods = paymentMethodsData.payment_methods?.filter((pm: any) =>
+              pm.code?.toLowerCase().includes('pix') || pm.name?.toLowerCase().includes('pix')
+            );
+
+            logStep('🔍 MÉTODOS PIX DISPONÍVEIS', {
+              totalMethods: paymentMethodsData.payment_methods?.length || 0,
+              pixMethods: pixMethods?.map((pm: any) => ({
+                id: pm.id,
+                code: pm.code,
+                name: pm.name,
+                type: pm.type,
+                status: pm.status
+              })) || []
+            });
+
+            // Verificar se o gateway Yapay está configurado
+            const yapayGateways = paymentMethodsData.payment_methods?.filter((pm: any) =>
+              pm.name?.toLowerCase().includes('yapay') || pm.gateway_name?.toLowerCase().includes('yapay')
+            );
+
+            logStep('🔍 GATEWAYS YAPAY ENCONTRADOS', {
+              yapayGateways: yapayGateways?.map((pm: any) => ({
+                id: pm.id,
+                code: pm.code,
+                name: pm.name,
+                gateway_name: pm.gateway_name,
+                status: pm.status
+              })) || []
+            });
+          }
+        } catch (diagnosticError) {
+          logStep('❌ Erro no diagnóstico de métodos de pagamento', { error: diagnosticError.message });
+        }
+
         // ✅ VALIDAÇÃO ROBUSTA E FEEDBACK PARA O USUÁRIO
         logStep('⚠️ AVISO: PIX criado mas dados não encontrados', {
           possibleCauses: [
-            'Vindi ainda processando PIX',
-            'Campos de resposta mudaram',
-            'Gateway demorou para processar'
+            'PIX não está habilitado/configurado na conta Vindi',
+            'Gateway Yapay não configurado para PIX',
+            'Método de pagamento "pix" não existe na conta',
+            'Problemas com dados do cliente (endereço, CPF)',
+            'Vindi ainda processando PIX (timing)',
+            'Ambiente sandbox com limitações'
           ],
-          recommendation: 'Usuário pode tentar novamente em alguns minutos'
+          recommendation: 'Verificar configuração PIX no painel da Vindi'
         });
 
-        responseData.warning = "PIX foi criado mas o QR Code pode demorar alguns minutos para aparecer. Tente atualizar a página.";
+        responseData.warning = "PIX não pôde ser gerado. Verifique se o PIX está habilitado na sua conta Vindi.";
         responseData.bill_id = billData.bill.id; // Para permitir consulta posterior
+        responseData.debug_info = {
+          environment: vindiEnvironment,
+          bill_status: billData.bill.status,
+          charge_status: billData.bill.charges?.[0]?.status,
+          payment_method_requested: paymentData.paymentMethod
+        };
       }
     }
 
