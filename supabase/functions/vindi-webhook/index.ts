@@ -180,7 +180,9 @@ serve(async (req) => {
       if (beneficiarioUpdated && matchedBeneficiario) {
         logStep("Calling adesão API for beneficiario", {
           beneficiarioId: matchedBeneficiario.id,
-          subscriptionId: subscription.id
+          subscriptionId: subscription.id,
+          planoId: matchedBeneficiario.plano_id,
+          paymentMethod: subscription.payment_method || 'unknown'
         });
 
         const adesaoData = {
@@ -197,6 +199,16 @@ serve(async (req) => {
           id_beneficiario_tipo: 1,
           codigo_externo: `VINDI_${subscriptionId}`
         };
+
+        logStep("=== DADOS PARA ADESÃO RMS ===", {
+          plano_id: matchedBeneficiario.plano_id,
+          nome: matchedBeneficiario.nome,
+          cpf: matchedBeneficiario.cpf,
+          email: matchedBeneficiario.email,
+          paymentConfirmedVia: eventType,
+          subscriptionId: subscription.id,
+          vindiSubscriptionId: subscriptionId
+        });
 
         try {
           const adesaoResult = await supabase.functions.invoke('notify-external-api', {

@@ -84,6 +84,39 @@ async function logApiCall(
   retryCount: number = 0
 ) {
   try {
+    // Buscar dados do beneficiário e plano se beneficiarioId for fornecido
+    let beneficiarioNome = null;
+    let planoNome = null;
+    let planoCodigoRms = null;
+
+    if (beneficiarioId) {
+      try {
+        const { data: beneficiario, error: beneficiarioError } = await supabase
+          .from('beneficiarios')
+          .select(`
+            nome,
+            plano:planos (nome, rms_plan_code)
+          `)
+          .eq('id', beneficiarioId)
+          .single();
+
+        if (!beneficiarioError && beneficiario) {
+          beneficiarioNome = beneficiario.nome;
+          if (beneficiario.plano) {
+            planoNome = beneficiario.plano.nome;
+            planoCodigoRms = beneficiario.plano.rms_plan_code;
+          }
+        }
+      } catch (error) {
+        console.warn('Erro ao buscar dados do beneficiário para log:', error);
+      }
+    }
+
+    // Se não conseguiu buscar dados do beneficiário, tentar extrair dos dados da requisição
+    if (!beneficiarioNome && requestData) {
+      beneficiarioNome = requestData.nome || null;
+    }
+
     await supabase.from('api_integrations_log').insert({
       beneficiario_id: beneficiarioId,
       operation,
@@ -91,8 +124,13 @@ async function logApiCall(
       response_data: responseData,
       status,
       error_message: errorMessage,
-      retry_count: retryCount
+      retry_count: retryCount,
+      beneficiario_nome: beneficiarioNome,
+      plano_nome: planoNome,
+      plano_codigo_rms: planoCodigoRms
     });
+
+    console.log(`📝 [LOG] Registrado: ${operation} | Beneficiário: ${beneficiarioNome || 'N/A'} | Plano: ${planoNome || 'N/A'} | RMS: ${planoCodigoRms || 'N/A'}`);
   } catch (error) {
     console.error('Erro ao salvar log:', error);
   }
@@ -287,16 +325,44 @@ function formatCPFForVindi(cpf: string): string {
   return cleanCPF;
 }
 
-function mapPlanoToTipoPlano(planoId: string): number {
-  // Mapear plano_id para tipoPlano da API externa
-  const planoMapping: { [key: string]: number } = {
-    'f3395d2c-7e18-41e6-8204-1d71c1981d3c': 102304, // Plano Familiar (old)
-    '1af1a9e8-5590-4349-84cc-be5f8f7f9d83': 102303, // Plano Individual (old)
-    '8f22a8dc-62f6-5145-b57d-fcec8c6780de': 102304, // Plano Familiar (new UUID)
-    '4e11e7cb-51f5-4034-a46c-ebdb7b5679cd': 102303, // Plano Individual (new UUID)
-  };
+async function getRmsPlanoCode(planoId: string): Promise<string> {
+  console.log(`=== BUSCANDO CÓDIGO RMS PARA PLANO ${planoId} ===`);
 
-  return planoMapping[planoId] || 102303; // Default para Individual
+  try {
+    const { data: plano, error } = await supabase
+      .from('planos')
+      .select('rms_plan_code, nome')
+      .eq('id', planoId)
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao buscar plano:', error);
+      console.log('⚠️ Usando código RMS default: 102303');
+      return '102303'; // Default para Individual
+    }
+
+    if (!plano) {
+      console.error('❌ Plano não encontrado:', planoId);
+      console.log('⚠️ Usando código RMS default: 102303');
+      return '102303';
+    }
+
+    const rmsCode = plano.rms_plan_code;
+
+    if (!rmsCode || rmsCode.trim() === '') {
+      console.warn(`⚠️ Plano "${plano.nome}" (${planoId}) não possui rms_plan_code configurado`);
+      console.log('⚠️ Usando código RMS default: 102303');
+      return '102303';
+    }
+
+    console.log(`✅ Código RMS encontrado: ${rmsCode} para plano "${plano.nome}"`);
+    return rmsCode.trim();
+
+  } catch (error) {
+    console.error('❌ Exceção ao buscar código RMS:', error);
+    console.log('⚠️ Usando código RMS default: 102303');
+    return '102303';
+  }
 }
 
 serve(async (req) => {
@@ -533,6 +599,9 @@ serve(async (req) => {
         cpf_titular // CPF do titular (obrigatório para dependentes)
       } = data;
 
+      // Buscar código RMS do plano
+      const rmsPlanoCode = await getRmsPlanoCode(plano_id);
+
       const requestData = {
         idClienteContrato: parseInt(idClienteContrato),
         idBeneficiarioTipo: id_beneficiario_tipo || 1,
@@ -546,8 +615,16 @@ serve(async (req) => {
         cep,
         numero: numero_endereco,
         uf: estado,
-        tipoPlano: mapPlanoToTipoPlano(plano_id)
+        tipoPlano: parseInt(rmsPlanoCode)
       };
+
+      console.log(`=== DADOS ADESÃO COM CÓDIGO RMS ===`);
+      console.log(`Plano ID: ${plano_id}`);
+      console.log(`Código RMS utilizado: ${rmsPlanoCode}`);
+      console.log(`Beneficiário: ${nome}`);
+      console.log(`Tipo Beneficiário: ${id_beneficiario_tipo || 1}`);
+      console.log(`Email: ${email}`);
+      console.log(`CPF: ${cpf}`);
 
       // Add cpfTitular field if this is a dependent (idBeneficiarioTipo = 3)
       if (id_beneficiario_tipo === 3 && cpf_titular) {
@@ -605,8 +682,12 @@ serve(async (req) => {
         uf,
         id_beneficiario_tipo,
         codigo_externo,
-        cpf_titular
+        cpf_titular,
+        plano_id
       } = data;
+
+      // Buscar código RMS do plano
+      const rmsPlanoCode = await getRmsPlanoCode(plano_id);
 
       const requestData = {
         idClienteContrato: parseInt(idClienteContrato),
@@ -620,8 +701,14 @@ serve(async (req) => {
         cep,
         numero,
         uf,
-        tipoPlano: tipoPlano
+        tipoPlano: parseInt(rmsPlanoCode)
       };
+
+      console.log(`=== DADOS DEPENDENTE COM CÓDIGO RMS ===`);
+      console.log(`Plano ID: ${plano_id}`);
+      console.log(`Código RMS utilizado: ${rmsPlanoCode}`);
+      console.log(`Dependente: ${nome}`);
+      console.log(`CPF Titular: ${cpf_titular}`);
 
       // Add cpfTitular field if this is a dependent (idBeneficiarioTipo = 3)
       if (id_beneficiario_tipo === 3 && cpf_titular) {

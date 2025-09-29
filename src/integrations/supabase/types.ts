@@ -25,6 +25,9 @@ export type Database = {
           response_data: Json | null
           retry_count: number | null
           status: string
+          beneficiario_nome: string | null
+          plano_nome: string | null
+          plano_codigo_rms: string | null
         }
         Insert: {
           beneficiario_id?: string | null
@@ -36,6 +39,9 @@ export type Database = {
           response_data?: Json | null
           retry_count?: number | null
           status?: string
+          beneficiario_nome?: string | null
+          plano_nome?: string | null
+          plano_codigo_rms?: string | null
         }
         Update: {
           beneficiario_id?: string | null
@@ -47,6 +53,9 @@ export type Database = {
           response_data?: Json | null
           retry_count?: number | null
           status?: string
+          beneficiario_nome?: string | null
+          plano_nome?: string | null
+          plano_codigo_rms?: string | null
         }
         Relationships: []
       }
