@@ -17,14 +17,19 @@ const logStep = (step: string, details?: any) => {
 };
 
 serve(async (req) => {
-  // Envolver toda a função em try/catch para garantir CORS sempre
+  let beneficiarioIdForErrorLog: string | undefined;
+
   try {
     // Handle CORS preflight requests
     if (req.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
-    logStep("🚀 CREATE-VINDI-CUSTOMER - Iniciado - Fluxo Correto: Apenas Cliente + Checkout");
+    const body = await req.json();
+    const beneficiario_id = body.beneficiario_id;
+    beneficiarioIdForErrorLog = beneficiario_id;
+
+    logStep(`🚀 CREATE-VINDI-CUSTOMER - Iniciado para beneficiario_id: ${beneficiario_id}`);
 
     // Validação prévia de variáveis de ambiente críticas
     const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
@@ -59,8 +64,6 @@ serve(async (req) => {
     if (userError || !userData.user) {
       throw new Error('User not authenticated');
     }
-
-    const { beneficiario_id } = await req.json() as CreateCustomerRequest;
 
     if (!beneficiario_id) {
       throw new Error('beneficiario_id is required');
@@ -441,7 +444,7 @@ serve(async (req) => {
     logStep("❌ ERROR in create-vindi-customer", {
       message: errorMessage,
       stack: error instanceof Error ? error.stack : undefined,
-      beneficiario_id: (req as any).beneficiario_id || 'unknown'
+      beneficiario_id: beneficiarioIdForErrorLog || 'unknown'
     });
 
     return new Response(JSON.stringify({
@@ -449,7 +452,7 @@ serve(async (req) => {
       error: errorMessage,
       debug_info: {
         function: 'create-vindi-customer',
-        beneficiario_id: (req as any).beneficiario_id || 'unknown',
+        beneficiario_id: beneficiarioIdForErrorLog || 'unknown',
         timestamp: new Date().toISOString()
       }
     }), {

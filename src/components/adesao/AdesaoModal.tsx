@@ -303,8 +303,12 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
               <Input
                 id="cpf"
                 value={beneficiario.cpf}
-                onChange={(e) => setBeneficiario({ ...beneficiario, cpf: e.target.value })}
-                placeholder="000.000.000-00"
+                onChange={(e) => {
+                  const cleanCpf = e.target.value.replace(/\D/g, '');
+                  setBeneficiario({ ...beneficiario, cpf: cleanCpf });
+                }}
+                placeholder="00000000000"
+                maxLength={11}
               />
             </div>
 
