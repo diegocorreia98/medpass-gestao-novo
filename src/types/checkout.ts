@@ -53,6 +53,8 @@ export interface TransactionResult {
   charge_id?: string;
   status?: string;
   error?: string;
+  gateway_message?: string; // Mensagem do gateway de pagamento
+  gateway_code?: string; // Código de resposta do gateway
   pix?: {
     qr_code?: string;
     qr_code_url?: string;
@@ -66,4 +68,15 @@ export interface TransactionResult {
     barcode?: string;
     due_date?: string;
   };
+}
+
+export interface DetailedError {
+  title: string;
+  message: string;
+  category: 'reversible' | 'irreversible' | 'user_action' | 'system';
+  suggestedAction: 'retry' | 'use_another_card' | 'fix_data' | 'contact_bank' | 'use_another_method';
+  canRetry: boolean;
+  userFriendly: string;
+  originalError?: string;
+  gatewayCode?: string;
 }

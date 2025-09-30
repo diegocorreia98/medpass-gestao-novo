@@ -363,14 +363,25 @@ serve(async (req) => {
 
     // ===== RESPOSTA FINAL =====
 
+    // Extract gateway response details for better error handling
+    const charge = subscriptionResult.bill?.charges?.[0];
+    const lastTransaction = charge?.last_transaction;
+    const gatewayFields = lastTransaction?.gateway_response_fields;
+
     const response = {
       success: true,
       subscription_id: subscriptionResult.subscription.id,
       customer_id: customer.id,
       bill_id: subscriptionResult.bill?.id,
-      charge_id: subscriptionResult.bill?.charges?.[0]?.id,
+      charge_id: charge?.id,
       status: subscriptionResult.subscription.status,
       payment_method: paymentMethod,
+
+      // Gateway response details
+      gateway_message: lastTransaction?.gateway_message || null,
+      gateway_code: lastTransaction?.gateway_response_code || null,
+      transaction_status: lastTransaction?.status || null,
+      charge_status: charge?.status || null,
 
       // Dados específicos do método de pagamento
       pix_data: paymentData?.type === 'pix' ? paymentData : undefined,
@@ -402,9 +413,40 @@ serve(async (req) => {
   } catch (error) {
     console.error(`❌ [VINDI-CHECKOUT] Erro no checkout:`, error);
 
+    // Extract detailed error information
+    let errorMessage = 'Erro desconhecido';
+    let gatewayCode: string | null = null;
+    let gatewayMessage: string | null = null;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+
+      // Try to extract Vindi error details from error message
+      const vindiErrorMatch = errorMessage.match(/Vindi API error: (.+)/);
+      if (vindiErrorMatch) {
+        errorMessage = vindiErrorMatch[1];
+      }
+
+      // Try to parse JSON error for gateway details
+      try {
+        const errorTextMatch = errorMessage.match(/\{.*\}/);
+        if (errorTextMatch) {
+          const parsedError = JSON.parse(errorTextMatch[0]);
+          if (parsedError.errors?.[0]) {
+            errorMessage = parsedError.errors[0].message || errorMessage;
+            gatewayCode = parsedError.errors[0].id || null;
+          }
+        }
+      } catch (parseError) {
+        // Continue with original error message
+      }
+    }
+
     const errorResponse = {
       success: false,
-      error: error.message,
+      error: errorMessage,
+      gateway_code: gatewayCode,
+      gateway_message: gatewayMessage,
       environment: VINDI_ENVIRONMENT,
       timestamp: new Date().toISOString()
     };

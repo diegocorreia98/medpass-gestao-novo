@@ -17,6 +17,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let savedEventId: string | null = null;
+
   try {
     logStep("Webhook received");
 
@@ -33,18 +35,204 @@ serve(async (req) => {
     // Parse webhook data
     const webhookData = await req.json();
 
-    logStep("Webhook data received", {
-      type: webhookData.type,
-      hasData: !!webhookData.data,
-      dataId: webhookData.data?.id
+    // ✅ LOG COMPLETO DO PAYLOAD
+    logStep("RAW WEBHOOK PAYLOAD RECEIVED", webhookData);
+    logStep("Payload type check", {
+      typeofData: typeof webhookData,
+      hasType: 'type' in webhookData,
+      typeValue: webhookData.type,
+      typeofTypeValue: typeof webhookData.type,
+      keys: Object.keys(webhookData)
     });
 
-    const eventType = webhookData.type;
-    const eventData = webhookData.data;
+    // ✅ CRITICAL FIX: Safely extract event type as string
+    let eventType: string = 'unknown'; // Default value to prevent null
 
-    // Process bill_paid events
+    try {
+      if (typeof webhookData === 'string') {
+        // If webhook data is a string, parse it
+        const parsed = JSON.parse(webhookData);
+        eventType = parsed.type || parsed.event?.type || 'unknown';
+      } else if (webhookData && typeof webhookData === 'object') {
+        // Extract from object structure
+        if (typeof webhookData.type === 'string' && webhookData.type.trim()) {
+          eventType = webhookData.type.trim();
+        } else if (webhookData.event && typeof webhookData.event.type === 'string' && webhookData.event.type.trim()) {
+          eventType = webhookData.event.type.trim();
+        } else if (webhookData.type) {
+          // Try to convert to string
+          eventType = String(webhookData.type).trim() || 'unknown';
+        }
+      }
+
+      // Final safety check: ensure eventType is never null/undefined/empty
+      if (!eventType || eventType === 'null' || eventType === 'undefined' || eventType.trim() === '') {
+        eventType = 'unknown';
+        logStep("⚠️ WARNING: event type was null/undefined/empty, using 'unknown'", {
+          originalType: webhookData?.type,
+          webhookDataKeys: Object.keys(webhookData || {})
+        });
+      }
+    } catch (parseError) {
+      logStep("❌ ERROR parsing event type", { error: parseError.message });
+      eventType = 'unknown';
+    }
+
+    const eventData = webhookData.data || webhookData.event?.data;
+
+    logStep("Extracted event info", {
+      eventType,
+      eventTypeLength: eventType.length,
+      hasEventData: !!eventData
+    });
+
+    // ✅ CRITICAL: Persistir TODOS os eventos imediatamente
+    const eventId = webhookData.event?.id || `${eventType}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    logStep("Saving event to database", { eventType, eventId });
+
+    const { data: savedEvent, error: saveError } = await supabase
+      .from('vindi_webhook_events')
+      .insert({
+        event_id: eventId,
+        event_type: eventType,
+        event_data: webhookData,
+        processed: false
+      })
+      .select()
+      .single();
+
+    if (saveError) {
+      logStep("Error saving event (continuing anyway)", { error: saveError.message });
+    } else {
+      savedEventId = savedEvent.id;
+      logStep("Event saved successfully", { id: savedEvent.id, event_id: eventId });
+    }
+
+    // ===== PROCESS DIFFERENT EVENT TYPES =====
+
+    // 1. Test event - Confirm webhook is working
+    if (eventType === 'test') {
+      logStep("✅ Test event received - Webhook is working correctly!");
+
+      // Mark as processed
+      if (savedEventId) {
+        await supabase
+          .from('vindi_webhook_events')
+          .update({ processed: true, processed_at: new Date().toISOString() })
+          .eq('id', savedEventId);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Test event received and processed successfully",
+        eventType,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // 2. Charge rejected - Payment failed
+    if (eventType === 'charge_rejected') {
+      logStep("❌ Processing charge_rejected event", {
+        chargeId: eventData?.id,
+        billId: eventData?.bill?.id,
+        subscriptionId: eventData?.bill?.subscription?.id,
+        gatewayMessage: eventData?.last_transaction?.gateway_message
+      });
+
+      const subscriptionId = eventData?.bill?.subscription?.id;
+      const chargeId = eventData?.id;
+
+      // Try to find and update related records
+      if (subscriptionId) {
+        // Update subscription status
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: 'payment_failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('vindi_subscription_id', subscriptionId);
+
+        // Update transaction status
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'failed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('vindi_subscription_id', subscriptionId);
+      }
+
+      // Try to find beneficiario by CPF and update
+      const customer = eventData?.bill?.customer || eventData?.customer;
+      if (customer?.registry_code) {
+        const cleanCpf = customer.registry_code.replace(/\D/g, '');
+
+        await supabase
+          .from('beneficiarios')
+          .update({
+            payment_status: 'failed',
+            updated_at: new Date().toISOString()
+          })
+          .or(`cpf.eq.${cleanCpf},cpf.eq.${customer.registry_code}`);
+
+        logStep("Beneficiario payment_status updated to failed", { cpf: cleanCpf });
+      }
+
+      // Mark as processed
+      if (savedEventId) {
+        await supabase
+          .from('vindi_webhook_events')
+          .update({ processed: true, processed_at: new Date().toISOString() })
+          .eq('id', savedEventId);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Charge rejected event processed",
+        eventType,
+        chargeId,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // 3. Subscription created - New subscription
+    if (eventType === 'subscription_created') {
+      logStep("🆕 Processing subscription_created event", {
+        subscriptionId: eventData?.id,
+        customerId: eventData?.customer?.id,
+        planId: eventData?.plan?.id
+      });
+
+      // Mark as processed
+      if (savedEventId) {
+        await supabase
+          .from('vindi_webhook_events')
+          .update({ processed: true, processed_at: new Date().toISOString() })
+          .eq('id', savedEventId);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Subscription created event logged",
+        eventType,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+
+    // 4. Bill paid - EXISTING LOGIC
     if (eventType === 'bill_paid') {
-      logStep("Processing bill_paid event", { billId: eventData?.id });
+      logStep("💰 Processing bill_paid event", { billId: eventData?.id });
 
       const billId = eventData?.id;
       const subscriptionId = eventData?.subscription?.id;
@@ -232,13 +420,34 @@ serve(async (req) => {
       } else {
         logStep("Skipping adesão API call - beneficiario not found or not updated");
       }
+
+      // ✅ Mark bill_paid event as processed
+      if (savedEventId) {
+        await supabase
+          .from('vindi_webhook_events')
+          .update({ processed: true, processed_at: new Date().toISOString() })
+          .eq('id', savedEventId);
+
+        logStep("Event marked as processed", { savedEventId });
+      }
+    }
+
+    // ===== UNHANDLED EVENT TYPES =====
+    // Event was saved but not specifically processed
+    if (!['test', 'charge_rejected', 'subscription_created', 'bill_paid'].includes(eventType)) {
+      logStep("⚠️ Event type not specifically handled (logged only)", {
+        eventType,
+        eventId: savedEventId,
+        note: "Event was saved to database but no specific processing logic exists"
+      });
     }
 
     return new Response(JSON.stringify({
       success: true,
       message: "Webhook processed successfully",
       eventType,
-      processed: eventType === 'bill_paid',
+      processed: ['test', 'charge_rejected', 'subscription_created', 'bill_paid'].includes(eventType),
+      saved: !!savedEventId,
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -246,11 +455,35 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    logStep("Error processing webhook", { error: error.message });
+    logStep("❌ Error processing webhook", { error: error.message, stack: error.stack });
+
+    // ✅ Mark event as failed
+    if (savedEventId) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+
+        await supabase
+          .from('vindi_webhook_events')
+          .update({
+            processed: false,
+            error_message: error.message,
+            processed_at: new Date().toISOString()
+          })
+          .eq('id', savedEventId);
+
+        logStep("Event marked as failed", { savedEventId, error: error.message });
+      } catch (updateError) {
+        logStep("Failed to update event error status", { error: updateError.message });
+      }
+    }
 
     return new Response(JSON.stringify({
       success: false,
       error: error.message,
+      saved: !!savedEventId,
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

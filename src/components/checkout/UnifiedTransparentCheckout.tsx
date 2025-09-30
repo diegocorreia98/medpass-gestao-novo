@@ -7,14 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { 
-  Loader2, 
-  CreditCard, 
-  QrCode, 
-  CheckCircle, 
-  AlertCircle, 
-  Shield, 
-  Copy, 
+import {
+  Loader2,
+  CreditCard,
+  QrCode,
+  CheckCircle,
+  AlertCircle,
+  Shield,
+  Copy,
   Clock,
   User,
   Mail,
@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { VindiCrypto, type EncryptedCardData } from '@/utils/vindiCrypto';
+import { mapVindiError, getActionButtonText, getErrorIcon } from '@/utils/vindiErrorMapper';
 import { validateCPF, validateCNPJ, validateEmail, validatePhone, validateCreditCard, getCreditCardBrand } from '@/utils/validators';
 import { generateQRCodeFromPayload } from '@/utils/pixQRCode';
 import InputMask from 'react-input-mask';
@@ -36,7 +37,7 @@ interface UnifiedTransparentCheckoutProps {
   onCancel?: () => void;
 }
 
-type CheckoutState = 'form' | 'processing' | 'pix-payment' | 'success' | 'error';
+type CheckoutState = 'form' | 'tokenizing' | 'creating_customer' | 'processing' | 'pix-payment' | 'success' | 'error';
 
 const BRAZILIAN_STATES = [
   { value: 'AC', label: 'Acre' },
@@ -73,6 +74,7 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(preSelectedPlan || null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'pix'>('credit_card');
   const [error, setError] = useState<string | null>(null);
+  const [detailedError, setDetailedError] = useState<any>(null); // Detailed error from vindiErrorMapper
   const [transactionResult, setTransactionResult] = useState<TransactionResult | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(!preSelectedPlan);
@@ -272,17 +274,38 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
 
     setCheckoutState('processing');
     setError(null);
+    setDetailedError(null);
 
     try {
       console.log('[UNIFIED-CHECKOUT] Starting checkout process');
 
       let encryptedCard: EncryptedCardData | null = null;
-      
+
       // Encrypt card data if credit card payment
       if (paymentMethod === 'credit_card') {
         console.log('[UNIFIED-CHECKOUT] Encrypting card data');
-        encryptedCard = await VindiCrypto.encryptCard(cardData as CardData);
+        setCheckoutState('tokenizing');
+
+        try {
+          encryptedCard = await VindiCrypto.encryptCard(cardData as CardData);
+          console.log('[UNIFIED-CHECKOUT] Card encrypted successfully');
+        } catch (tokenError) {
+          console.error('[UNIFIED-CHECKOUT] Tokenization failed:', tokenError);
+          const mappedError = mapVindiError(tokenError as Error);
+          setDetailedError(mappedError);
+          setError(mappedError.userFriendly);
+          setCheckoutState('error');
+          toast({
+            title: mappedError.title,
+            description: mappedError.userFriendly,
+            variant: "destructive",
+          });
+          return;
+        }
       }
+
+      setCheckoutState('creating_customer');
+      console.log('[UNIFIED-CHECKOUT] Creating customer and subscription');
 
       const checkoutPayload = {
         clinicData: customerData,
@@ -298,14 +321,34 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
         installments: paymentMethod === 'credit_card' ? installments : undefined
       };
 
+      setCheckoutState('processing');
       console.log('[UNIFIED-CHECKOUT] Calling vindi-transparent-checkout');
-      
+
       const response = await supabase.functions.invoke('vindi-transparent-checkout', {
         body: checkoutPayload
       });
 
       if (response.error || !response.data?.success) {
-        throw new Error(response.error?.message || response.data?.error || 'Erro ao processar pagamento');
+        const errorMessage = response.error?.message || response.data?.error || 'Erro ao processar pagamento';
+        const gatewayCode = response.data?.gateway_code;
+
+        console.error('[UNIFIED-CHECKOUT] Checkout failed:', {
+          error: errorMessage,
+          gatewayCode,
+          response: response.data
+        });
+
+        const mappedError = mapVindiError(errorMessage, gatewayCode);
+        setDetailedError(mappedError);
+        setError(mappedError.userFriendly);
+        setCheckoutState('error');
+
+        toast({
+          title: mappedError.title,
+          description: mappedError.userFriendly,
+          variant: "destructive",
+        });
+        return;
       }
 
       const result = response.data;
@@ -317,6 +360,8 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
         transaction_id: result.subscription_id?.toString(),
         charge_id: result.charge_id?.toString(),
         status: result.status || 'processing',
+        gateway_message: result.gateway_message,
+        gateway_code: result.gateway_code,
         pix: result.pix_data ? {
           qr_code: result.pix_data.qr_code,
           qr_code_url: undefined,
@@ -328,14 +373,14 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
 
       if (paymentMethod === 'pix') {
         setCheckoutState('pix-payment');
-        
+
         // Generate QR Code from PIX payload
         if (result.pix_data?.qr_code) {
           setIsGeneratingQRCode(true);
-          
+
           try {
             const qrResult = await generateQRCodeFromPayload(result.pix_data.qr_code);
-            
+
             if (qrResult.success && qrResult.qrCodeDataURL) {
               setQrCodeDataURL(qrResult.qrCodeDataURL);
               console.log('[UNIFIED-CHECKOUT] QR Code image generated successfully');
@@ -353,7 +398,7 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
             setIsGeneratingQRCode(false);
           }
         }
-        
+
         toast({
           title: "PIX gerado com sucesso!",
           description: "Use o QR Code ou código PIX para efetuar o pagamento.",
@@ -371,14 +416,15 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
       }
 
     } catch (error) {
-      console.error('[UNIFIED-CHECKOUT] Error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
-      setError(errorMessage);
+      console.error('[UNIFIED-CHECKOUT] Unexpected error:', error);
+      const mappedError = mapVindiError(error as Error);
+      setDetailedError(mappedError);
+      setError(mappedError.userFriendly);
       setCheckoutState('error');
-      
+
       toast({
-        title: "Erro no checkout",
-        description: errorMessage,
+        title: mappedError.title,
+        description: mappedError.userFriendly,
         variant: "destructive",
       });
     }
@@ -760,21 +806,38 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
           </div>
         );
 
+      case 'tokenizing':
+        return (
+          <div className="text-center space-y-4 py-8">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+            <h2 className="text-2xl font-bold">🔐 Validando cartão...</h2>
+            <p className="text-muted-foreground">
+              Verificando dados do cartão com segurança
+            </p>
+          </div>
+        );
+
+      case 'creating_customer':
+        return (
+          <div className="text-center space-y-4 py-8">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+            <h2 className="text-2xl font-bold">👤 Criando cadastro...</h2>
+            <p className="text-muted-foreground">
+              Registrando informações na plataforma
+            </p>
+          </div>
+        );
+
       case 'processing':
         return (
           <div className="text-center space-y-4 py-8">
             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
-            <h2 className="text-2xl font-bold">Processando pagamento...</h2>
-            <div className="space-y-2 text-muted-foreground">
-              {paymentMethod === 'credit_card' ? (
-                <>
-                  <p>🔐 Criptografando dados do cartão</p>
-                  <p>💳 Processando pagamento na Vindi</p>
-                </>
-              ) : (
-                <p>🔐 Gerando código PIX</p>
-              )}
-            </div>
+            <h2 className="text-2xl font-bold">💳 Processando pagamento...</h2>
+            <p className="text-muted-foreground">
+              {paymentMethod === 'credit_card'
+                ? 'Finalizando pagamento com a operadora'
+                : 'Gerando código PIX'}
+            </p>
           </div>
         );
 
@@ -908,13 +971,120 @@ export function UnifiedTransparentCheckout({ preSelectedPlan, customerData: preF
 
       case 'error':
         return (
-          <div className="text-center space-y-4 py-8">
-            <AlertCircle className="h-16 w-16 text-destructive mx-auto" />
-            <h2 className="text-2xl font-bold text-destructive">Erro no Pagamento</h2>
-            <p className="text-muted-foreground">{error}</p>
-            <Button onClick={() => setCheckoutState('form')} variant="outline">
-              Tentar Novamente
-            </Button>
+          <div className="text-center space-y-6 py-8 max-w-md mx-auto">
+            <div className="space-y-2">
+              <div className="text-6xl">
+                {detailedError ? getErrorIcon(detailedError.category) : '❌'}
+              </div>
+              <h2 className="text-2xl font-bold text-destructive">
+                {detailedError?.title || 'Erro no Pagamento'}
+              </h2>
+            </div>
+
+            <Card className="text-left">
+              <CardContent className="pt-6 space-y-4">
+                <div className="space-y-2">
+                  <p className="text-base font-medium">
+                    {detailedError?.message || error || 'Ocorreu um erro inesperado'}
+                  </p>
+
+                  {detailedError?.userFriendly && (
+                    <Alert>
+                      <AlertDescription className="text-sm">
+                        💡 {detailedError.userFriendly}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
+                {detailedError?.gatewayCode && (
+                  <div className="text-xs text-muted-foreground pt-2 border-t">
+                    <p>Código de referência: {detailedError.gatewayCode}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex flex-col gap-3">
+              {/* Botão de ação baseado no tipo de erro */}
+              {detailedError?.canRetry && (
+                <Button
+                  onClick={() => {
+                    setCheckoutState('form');
+                    setError(null);
+                    setDetailedError(null);
+                  }}
+                  size="lg"
+                >
+                  {getActionButtonText(detailedError.suggestedAction)}
+                </Button>
+              )}
+
+              {/* Botão para usar outro cartão */}
+              {detailedError?.suggestedAction === 'use_another_card' && paymentMethod === 'credit_card' && (
+                <>
+                  <Button
+                    onClick={() => {
+                      setCheckoutState('form');
+                      setError(null);
+                      setDetailedError(null);
+                      setCardData({});
+                    }}
+                    size="lg"
+                  >
+                    Usar Outro Cartão
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setCheckoutState('form');
+                      setError(null);
+                      setDetailedError(null);
+                      setPaymentMethod('pix');
+                    }}
+                    variant="outline"
+                    size="lg"
+                  >
+                    Pagar com PIX
+                  </Button>
+                </>
+              )}
+
+              {/* Botão para corrigir dados */}
+              {detailedError?.suggestedAction === 'fix_data' && (
+                <Button
+                  onClick={() => {
+                    setCheckoutState('form');
+                    setError(null);
+                    setDetailedError(null);
+                  }}
+                  size="lg"
+                >
+                  Corrigir Dados
+                </Button>
+              )}
+
+              {/* Botão genérico de voltar se não puder retryar */}
+              {!detailedError?.canRetry && detailedError?.suggestedAction !== 'use_another_card' && detailedError?.suggestedAction !== 'fix_data' && (
+                <Button
+                  onClick={() => {
+                    setCheckoutState('form');
+                    setError(null);
+                    setDetailedError(null);
+                  }}
+                  variant="outline"
+                  size="lg"
+                >
+                  Voltar
+                </Button>
+              )}
+
+              {/* Botão de cancelar sempre disponível */}
+              {onCancel && (
+                <Button onClick={onCancel} variant="ghost" size="sm">
+                  Cancelar
+                </Button>
+              )}
+            </div>
           </div>
         );
 

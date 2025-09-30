@@ -48,11 +48,15 @@ export class VindiCrypto {
   /**
    * Creates a payment profile (tokenization) using Vindi's public API
    * This method follows the transparent checkout specification by calling Vindi directly from frontend
+   * Includes timeout and retry logic for better reliability
    */
-  static async encryptCard(cardData: CardData): Promise<EncryptedCardData> {
+  static async encryptCard(cardData: CardData, retryCount = 0): Promise<EncryptedCardData> {
+    const MAX_RETRIES = 1;
+    const TIMEOUT_MS = 30000; // 30 seconds
+
     try {
-      console.log('[VINDI-CRYPTO] Starting card tokenization via Vindi public API');
-      
+      console.log(`[VINDI-CRYPTO] Starting card tokenization via Vindi public API (attempt ${retryCount + 1}/${MAX_RETRIES + 1})`);
+
       // Validate card data
       this.validateCardData(cardData);
 
@@ -68,41 +72,83 @@ export class VindiCrypto {
 
       console.log('[VINDI-CRYPTO] Calling Vindi public payment_profiles endpoint');
 
-      // Call Vindi's public API for tokenization (as per specification)
-      const response = await fetch(`${this.getPublicUrl()}/payment_profiles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${btoa(this.getPublicKey() + ':')}`
-        },
-        body: JSON.stringify(paymentProfileData)
-      });
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.errors?.[0]?.message || `HTTP ${response.status}`;
-        throw new Error(`Vindi API error: ${errorMessage}`);
+      try {
+        // Call Vindi's public API for tokenization (as per specification)
+        const response = await fetch(`${this.getPublicUrl()}/payment_profiles`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${btoa(this.getPublicKey() + ':')}`
+          },
+          body: JSON.stringify(paymentProfileData),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.errors?.[0]?.message || `HTTP ${response.status}`;
+          throw new Error(`Vindi API error: ${errorMessage}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.payment_profile?.gateway_token) {
+          throw new Error('Gateway token não recebido da Vindi');
+        }
+
+        console.log('[VINDI-CRYPTO] Tokenization successful, gateway_token received');
+
+        const paymentProfile = result.payment_profile;
+
+        return {
+          gateway_token: paymentProfile.gateway_token,
+          card_brand: paymentProfile.card_company_name?.toLowerCase() || this.detectCardBrand(cardData.number),
+          card_last_four: paymentProfile.card_number_first_six?.slice(-4) || cardData.number.replace(/\s/g, '').slice(-4)
+        };
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+
+        // Handle timeout error
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.warn('[VINDI-CRYPTO] Request timed out after 30s');
+
+          // Retry once on timeout
+          if (retryCount < MAX_RETRIES) {
+            console.log('[VINDI-CRYPTO] Retrying tokenization...');
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+            return this.encryptCard(cardData, retryCount + 1);
+          }
+
+          throw new Error('Tempo esgotado ao validar cartão. Por favor, tente novamente.');
+        }
+
+        throw fetchError;
       }
-
-      const result = await response.json();
-      
-      if (!result.payment_profile?.gateway_token) {
-        throw new Error('Gateway token não recebido da Vindi');
-      }
-
-      console.log('[VINDI-CRYPTO] Tokenization successful, gateway_token received');
-      
-      const paymentProfile = result.payment_profile;
-      
-      return {
-        gateway_token: paymentProfile.gateway_token,
-        card_brand: paymentProfile.card_company_name?.toLowerCase() || this.detectCardBrand(cardData.number),
-        card_last_four: paymentProfile.card_number_first_six?.slice(-4) || cardData.number.replace(/\s/g, '').slice(-4)
-      };
 
     } catch (error) {
       console.error('[VINDI-CRYPTO] Tokenization failed:', error);
-      throw new Error(`Falha na tokenização do cartão: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('Tempo esgotado')) {
+          throw error; // Already has good message
+        }
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          throw new Error('Erro de conexão. Verifique sua internet e tente novamente.');
+        }
+        if (error.message.includes('Vindi API error')) {
+          throw error; // Already has API error message
+        }
+        throw new Error(`Falha na tokenização do cartão: ${error.message}`);
+      }
+
+      throw new Error('Falha na tokenização do cartão: Erro desconhecido');
     }
   }
 
