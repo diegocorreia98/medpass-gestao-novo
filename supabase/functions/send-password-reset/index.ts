@@ -60,10 +60,44 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Check if user exists first
-    console.log(`[${requestId}] Checking if user exists...`);
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-    if (userError) {
+    // Check if user exists first - with pagination to get ALL users
+    console.log(`[${requestId}] Checking if user exists (fetching all users with pagination)...`);
+
+    let allUsers: any[] = [];
+    let page = 1;
+    let hasMore = true;
+    const perPage = 1000; // Max allowed by Supabase
+
+    try {
+      while (hasMore) {
+        const { data: pageData, error: userError } = await supabase.auth.admin.listUsers({
+          page,
+          perPage
+        });
+
+        if (userError) {
+          console.error(`[${requestId}] Error fetching users page ${page}:`, userError);
+          throw userError;
+        }
+
+        if (pageData && pageData.users && pageData.users.length > 0) {
+          allUsers = allUsers.concat(pageData.users);
+          console.log(`[${requestId}] Fetched page ${page}: ${pageData.users.length} users`);
+
+          // If we got less than perPage, we've reached the end
+          if (pageData.users.length < perPage) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`[${requestId}] Total users fetched: ${allUsers.length}`);
+
+    } catch (userError) {
       console.error(`[${requestId}] Error checking user existence:`, userError);
       return new Response(
         JSON.stringify({ error: "Erro interno do servidor" }),
@@ -71,9 +105,9 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const userExists = users.users.some(user => user.email === email);
+    const userExists = allUsers.some(user => user.email === email);
     console.log(`[${requestId}] User exists:`, userExists);
-    console.log(`[${requestId}] Total users in system:`, users.users.length);
+    console.log(`[${requestId}] Searching for email in ${allUsers.length} users`);
 
     if (!userExists) {
       console.log(`[${requestId}] User not found in listUsers(), but will try to send anyway`);
