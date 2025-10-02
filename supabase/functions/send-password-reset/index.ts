@@ -73,10 +73,32 @@ const handler = async (req: Request): Promise<Response> => {
 
     const userExists = users.users.some(user => user.email === email);
     console.log(`[${requestId}] User exists:`, userExists);
+    console.log(`[${requestId}] Total users in system:`, users.users.length);
 
     if (!userExists) {
-      console.log(`[${requestId}] User not found for email, but returning success for security`);
-      // Return success even if user doesn't exist for security reasons
+      console.log(`[${requestId}] User not found for email`);
+      console.log(`[${requestId}] Attempting to send password reset anyway via Supabase (user might exist but not in list)`);
+
+      // Try to send password reset anyway - Supabase will handle if user exists
+      // This fixes cases where user exists but isn't returned in listUsers
+      try {
+        const baseUrl = redirectOrigin || 'https://www.medpassbeneficios.com.br';
+        const redirectUrl = `${baseUrl}/auth/reset-password`;
+
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: redirectUrl
+        });
+
+        if (resetError) {
+          console.error(`[${requestId}] Supabase resetPasswordForEmail failed:`, resetError);
+        } else {
+          console.log(`[${requestId}] Password reset email sent via Supabase built-in (user may exist)`);
+        }
+      } catch (fallbackError) {
+        console.error(`[${requestId}] Failed to send via Supabase fallback:`, fallbackError);
+      }
+
+      // Always return success for security (don't leak user existence)
       return new Response(
         JSON.stringify({
           success: true,
