@@ -105,10 +105,30 @@ export const useBeneficiarios = (filters?: BeneficiarioFilters & { unidadeId?: s
         `)
         .order('created_at', { ascending: false });
 
-      // 🔒 SECURITY: Sempre filtrar por user_id para usuários unidade
+      // 🔒 SECURITY: Filtrar beneficiários pela unidade para usuários unidade
       if (profile?.user_type === 'unidade') {
         console.log('[SECURITY] Aplicando filtro de segurança para usuário unidade');
-        query = query.eq('user_id', user?.id);
+
+        // Buscar a unidade associada a este usuário
+        const { data: unidadeData, error: unidadeError } = await supabase
+          .from('unidades')
+          .select('id')
+          .eq('user_id', user?.id)
+          .maybeSingle();
+
+        if (unidadeError) {
+          console.error('[SECURITY] Erro ao buscar unidade do usuário:', unidadeError);
+          throw unidadeError;
+        }
+
+        if (!unidadeData) {
+          console.warn('[SECURITY] Nenhuma unidade encontrada para este usuário');
+          // Retornar lista vazia se não há unidade associada
+          return [];
+        }
+
+        console.log('[SECURITY] Filtrando beneficiários pela unidade:', unidadeData.id);
+        query = query.eq('unidade_id', unidadeData.id);
       }
       // Para usuários matriz, permitir acesso a todos os dados
 

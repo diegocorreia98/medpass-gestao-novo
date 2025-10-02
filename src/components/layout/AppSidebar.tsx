@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell } from "lucide-react";
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, Send } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,10 @@ const adminItems = [{
   title: "Painel Admin",
   url: "/admin",
   icon: Settings
+}, {
+  title: "Adesão Direta RMS",
+  url: "/rms-adesao",
+  icon: Send
 }, {
   title: "Logs da API",
   url: "/api-logs",
