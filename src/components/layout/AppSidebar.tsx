@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, Send } from "lucide-react";
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, Send, ShoppingCart } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
-const mainItems = [{
+
+// Dashboard
+const dashboardItems = [{
   title: "Dashboard",
   url: "/dashboard",
   icon: LayoutDashboard
-}, {
+}];
+
+// Vendas
+const vendasItems = [{
   title: "Gerar Orçamento",
   url: "/orcamento",
   icon: FileText
@@ -25,38 +30,43 @@ const mainItems = [{
   url: "/cancelamento",
   icon: UserMinus
 }, {
-  title: "Gestão de Empresas",
-  url: "/gestao-empresas",
-  icon: Building2
-}];
-const adminItems = [{
-  title: "Painel Admin",
-  url: "/admin",
-  icon: Settings
-}, {
-  title: "Logs da API",
-  url: "/api-logs",
-  icon: Activity
-}, {
   title: "Transações",
   url: "/transacoes",
   icon: Receipt
-}, {
-  title: "Configurar Planos",
-  url: "/planos",
-  icon: Database
-}, {
+}];
+
+// Gestão
+const gestaoItems = [{
   title: "Franquias",
   url: "/franquias",
   icon: GitBranch
+}, {
+  title: "Gestão de Empresas",
+  url: "/gestao-empresas",
+  icon: Building2
 }, {
   title: "Gestão de Unidades",
   url: "/gestao-unidades",
   icon: Users
 }, {
+  title: "Configurar Planos",
+  url: "/planos",
+  icon: Database
+}];
+
+// Administração
+const adminItems = [{
+  title: "Painel Admin",
+  url: "/admin",
+  icon: Settings
+}, {
   title: "Teste Notificações",
   url: "/notification-test",
   icon: Bell
+}, {
+  title: "Logs da API",
+  url: "/api-logs",
+  icon: Activity
 }];
 export function AppSidebar() {
   const {
@@ -121,12 +131,12 @@ export function AppSidebar() {
           </div>
         </div>
 
-        {/* Main Navigation */}
+        {/* Dashboard */}
         <SidebarGroup>
           <SidebarGroupLabel>Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainItems.map(item => <SidebarMenuItem key={item.title}>
+              {dashboardItems.map(item => <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end={item.url === "/dashboard"} className={({
                   isActive
@@ -142,7 +152,49 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Admin Navigation */}
+        {/* Vendas */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Vendas</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {vendasItems.map(item => <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} className={({
+                  isActive
+                }) => getNavCls({
+                  isActive
+                })}>
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>)}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Gestão */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Gestão</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {gestaoItems.map(item => <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} className={({
+                  isActive
+                }) => getNavCls({
+                  isActive
+                })}>
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>)}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Administração */}
         <SidebarGroup>
           <SidebarGroupLabel>Administração</SidebarGroupLabel>
           <SidebarGroupContent>
