@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { UserPlus, FileSpreadsheet, RefreshCw, Download } from "lucide-react";
+import { UserPlus, FileSpreadsheet, RefreshCw, Download, UserCog } from "lucide-react";
 import { useBeneficiarios } from "@/hooks/useBeneficiarios";
 import { usePaymentStatus } from "@/hooks/usePaymentStatus";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +14,7 @@ import { exportBeneficiariosToExcel } from "@/utils/excelExport";
 import type { BeneficiarioCompleto } from "@/types/database";
 
 export default function Adesao() {
+  const navigate = useNavigate();
   const { beneficiarios, isLoading, refetch } = useBeneficiarios();
   const { isRefreshing, refreshPaymentStatuses } = usePaymentStatus();
   const { toast } = useToast();
@@ -233,6 +235,10 @@ export default function Adesao() {
           <Button onClick={() => setModalOpen(true)}>
             <UserPlus className="h-4 w-4 mr-2" />
             Nova Adesão
+          </Button>
+          <Button onClick={() => navigate('/rms-adesao')} variant="outline">
+            <UserCog className="h-4 w-4 mr-2" />
+            Adesão Direta RMS
           </Button>
           <Button onClick={() => setImportacaoModalOpen(true)} variant="outline">
             <FileSpreadsheet className="h-4 w-4 mr-2" />
