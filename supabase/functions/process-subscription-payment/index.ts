@@ -890,41 +890,93 @@ serve(async (req) => {
      }
 
      // Ensure we have full bill details (including PIX fields) by fetching the bill by ID
-     try {
-       logStep("🔄 Fetching complete bill details from Vindi API");
-       const billDetailsResp = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}` , {
-         method: "GET",
-         headers: {
-           "Content-Type": "application/json",
-           Authorization: `Basic ${btoa(vindiApiKey + ":")}`,
-         },
-       });
-       if (billDetailsResp.ok) {
-         const fullBill = await billDetailsResp.json();
-         if (fullBill?.bill?.id) {
-           billData = fullBill; // overwrite with detailed bill payload
-           logStep("✅ Fetched full bill details successfully", { billId: billData.bill.id });
+     // ✅ RETRY WITH DELAY: Vindi may need time to process the bill before it's available
+     let fetchAttempts = 0;
+     const maxFetchAttempts = 3;
+     let billDetailsFetched = false;
 
-           // 🔍 DEBUG: Log the updated bill structure after fetching details
-           if (billData.bill.charges && billData.bill.charges.length > 0) {
-             const charge = billData.bill.charges[0];
-             if (charge.last_transaction?.gateway_response_fields) {
-               const gwFields = charge.last_transaction.gateway_response_fields;
-               logStep("🔍 UPDATED GATEWAY RESPONSE FIELDS", {
-                 availableFieldsAfterFetch: Object.keys(gwFields),
-                 qrcodePath: gwFields.qrcode_path ? 'PRESENT' : 'MISSING',
-                 qrcodeOriginalPath: gwFields.qrcode_original_path ? 'PRESENT' : 'MISSING',
-                 qrCodeUrl: gwFields.qr_code_url || gwFields.qr_code_image_url ? 'PRESENT' : 'MISSING',
-                 qrCodeBase64: gwFields.qr_code_base64 || gwFields.qr_code_png_base64 ? 'PRESENT' : 'MISSING'
-               });
+     while (fetchAttempts < maxFetchAttempts && !billDetailsFetched) {
+       fetchAttempts++;
+
+       try {
+         // Add delay before retry (except first attempt)
+         if (fetchAttempts > 1) {
+           const delayMs = fetchAttempts * 2000; // 2s, 4s
+           logStep(`⏳ Aguardando ${delayMs/1000}s antes de tentar buscar detalhes da bill novamente`, {
+             attempt: fetchAttempts,
+             maxAttempts: maxFetchAttempts
+           });
+           await new Promise(resolve => setTimeout(resolve, delayMs));
+         }
+
+         logStep("🔄 Fetching complete bill details from Vindi API", {
+           attempt: fetchAttempts,
+           billId: billData.bill.id
+         });
+
+         const billDetailsResp = await fetch(`${vindiApiUrl}/bills/${billData.bill.id}`, {
+           method: "GET",
+           headers: {
+             "Content-Type": "application/json",
+             Authorization: `Basic ${btoa(vindiApiKey + ":")}`,
+           },
+         });
+
+         if (billDetailsResp.ok) {
+           const fullBill = await billDetailsResp.json();
+           if (fullBill?.bill?.id) {
+             billData = fullBill; // overwrite with detailed bill payload
+             billDetailsFetched = true;
+             logStep("✅ Fetched full bill details successfully", {
+               billId: billData.bill.id,
+               attempt: fetchAttempts
+             });
+
+             // 🔍 DEBUG: Log the updated bill structure after fetching details
+             if (billData.bill.charges && billData.bill.charges.length > 0) {
+               const charge = billData.bill.charges[0];
+               if (charge.last_transaction?.gateway_response_fields) {
+                 const gwFields = charge.last_transaction.gateway_response_fields;
+                 logStep("🔍 UPDATED GATEWAY RESPONSE FIELDS", {
+                   availableFieldsAfterFetch: Object.keys(gwFields),
+                   qrcodePath: gwFields.qrcode_path ? 'PRESENT' : 'MISSING',
+                   qrcodeOriginalPath: gwFields.qrcode_original_path ? 'PRESENT' : 'MISSING',
+                   qrCodeUrl: gwFields.qr_code_url || gwFields.qr_code_image_url ? 'PRESENT' : 'MISSING',
+                   qrCodeBase64: gwFields.qr_code_base64 || gwFields.qr_code_png_base64 ? 'PRESENT' : 'MISSING'
+                 });
+               }
              }
            }
+         } else {
+           const errorText = await billDetailsResp.text();
+           logStep("❌ Failed to fetch full bill details", {
+             status: billDetailsResp.status,
+             statusText: billDetailsResp.statusText,
+             error: errorText,
+             attempt: fetchAttempts
+           });
+
+           // If it's the last attempt, log warning but continue
+           if (fetchAttempts >= maxFetchAttempts) {
+             logStep("⚠️ Could not fetch bill details after all retries, continuing with existing data", {
+               billId: billData.bill.id
+             });
+           }
          }
-       } else {
-         logStep("❌ Failed to fetch full bill details", { status: billDetailsResp.status });
+       } catch (e) {
+         logStep("❌ Error fetching full bill details", {
+           error: (e as any)?.message,
+           attempt: fetchAttempts
+         });
+
+         // If it's the last attempt, log warning but continue
+         if (fetchAttempts >= maxFetchAttempts) {
+           logStep("⚠️ Exception fetching bill details after all retries, continuing with existing data", {
+             billId: billData.bill.id,
+             error: (e as any)?.message
+           });
+         }
        }
-     } catch (e) {
-       logStep("❌ Error fetching full bill details", { error: (e as any)?.message });
      }
 
      // For credit card payments, try to process the charge immediately if it's still pending

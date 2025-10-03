@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Send, Copy, CheckCircle2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { usePlanos } from "@/hooks/usePlanos";
 
 interface AdesaoFormData {
   // Campos obrigatórios
@@ -41,6 +42,7 @@ interface AdesaoFormData {
 
 export default function RMSAdesao() {
   const { toast } = useToast();
+  const { planos, isLoading: loadingPlanos } = usePlanos();
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +62,23 @@ export default function RMSAdesao() {
     uf: "SP",
     tipoPlano: "",
   });
+
+  // Buscar ID_CLIENTE_CONTRATO das secrets
+  useEffect(() => {
+    const fetchIdClienteContrato = async () => {
+      const { data: settings, error: settingsError } = await supabase
+        .from('api_settings')
+        .select('setting_value')
+        .eq('setting_name', 'ID_CLIENTE_CONTRATO')
+        .maybeSingle();
+
+      if (settings && settings.setting_value) {
+        setFormData(prev => ({ ...prev, idClienteContrato: settings.setting_value }));
+      }
+    };
+
+    fetchIdClienteContrato();
+  }, []);
 
   const handleInputChange = (field: keyof AdesaoFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -116,10 +135,18 @@ export default function RMSAdesao() {
         throw new Error('API Key ou URL de Adesão não configuradas.');
       }
 
-      // Validar campos obrigatórios
-      if (!formData.nome || !formData.cpf || !formData.dataNascimento || !formData.celular ||
-          !formData.email || !formData.cep || !formData.numero || !formData.uf || !formData.tipoPlano) {
-        throw new Error('Preencha todos os campos obrigatórios');
+      // Validar campos obrigatórios pela API RMS V4.3
+      // Obrigatórios: idClienteContrato, idBeneficiarioTipo, nome, codigoExterno, cpf, dataNascimento, celular, email, cep, numero, uf, tipoPlano
+      // Se dependente (tipo 3): cpfTitular também é obrigatório
+      if (!formData.nome || !formData.codigoExterno || !formData.cpf || !formData.dataNascimento ||
+          !formData.celular || !formData.email || !formData.cep || !formData.numero ||
+          !formData.uf || !formData.tipoPlano) {
+        throw new Error('Preencha todos os campos obrigatórios marcados com *');
+      }
+
+      // Se for dependente, cpfTitular é obrigatório
+      if (formData.idBeneficiarioTipo === "3" && !formData.cpfTitular) {
+        throw new Error('CPF do Titular é obrigatório para dependentes');
       }
 
       // Preparar payload conforme documentação RMS
@@ -284,7 +311,12 @@ export default function RMSAdesao() {
                   onChange={(e) => handleInputChange('idClienteContrato', e.target.value)}
                   placeholder="999999999"
                   required
+                  disabled
+                  className="bg-muted"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Preenchido automaticamente das configurações
+                </p>
               </div>
             </div>
 
@@ -382,7 +414,7 @@ export default function RMSAdesao() {
               {/* Campos Opcionais */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="nomeSocial">Nome Social (opcional)</Label>
+                  <Label htmlFor="nomeSocial">Nome Social</Label>
                   <Input
                     id="nomeSocial"
                     value={formData.nomeSocial || ""}
@@ -392,7 +424,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="rg">RG (opcional)</Label>
+                  <Label htmlFor="rg">RG</Label>
                   <Input
                     id="rg"
                     value={formData.rg || ""}
@@ -402,7 +434,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sexo">Sexo (opcional)</Label>
+                  <Label htmlFor="sexo">Sexo</Label>
                   <Select
                     value={formData.sexo || ""}
                     onValueChange={(value) => handleInputChange('sexo', value)}
@@ -418,7 +450,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="estadoCivil">Estado Civil (opcional)</Label>
+                  <Label htmlFor="estadoCivil">Estado Civil</Label>
                   <Select
                     value={formData.estadoCivil || ""}
                     onValueChange={(value) => handleInputChange('estadoCivil', value)}
@@ -437,7 +469,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2 col-span-2">
-                  <Label htmlFor="nomeMae">Nome da Mãe (opcional)</Label>
+                  <Label htmlFor="nomeMae">Nome da Mãe</Label>
                   <Input
                     id="nomeMae"
                     value={formData.nomeMae || ""}
@@ -483,7 +515,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="telefone">Telefone Fixo (opcional)</Label>
+                  <Label htmlFor="telefone">Telefone Fixo</Label>
                   <Input
                     id="telefone"
                     value={formData.telefone || ""}
@@ -494,7 +526,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="telefoneComercial">Telefone Comercial (opcional)</Label>
+                  <Label htmlFor="telefoneComercial">Telefone Comercial</Label>
                   <Input
                     id="telefoneComercial"
                     value={formData.telefoneComercial || ""}
@@ -583,7 +615,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="complemento">Complemento (opcional)</Label>
+                  <Label htmlFor="complemento">Complemento</Label>
                   <Input
                     id="complemento"
                     value={formData.complemento || ""}
@@ -593,7 +625,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="bairro">Bairro (opcional)</Label>
+                  <Label htmlFor="bairro">Bairro</Label>
                   <Input
                     id="bairro"
                     value={formData.bairro || ""}
@@ -603,7 +635,7 @@ export default function RMSAdesao() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cidade">Cidade (opcional)</Label>
+                  <Label htmlFor="cidade">Cidade</Label>
                   <Input
                     id="cidade"
                     value={formData.cidade || ""}
@@ -620,15 +652,28 @@ export default function RMSAdesao() {
 
               <div className="space-y-2">
                 <Label htmlFor="tipoPlano">
-                  Tipo de Plano (Código RMS) <span className="text-red-500">*</span>
+                  Tipo de Plano <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  id="tipoPlano"
+                <Select
                   value={formData.tipoPlano}
-                  onChange={(e) => handleInputChange('tipoPlano', e.target.value)}
-                  placeholder="9999"
+                  onValueChange={(value) => handleInputChange('tipoPlano', value)}
                   required
-                />
+                  disabled={loadingPlanos}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingPlanos ? "Carregando planos..." : "Selecione um plano"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {planos.map((plano) => (
+                      <SelectItem key={plano.id} value={plano.codigo_rms || plano.id}>
+                        {plano.nome} {plano.codigo_rms ? `(RMS: ${plano.codigo_rms})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Selecione o plano cadastrado no sistema
+                </p>
               </div>
             </div>
 
