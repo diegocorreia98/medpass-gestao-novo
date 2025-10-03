@@ -17,6 +17,10 @@ const mainItems = [{
   url: "/adesao",
   icon: UserPlus
 }, {
+  title: "Adesão RMS",
+  url: "/rms-adesao",
+  icon: Send
+}, {
   title: "Cancelamento",
   url: "/cancelamento",
   icon: UserMinus
@@ -29,10 +33,6 @@ const adminItems = [{
   title: "Painel Admin",
   url: "/admin",
   icon: Settings
-}, {
-  title: "Adesão Direta RMS",
-  url: "/rms-adesao",
-  icon: Send
 }, {
   title: "Logs da API",
   url: "/api-logs",
