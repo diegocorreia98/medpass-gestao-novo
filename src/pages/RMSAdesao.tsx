@@ -75,6 +75,19 @@ export default function RMSAdesao() {
     return cpf.replace(/\D/g, '');
   };
 
+  const generateCodigoExterno = () => {
+    // Gerar código baseado no timestamp e CPF
+    const timestamp = Date.now().toString().slice(-6); // Últimos 6 dígitos do timestamp
+    const cpfNumbers = formData.cpf.replace(/\D/g, '').slice(0, 6); // Primeiros 6 dígitos do CPF
+    const codigo = `MP${cpfNumbers || timestamp}${timestamp}`.slice(0, 15);
+    handleInputChange('codigoExterno', codigo);
+
+    toast({
+      title: "Código gerado!",
+      description: `Código externo: ${codigo}`,
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -103,20 +116,26 @@ export default function RMSAdesao() {
         throw new Error('API Key ou URL de Adesão não configuradas.');
       }
 
+      // Validar campos obrigatórios
+      if (!formData.nome || !formData.cpf || !formData.dataNascimento || !formData.celular ||
+          !formData.email || !formData.cep || !formData.numero || !formData.uf || !formData.tipoPlano) {
+        throw new Error('Preencha todos os campos obrigatórios');
+      }
+
       // Preparar payload conforme documentação RMS
       const payload: any = {
         idClienteContrato: parseInt(formData.idClienteContrato),
         idBeneficiarioTipo: parseInt(formData.idBeneficiarioTipo),
-        nome: formData.nome.toUpperCase(),
-        codigoExterno: formData.codigoExterno,
+        nome: formData.nome.toUpperCase().trim(),
+        codigoExterno: formData.codigoExterno.trim(),
         cpf: cleanCPF(formData.cpf),
         dataNascimento: formatDateForAPI(formData.dataNascimento),
         celular: cleanCPF(formData.celular),
-        email: formData.email.toUpperCase(),
+        email: formData.email.toUpperCase().trim(),
         cep: cleanCPF(formData.cep),
-        numero: formData.numero,
+        numero: formData.numero.trim(),
         uf: formData.uf,
-        tipoPlano: formData.tipoPlano,
+        tipoPlano: formData.tipoPlano.trim(),
       };
 
       // Adicionar cpfTitular se for dependente
@@ -173,11 +192,32 @@ export default function RMSAdesao() {
 
     } catch (err: any) {
       console.error('Erro ao enviar adesão:', err);
-      setError(err.message || 'Erro desconhecido ao enviar adesão');
+
+      let errorMessage = err.message || 'Erro desconhecido ao enviar adesão';
+
+      // Tratamento de erros comuns
+      if (err.message?.includes('Failed to fetch')) {
+        errorMessage = 'Erro de conexão com a API RMS. Verifique a URL da API nas configurações.';
+      } else if (err.message?.includes('API Key')) {
+        errorMessage = 'API Key não configurada. Configure nas Configurações do sistema.';
+      }
+
+      setError(errorMessage);
+
+      // Logar o erro
+      await supabase.functions.invoke('log-api-call', {
+        body: {
+          operation: 'adesao_manual',
+          requestData: payload,
+          responseData: null,
+          status: 'error',
+          errorMessage: errorMessage,
+        }
+      }).catch(console.error);
 
       toast({
         title: "Erro ao enviar adesão",
-        description: err.message,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -314,14 +354,28 @@ export default function RMSAdesao() {
                   <Label htmlFor="codigoExterno">
                     Código Externo <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    id="codigoExterno"
-                    value={formData.codigoExterno}
-                    onChange={(e) => handleInputChange('codigoExterno', e.target.value)}
-                    placeholder="Código único no seu sistema"
-                    maxLength={50}
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="codigoExterno"
+                      value={formData.codigoExterno}
+                      onChange={(e) => handleInputChange('codigoExterno', e.target.value)}
+                      placeholder="Código único no seu sistema"
+                      maxLength={50}
+                      required
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={generateCodigoExterno}
+                      className="whitespace-nowrap"
+                    >
+                      Gerar Código
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Código único para identificar o beneficiário no seu sistema
+                  </p>
                 </div>
               </div>
 
