@@ -30,6 +30,7 @@ export function EditarOrcamentoModal({ open, onOpenChange, orcamentoId }: Editar
   })
   
   const [itens, setItens] = useState<OrcamentoItem[]>([])
+  const [periodoMeses, setPeriodoMeses] = useState<number>(12)
   const [observacoes, setObservacoes] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -121,22 +122,34 @@ export function EditarOrcamentoModal({ open, onOpenChange, orcamentoId }: Editar
   // Calcular comissão interna baseada nos percentuais dos planos
   const calcularComissaoInterna = () => {
     let comissaoAdesao = 0
-    let comissaoRecorrente = 0
+    let comissaoRecorrenteMensal = 0
 
     itens.forEach(item => {
       if (item.plano_id && planos) {
         const plano = planos.find(p => p.id === item.plano_id)
         if (plano) {
-          // Comissão de adesão (100% do valor para cada titular)
-          comissaoAdesao += item.valor_total * (Number(plano.comissao_adesao_percentual || 100) / 100)
-          
-          // Comissão recorrente mensal (30% do valor)
-          comissaoRecorrente += item.valor_total * (Number(plano.comissao_recorrente_percentual || 30) / 100)
+          const valorItem = item.valor_total
+          // Comissão de adesão: aplicada apenas na 1ª parcela
+          comissaoAdesao += valorItem * (Number(plano.comissao_adesao_percentual || 100) / 100)
+          // Comissão recorrente: aplicada mensalmente a partir da 2ª parcela
+          comissaoRecorrenteMensal += valorItem * (Number(plano.comissao_recorrente_percentual || 30) / 100)
         }
       }
     })
 
-    return { comissaoAdesao, comissaoRecorrente }
+    // Total de comissões considerando o período do contrato
+    // Adesão (1ª parcela) + Recorrente (demais parcelas)
+    const parcelasRecorrentes = Math.max(0, periodoMeses - 1) // Descontar a primeira parcela
+    const comissaoRecorrenteTotal = comissaoRecorrenteMensal * parcelasRecorrentes
+    const totalComissoes = comissaoAdesao + comissaoRecorrenteTotal
+
+    return {
+      comissaoAdesao,
+      comissaoRecorrenteMensal,
+      comissaoRecorrenteTotal,
+      parcelasRecorrentes,
+      total: totalComissoes
+    }
   }
 
   // Total para o cliente = apenas subtotal (sem comissão)
@@ -167,16 +180,15 @@ export function EditarOrcamentoModal({ open, onOpenChange, orcamentoId }: Editar
       return
     }
 
-    const { comissaoAdesao, comissaoRecorrente } = calcularComissaoInterna()
-    const totalComissao = comissaoAdesao + comissaoRecorrente
+    const comissaoInfo = calcularComissaoInterna()
 
     const orcamentoData: OrcamentoData & { id: string } = {
       id: orcamentoId,
       cliente,
       itens: itensValidos,
       subtotal: calcularSubtotal(),
-      comissao_percentual: totalComissao > 0 ? (totalComissao / calcularSubtotal()) * 100 : 0,
-      comissao_valor: totalComissao,
+      comissao_percentual: 0, // Não há comissão no valor do cliente
+      comissao_valor: comissaoInfo.total, // Comissão interna para controle
       total: calcularTotal(), // Total para cliente = apenas subtotal
       observacoes
     }
@@ -335,6 +347,28 @@ export function EditarOrcamentoModal({ open, onOpenChange, orcamentoId }: Editar
               </div>
             </div>
 
+            {/* Período do Contrato */}
+            <div className="space-y-2">
+              <Label htmlFor="periodo">Período do Contrato (meses) *</Label>
+              <div className="flex gap-4 items-center">
+                <Input
+                  id="periodo"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={periodoMeses}
+                  onChange={(e) => setPeriodoMeses(parseInt(e.target.value) || 12)}
+                  className="w-32"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {periodoMeses} {periodoMeses === 1 ? 'mês' : 'meses'} de contrato
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Este período será usado para calcular as comissões recorrentes (da 2ª parcela em diante)
+              </p>
+            </div>
+
             {/* Observações e Resumo */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-2">
@@ -365,18 +399,27 @@ export function EditarOrcamentoModal({ open, onOpenChange, orcamentoId }: Editar
 
                 {/* Informações Internas de Comissão */}
                 <div className="mt-4 pt-4 border-t space-y-2">
-                  <h5 className="text-sm font-semibold text-muted-foreground">Informações Internas</h5>
+                  <h5 className="text-sm font-semibold text-muted-foreground">
+                    Comissões (Interno) - {periodoMeses} {periodoMeses === 1 ? 'mês' : 'meses'}
+                  </h5>
                   <div className="flex justify-between text-sm">
-                    <span>Comissão Adesão:</span>
-                    <span>R$ {calcularComissaoInterna().comissaoAdesao.toFixed(2)}</span>
+                    <span>Adesão (1ª parcela):</span>
+                    <span className="font-medium">R$ {calcularComissaoInterna().comissaoAdesao.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>Comissão Recorrente:</span>
-                    <span>R$ {calcularComissaoInterna().comissaoRecorrente.toFixed(2)}</span>
+                    <span>Recorrente mensal:</span>
+                    <span>R$ {calcularComissaoInterna().comissaoRecorrenteMensal.toFixed(2)}/mês</span>
                   </div>
-                  <div className="flex justify-between text-sm font-semibold">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-xs text-muted-foreground">
+                      ({calcularComissaoInterna().parcelasRecorrentes} parcelas × R$ {calcularComissaoInterna().comissaoRecorrenteMensal.toFixed(2)}):
+                    </span>
+                    <span>R$ {calcularComissaoInterna().comissaoRecorrenteTotal.toFixed(2)}</span>
+                  </div>
+                  <hr className="my-2" />
+                  <div className="flex justify-between text-sm font-bold">
                     <span>Total Comissões:</span>
-                    <span>R$ {(calcularComissaoInterna().comissaoAdesao + calcularComissaoInterna().comissaoRecorrente).toFixed(2)}</span>
+                    <span className="text-primary">R$ {calcularComissaoInterna().total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>

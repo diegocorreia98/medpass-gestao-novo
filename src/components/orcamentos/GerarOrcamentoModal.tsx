@@ -30,7 +30,7 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
   })
   
   const [itens, setItens] = useState<OrcamentoItem[]>([
-    { 
+    {
       plano_id: "",
       plano_nome: "",
       quantidade: 1,
@@ -38,7 +38,8 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
       valor_total: 0
     }
   ])
-  
+
+  const [periodoMeses, setPeriodoMeses] = useState<number>(12)
   const [observacoes, setObservacoes] = useState<string>("")
 
   const adicionarItem = () => {
@@ -95,20 +96,34 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
 
   const calcularComissaoInterna = () => {
     let comissaoAdesao = 0
-    let comissaoRecorrente = 0
-    
+    let comissaoRecorrenteMensal = 0
+
     itens.forEach(item => {
       if (item.plano_id) {
         const plano = planos?.find(p => p.id === item.plano_id)
         if (plano) {
           const valorItem = item.valor_total
+          // Comissão de adesão: aplicada apenas na 1ª parcela
           comissaoAdesao += valorItem * (Number(plano.comissao_adesao_percentual || 100) / 100)
-          comissaoRecorrente += valorItem * (Number(plano.comissao_recorrente_percentual || 30) / 100)
+          // Comissão recorrente: aplicada mensalmente a partir da 2ª parcela
+          comissaoRecorrenteMensal += valorItem * (Number(plano.comissao_recorrente_percentual || 30) / 100)
         }
       }
     })
-    
-    return { comissaoAdesao, comissaoRecorrente, total: comissaoAdesao + comissaoRecorrente }
+
+    // Total de comissões considerando o período do contrato
+    // Adesão (1ª parcela) + Recorrente (demais parcelas)
+    const parcelasRecorrentes = Math.max(0, periodoMeses - 1) // Descontar a primeira parcela
+    const comissaoRecorrenteTotal = comissaoRecorrenteMensal * parcelasRecorrentes
+    const totalComissoes = comissaoAdesao + comissaoRecorrenteTotal
+
+    return {
+      comissaoAdesao,
+      comissaoRecorrenteMensal,
+      comissaoRecorrenteTotal,
+      parcelasRecorrentes,
+      total: totalComissoes
+    }
   }
 
   const calcularTotal = (): number => {
@@ -160,13 +175,14 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
         email: "",
         telefone: "",
       })
-      setItens([{ 
+      setItens([{
         plano_id: "",
         plano_nome: "",
         quantidade: 1,
         valor_unitario: 0,
         valor_total: 0
       }])
+      setPeriodoMeses(12)
       setObservacoes("")
       
       // Fechar modal
@@ -337,6 +353,38 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
                 </CardContent>
               </Card>
 
+              {/* Período do Contrato */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Período do Contrato</CardTitle>
+                  <CardDescription>
+                    Defina a duração do contrato em meses para cálculo das comissões
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="periodo">Duração (meses) *</Label>
+                    <div className="flex gap-4 items-center">
+                      <Input
+                        id="periodo"
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={periodoMeses}
+                        onChange={(e) => setPeriodoMeses(parseInt(e.target.value) || 12)}
+                        className="w-32"
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {periodoMeses} {periodoMeses === 1 ? 'mês' : 'meses'} de contrato
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Este período será usado para calcular as comissões recorrentes (da 2ª parcela em diante)
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Observações */}
               <Card>
                 <CardHeader>
@@ -373,20 +421,29 @@ export function GerarOrcamentoModal({ open, onOpenChange }: GerarOrcamentoModalP
                   </div>
                   
                   <hr />
-                  
+
                   <div className="bg-muted p-3 rounded-md space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Comissões (Interno)</div>
-                    <div className="flex justify-between text-sm">
-                      <span>Adesão:</span>
-                      <span>R$ {calcularComissaoInterna().comissaoAdesao.toFixed(2)}</span>
+                    <div className="text-sm font-medium text-muted-foreground mb-2">
+                      Comissões (Interno) - {periodoMeses} {periodoMeses === 1 ? 'mês' : 'meses'}
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>Recorrente:</span>
-                      <span>R$ {calcularComissaoInterna().comissaoRecorrente.toFixed(2)}</span>
+                      <span>Adesão (1ª parcela):</span>
+                      <span className="font-medium">R$ {calcularComissaoInterna().comissaoAdesao.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm font-medium">
+                    <div className="flex justify-between text-sm">
+                      <span>Recorrente mensal:</span>
+                      <span>R$ {calcularComissaoInterna().comissaoRecorrenteMensal.toFixed(2)}/mês</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-xs text-muted-foreground">
+                        ({calcularComissaoInterna().parcelasRecorrentes} parcelas × R$ {calcularComissaoInterna().comissaoRecorrenteMensal.toFixed(2)}):
+                      </span>
+                      <span>R$ {calcularComissaoInterna().comissaoRecorrenteTotal.toFixed(2)}</span>
+                    </div>
+                    <hr className="my-2" />
+                    <div className="flex justify-between text-sm font-bold">
                       <span>Total Comissões:</span>
-                      <span>R$ {calcularComissaoInterna().total.toFixed(2)}</span>
+                      <span className="text-primary">R$ {calcularComissaoInterna().total.toFixed(2)}</span>
                     </div>
                   </div>
                 </CardContent>
