@@ -17,6 +17,7 @@ import Cancelamento from "./pages/Cancelamento";
 import Planos from "./pages/Planos";
 import Admin from "./pages/Admin";
 import RMSAdesao from "./pages/RMSAdesao";
+import RMSConsultaBeneficiarios from "./pages/RMSConsultaBeneficiarios";
 import UnidadeDashboard from "./pages/unidade/UnidadeDashboard";
 import UnidadeOrcamento from "./pages/unidade/UnidadeOrcamento";
 import UnidadeAdesao from "./pages/unidade/UnidadeAdesao";
@@ -134,6 +135,11 @@ const App = () => (
               <Route path="/rms-adesao" element={
                 <ProtectedRoute requiredUserType="matriz">
                   <Layout><RMSAdesao /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/rms-consulta-beneficiarios" element={
+                <ProtectedRoute requiredUserType="matriz">
+                  <Layout><RMSConsultaBeneficiarios /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/transacoes" element={

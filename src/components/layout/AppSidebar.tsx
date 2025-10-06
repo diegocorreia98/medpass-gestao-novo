@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, Send, ShoppingCart } from "lucide-react";
+import { LayoutDashboard, FileText, UserPlus, UserMinus, Settings, Database, CreditCard, LogOut, Building2, Users, Activity, Receipt, GitBranch, Bell, Send, ShoppingCart, Search } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -22,10 +22,6 @@ const vendasItems = [{
   url: "/adesao",
   icon: UserPlus
 }, {
-  title: "Adesão RMS",
-  url: "/rms-adesao",
-  icon: Send
-}, {
   title: "Cancelamento",
   url: "/cancelamento",
   icon: UserMinus
@@ -33,6 +29,17 @@ const vendasItems = [{
   title: "Transações",
   url: "/transacoes",
   icon: Receipt
+}];
+
+// RMS
+const rmsItems = [{
+  title: "Adesão RMS",
+  url: "/rms-adesao",
+  icon: Send
+}, {
+  title: "Consulta Beneficiários",
+  url: "/rms-consulta-beneficiarios",
+  icon: Search
 }];
 
 // Gestão
@@ -158,6 +165,27 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {vendasItems.map(item => <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} className={({
+                  isActive
+                }) => getNavCls({
+                  isActive
+                })}>
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>)}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* RMS */}
+        <SidebarGroup>
+          <SidebarGroupLabel>RMS</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {rmsItems.map(item => <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={({
                   isActive
