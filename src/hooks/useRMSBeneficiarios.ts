@@ -12,7 +12,9 @@ interface UseRMSBeneficiariosParams {
  * Hook para consultar beneficiários na API RMS
  *
  * Utiliza React Query para cache e gerenciamento de estado
- * Cache de 5 minutos por padrão
+ * - Cache de 30 minutos (staleTime)
+ * - Dados mantidos em memória por 60 minutos (gcTime)
+ * - Mantém dados anteriores durante transições (keepPreviousData)
  */
 export const useRMSBeneficiarios = ({
   filters,
@@ -28,9 +30,10 @@ export const useRMSBeneficiarios = ({
       offset,
     }),
     enabled: enabled && !!filters.dataInicial && !!filters.dataFinal,
-    staleTime: 5 * 60 * 1000, // 5 minutos
-    gcTime: 10 * 60 * 1000,   // 10 minutos (garbage collection)
+    staleTime: 30 * 60 * 1000,    // 30 minutos - dados considerados "frescos"
+    gcTime: 60 * 60 * 1000,       // 60 minutos - tempo que mantém no cache
     retry: 1,
     refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData, // Mantém dados anteriores durante carregamento
   });
 };

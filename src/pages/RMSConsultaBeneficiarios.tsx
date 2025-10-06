@@ -22,7 +22,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Search, AlertCircle, FileSearch, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Search, AlertCircle, FileSearch, ChevronLeft, ChevronRight, Eye, RefreshCw, Clock } from "lucide-react";
 import { useRMSBeneficiarios } from "@/hooks/useRMSBeneficiarios";
 import type { ConsultaBeneficiariosFilters, RMSBeneficiario } from "@/types/rms";
 import {
@@ -47,7 +47,7 @@ export default function RMSConsultaBeneficiarios() {
   const [shouldFetch, setShouldFetch] = useState(false);
 
   // Hook de consulta
-  const { data, isLoading, error, isFetching } = useRMSBeneficiarios({
+  const { data, isLoading, error, isFetching, refetch, dataUpdatedAt, isPlaceholderData } = useRMSBeneficiarios({
     filters,
     offset: currentOffset,
     enabled: shouldFetch && !!filters.dataInicial && !!filters.dataFinal,
@@ -64,6 +64,10 @@ export default function RMSConsultaBeneficiarios() {
   const handleBuscar = () => {
     setCurrentOffset(0);
     setShouldFetch(true);
+  };
+
+  const handleAtualizar = () => {
+    refetch();
   };
 
   const handleLimparFiltros = () => {
@@ -94,8 +98,27 @@ export default function RMSConsultaBeneficiarios() {
   const totalPages = data ? Math.ceil(data.count / ITEMS_PER_PAGE) : 0;
   const currentPage = Math.floor(currentOffset / ITEMS_PER_PAGE) + 1;
 
+  // Calcular tempo desde última atualização
+  const getTempoDesdeAtualizacao = () => {
+    if (!dataUpdatedAt) return null;
+    const agora = Date.now();
+    const diff = agora - dataUpdatedAt;
+    const minutos = Math.floor(diff / 60000);
+
+    if (minutos < 1) return 'agora mesmo';
+    if (minutos === 1) return 'há 1 minuto';
+    if (minutos < 60) return `há ${minutos} minutos`;
+
+    const horas = Math.floor(minutos / 60);
+    if (horas === 1) return 'há 1 hora';
+    return `há ${horas} horas`;
+  };
+
+  // Dados estão "frescos" se foram atualizados nos últimos 30 minutos
+  const dadosFrescos = dataUpdatedAt && (Date.now() - dataUpdatedAt) < 30 * 60 * 1000;
+
   return (
-    <div className="container mx-auto p-6 max-w-7xl space-y-6">
+    <div className="w-full -m-3 sm:-m-4 lg:-m-6 p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Consulta de Beneficiários RMS</h1>
@@ -157,7 +180,7 @@ export default function RMSConsultaBeneficiarios() {
             </div>
 
             {/* Botões */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={handleBuscar}
                 disabled={!isFormValid || isLoading || isFetching}
@@ -165,6 +188,19 @@ export default function RMSConsultaBeneficiarios() {
                 <Search className="h-4 w-4 mr-2" />
                 {isLoading || isFetching ? 'Buscando...' : 'Buscar'}
               </Button>
+
+              {shouldFetch && (
+                <Button
+                  variant="outline"
+                  onClick={handleAtualizar}
+                  disabled={isLoading || isFetching}
+                  title="Atualizar dados da API"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 onClick={handleLimparFiltros}
@@ -191,12 +227,31 @@ export default function RMSConsultaBeneficiarios() {
       {shouldFetch && (
         <Card>
           <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>Resultados</CardTitle>
+            <div className="flex justify-between items-start gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <CardTitle>Resultados</CardTitle>
+                  {data && dataUpdatedAt && (
+                    <Badge
+                      variant={dadosFrescos ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {dadosFrescos ? '✓ Atualizado' : '⏱ Cache'}
+                    </Badge>
+                  )}
+                </div>
                 {data && (
-                  <CardDescription>
-                    {data.count} beneficiário(s) encontrado(s)
+                  <CardDescription className="flex items-center gap-2">
+                    <span>{data.count} beneficiário(s) encontrado(s)</span>
+                    {dataUpdatedAt && (
+                      <>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {getTempoDesdeAtualizacao()}
+                        </span>
+                      </>
+                    )}
                   </CardDescription>
                 )}
               </div>

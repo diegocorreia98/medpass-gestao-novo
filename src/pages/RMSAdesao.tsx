@@ -10,11 +10,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Send, Copy, CheckCircle2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { usePlanos } from "@/hooks/usePlanos";
+import { useUnidades } from "@/hooks/useUnidades";
 
 interface AdesaoFormData {
   // Campos obrigatórios
   idClienteContrato: string;
   idBeneficiarioTipo: string;
+  unidadeId: string;
   nome: string;
   codigoExterno: string;
   cpf: string;
@@ -26,23 +28,12 @@ interface AdesaoFormData {
   numero: string;
   uf: string;
   tipoPlano: string;
-
-  // Campos opcionais
-  nomeSocial?: string;
-  rg?: string;
-  sexo?: string;
-  estadoCivil?: string;
-  nomeMae?: string;
-  telefone?: string;
-  telefoneComercial?: string;
-  complemento?: string;
-  bairro?: string;
-  cidade?: string;
 }
 
 export default function RMSAdesao() {
   const { toast } = useToast();
   const { planos, isLoading: loadingPlanos } = usePlanos();
+  const { unidades, isLoading: loadingUnidades } = useUnidades();
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +41,7 @@ export default function RMSAdesao() {
   const [formData, setFormData] = useState<AdesaoFormData>({
     idClienteContrato: "",
     idBeneficiarioTipo: "1",
+    unidadeId: "",
     nome: "",
     codigoExterno: "",
     cpf: "",
@@ -80,6 +72,16 @@ export default function RMSAdesao() {
     fetchIdClienteContrato();
   }, []);
 
+  // Auto-gerar codigoExterno quando o CPF mudar
+  useEffect(() => {
+    if (formData.cpf && formData.cpf.replace(/\D/g, '').length >= 6) {
+      const timestamp = Date.now().toString().slice(-6);
+      const cpfNumbers = formData.cpf.replace(/\D/g, '').slice(0, 6);
+      const codigo = `MP${cpfNumbers}${timestamp}`.slice(0, 15);
+      setFormData(prev => ({ ...prev, codigoExterno: codigo }));
+    }
+  }, [formData.cpf]);
+
   const handleInputChange = (field: keyof AdesaoFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -94,18 +96,6 @@ export default function RMSAdesao() {
     return cpf.replace(/\D/g, '');
   };
 
-  const generateCodigoExterno = () => {
-    // Gerar código baseado no timestamp e CPF
-    const timestamp = Date.now().toString().slice(-6); // Últimos 6 dígitos do timestamp
-    const cpfNumbers = formData.cpf.replace(/\D/g, '').slice(0, 6); // Primeiros 6 dígitos do CPF
-    const codigo = `MP${cpfNumbers || timestamp}${timestamp}`.slice(0, 15);
-    handleInputChange('codigoExterno', codigo);
-
-    toast({
-      title: "Código gerado!",
-      description: `Código externo: ${codigo}`,
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,29 +104,21 @@ export default function RMSAdesao() {
     setResponse(null);
 
     try {
-      // Buscar configurações da API
-      const { data: settings, error: settingsError } = await supabase
+      // Buscar ID_CLIENTE da configuração
+      const { data: idClienteData, error: idClienteError } = await supabase
         .from('api_settings')
-        .select('setting_name, setting_value')
-        .in('setting_name', ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL']);
+        .select('setting_value')
+        .eq('setting_name', 'ID_CLIENTE')
+        .maybeSingle();
 
-      if (settingsError || !settings || settings.length === 0) {
-        throw new Error('Configurações da API RMS não encontradas. Configure em Configurações.');
+      if (idClienteError || !idClienteData) {
+        throw new Error('ID_CLIENTE não configurado. Configure em Configurações.');
       }
 
-      const settingsMap = Object.fromEntries(
-        settings.map(s => [s.setting_name, s.setting_value])
-      );
-
-      const apiKey = settingsMap['EXTERNAL_API_KEY'];
-      const apiUrl = settingsMap['EXTERNAL_API_ADESAO_URL'];
-
-      if (!apiKey || !apiUrl) {
-        throw new Error('API Key ou URL de Adesão não configuradas.');
-      }
+      const idCliente = parseInt(idClienteData.setting_value);
 
       // Validar campos obrigatórios pela API RMS V4.3
-      // Obrigatórios: idClienteContrato, idBeneficiarioTipo, nome, codigoExterno, cpf, dataNascimento, celular, email, cep, numero, uf, tipoPlano
+      // Obrigatórios: idCliente, idClienteContrato, idBeneficiarioTipo, nome, codigoExterno, cpf, dataNascimento, celular, email, cep, numero, uf, tipoPlano
       // Se dependente (tipo 3): cpfTitular também é obrigatório
       if (!formData.nome || !formData.codigoExterno || !formData.cpf || !formData.dataNascimento ||
           !formData.celular || !formData.email || !formData.cep || !formData.numero ||
@@ -149,8 +131,15 @@ export default function RMSAdesao() {
         throw new Error('CPF do Titular é obrigatório para dependentes');
       }
 
+      // Validar se o tipoPlano é um UUID (não tem codigo_rms)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(formData.tipoPlano);
+      if (isUUID) {
+        throw new Error('O plano selecionado não possui código RMS. Configure o código RMS do plano em Configurações > Planos.');
+      }
+
       // Preparar payload conforme documentação RMS
       const payload: any = {
+        idCliente: idCliente,
         idClienteContrato: parseInt(formData.idClienteContrato),
         idBeneficiarioTipo: parseInt(formData.idBeneficiarioTipo),
         nome: formData.nome.toUpperCase().trim(),
@@ -170,34 +159,21 @@ export default function RMSAdesao() {
         payload.cpfTitular = cleanCPF(formData.cpfTitular);
       }
 
-      // Adicionar campos opcionais se preenchidos
-      if (formData.nomeSocial) payload.nomeSocial = formData.nomeSocial.toUpperCase();
-      if (formData.rg) payload.rg = formData.rg;
-      if (formData.sexo) payload.sexo = formData.sexo;
-      if (formData.estadoCivil) payload.estadoCivil = formData.estadoCivil;
-      if (formData.nomeMae) payload.nomeMae = formData.nomeMae.toUpperCase();
-      if (formData.telefone) payload.telefone = cleanCPF(formData.telefone);
-      if (formData.telefoneComercial) payload.telefoneComercial = cleanCPF(formData.telefoneComercial);
-      if (formData.complemento) payload.complemento = formData.complemento;
-      if (formData.bairro) payload.bairro = formData.bairro.toUpperCase();
-      if (formData.cidade) payload.cidade = formData.cidade.toUpperCase();
+      console.log('Enviando para RMS via Edge Function:', payload);
 
-      console.log('Enviando para RMS:', payload);
-
-      // Chamar API RMS
-      const rmsResponse = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-        },
-        body: JSON.stringify(payload),
+      // Chamar Edge Function que faz a requisição para a API RMS
+      const { data: responseData, error: functionError } = await supabase.functions.invoke('rms-adesao-manual', {
+        body: payload,
       });
 
-      const responseData = await rmsResponse.json();
+      console.log('Resposta da Edge Function:', { responseData, functionError });
 
-      if (!rmsResponse.ok) {
-        throw new Error(responseData.mensagem || `Erro ${rmsResponse.status}: ${rmsResponse.statusText}`);
+      if (functionError) {
+        throw new Error(functionError.message || 'Erro ao chamar Edge Function');
+      }
+
+      if (responseData?.error) {
+        throw new Error(responseData.error);
       }
 
       setResponse(responseData);
@@ -223,10 +199,8 @@ export default function RMSAdesao() {
       let errorMessage = err.message || 'Erro desconhecido ao enviar adesão';
 
       // Tratamento de erros comuns
-      if (err.message?.includes('Failed to fetch')) {
-        errorMessage = 'Erro de conexão com a API RMS. Verifique a URL da API nas configurações.';
-      } else if (err.message?.includes('API Key')) {
-        errorMessage = 'API Key não configurada. Configure nas Configurações do sistema.';
+      if (err.message?.includes('Failed to invoke')) {
+        errorMessage = 'Erro ao invocar Edge Function. Verifique as configurações.';
       }
 
       setError(errorMessage);
@@ -278,8 +252,8 @@ export default function RMSAdesao() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Tipo de Beneficiário */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Tipo de Beneficiário e Unidade */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="idBeneficiarioTipo">
                   Tipo de Beneficiário <span className="text-red-500">*</span>
@@ -296,6 +270,29 @@ export default function RMSAdesao() {
                     <SelectItem value="1">1 - Titular</SelectItem>
                     <SelectItem value="3">3 - Dependente</SelectItem>
                     <SelectItem value="5">5 - Responsável Financeiro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="unidadeId">
+                  Unidade <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={formData.unidadeId}
+                  onValueChange={(value) => handleInputChange('unidadeId', value)}
+                  required
+                  disabled={loadingUnidades}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingUnidades ? "Carregando..." : "Selecione uma unidade"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unidades.map((unidade) => (
+                      <SelectItem key={unidade.id} value={unidade.id}>
+                        {unidade.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -386,98 +383,21 @@ export default function RMSAdesao() {
                   <Label htmlFor="codigoExterno">
                     Código Externo <span className="text-red-500">*</span>
                   </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="codigoExterno"
-                      value={formData.codigoExterno}
-                      onChange={(e) => handleInputChange('codigoExterno', e.target.value)}
-                      placeholder="Código único no seu sistema"
-                      maxLength={50}
-                      required
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={generateCodigoExterno}
-                      className="whitespace-nowrap"
-                    >
-                      Gerar Código
-                    </Button>
-                  </div>
+                  <Input
+                    id="codigoExterno"
+                    value={formData.codigoExterno}
+                    placeholder="Gerado automaticamente"
+                    maxLength={50}
+                    required
+                    readOnly
+                    className="bg-muted"
+                  />
                   <p className="text-xs text-muted-foreground">
-                    Código único para identificar o beneficiário no seu sistema
+                    Código único gerado automaticamente a partir do CPF
                   </p>
                 </div>
               </div>
 
-              {/* Campos Opcionais */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nomeSocial">Nome Social</Label>
-                  <Input
-                    id="nomeSocial"
-                    value={formData.nomeSocial || ""}
-                    onChange={(e) => handleInputChange('nomeSocial', e.target.value)}
-                    maxLength={100}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rg">RG</Label>
-                  <Input
-                    id="rg"
-                    value={formData.rg || ""}
-                    onChange={(e) => handleInputChange('rg', e.target.value)}
-                    maxLength={20}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="sexo">Sexo</Label>
-                  <Select
-                    value={formData.sexo || ""}
-                    onValueChange={(value) => handleInputChange('sexo', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="M">Masculino</SelectItem>
-                      <SelectItem value="F">Feminino</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="estadoCivil">Estado Civil</Label>
-                  <Select
-                    value={formData.estadoCivil || ""}
-                    onValueChange={(value) => handleInputChange('estadoCivil', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Solteiro(a)</SelectItem>
-                      <SelectItem value="2">Casado(a)</SelectItem>
-                      <SelectItem value="3">Divorciado(a)</SelectItem>
-                      <SelectItem value="4">Viúvo(a)</SelectItem>
-                      <SelectItem value="5">União Estável</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="nomeMae">Nome da Mãe</Label>
-                  <Input
-                    id="nomeMae"
-                    value={formData.nomeMae || ""}
-                    onChange={(e) => handleInputChange('nomeMae', e.target.value)}
-                    maxLength={100}
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Contato */}
@@ -511,28 +431,6 @@ export default function RMSAdesao() {
                     placeholder="email@exemplo.com"
                     maxLength={100}
                     required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="telefone">Telefone Fixo</Label>
-                  <Input
-                    id="telefone"
-                    value={formData.telefone || ""}
-                    onChange={(e) => handleInputChange('telefone', e.target.value)}
-                    placeholder="1133334444"
-                    maxLength={11}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="telefoneComercial">Telefone Comercial</Label>
-                  <Input
-                    id="telefoneComercial"
-                    value={formData.telefoneComercial || ""}
-                    onChange={(e) => handleInputChange('telefoneComercial', e.target.value)}
-                    placeholder="1133334444"
-                    maxLength={11}
                   />
                 </div>
               </div>
@@ -613,36 +511,6 @@ export default function RMSAdesao() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="complemento">Complemento</Label>
-                  <Input
-                    id="complemento"
-                    value={formData.complemento || ""}
-                    onChange={(e) => handleInputChange('complemento', e.target.value)}
-                    maxLength={50}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="bairro">Bairro</Label>
-                  <Input
-                    id="bairro"
-                    value={formData.bairro || ""}
-                    onChange={(e) => handleInputChange('bairro', e.target.value)}
-                    maxLength={50}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="cidade">Cidade</Label>
-                  <Input
-                    id="cidade"
-                    value={formData.cidade || ""}
-                    onChange={(e) => handleInputChange('cidade', e.target.value)}
-                    maxLength={50}
-                  />
-                </div>
               </div>
             </div>
 
@@ -665,8 +533,8 @@ export default function RMSAdesao() {
                   </SelectTrigger>
                   <SelectContent>
                     {planos.map((plano) => (
-                      <SelectItem key={plano.id} value={plano.codigo_rms || plano.id}>
-                        {plano.nome} {plano.codigo_rms ? `(RMS: ${plano.codigo_rms})` : ''}
+                      <SelectItem key={plano.id} value={plano.rms_plan_code || plano.id}>
+                        {plano.nome} {plano.rms_plan_code ? `(RMS: ${plano.rms_plan_code})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
