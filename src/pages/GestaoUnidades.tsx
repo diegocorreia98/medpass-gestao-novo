@@ -88,7 +88,12 @@ export default function GestaoUnidades() {
         franquia_id: unidadeData.franquia_id || null,
         responsavel: responsavelData.nome,
         email: responsavelData.email,
-        status: 'ativo'
+        status: 'ativo',
+        banco: responsavelData.banco || null,
+        agencia: responsavelData.agencia || null,
+        conta: responsavelData.conta || null,
+        tipo_conta: responsavelData.tipoConta || null,
+        chave_pix: responsavelData.chavePix || null
       }, {
         onSuccess: () => {
           toast.success("Unidade criada e convite enviado com sucesso!")
@@ -110,7 +115,7 @@ export default function GestaoUnidades() {
 
   const handleUpdateUnidade = async () => {
     if (!editingUnidade) return
-    
+
     setIsSubmitting(true)
     try {
       updateUnidade({
@@ -123,7 +128,12 @@ export default function GestaoUnidades() {
         telefone: unidadeData.telefone || null,
         franquia_id: unidadeData.franquia_id || null,
         responsavel: responsavelData.nome,
-        email: responsavelData.email
+        email: responsavelData.email,
+        banco: responsavelData.banco || null,
+        agencia: responsavelData.agencia || null,
+        conta: responsavelData.conta || null,
+        tipo_conta: responsavelData.tipoConta || null,
+        chave_pix: responsavelData.chavePix || null
       }, {
         onSuccess: () => {
           toast.success("Unidade atualizada com sucesso!")
@@ -179,11 +189,11 @@ export default function GestaoUnidades() {
       email: unidade.email || "",
       telefone: unidade.telefone || "",
       cuf: "",
-      banco: "",
-      agencia: "",
-      conta: "",
-      tipoConta: "",
-      chavePix: ""
+      banco: unidade.banco || "",
+      agencia: unidade.agencia || "",
+      conta: unidade.conta || "",
+      tipoConta: unidade.tipo_conta || "",
+      chavePix: unidade.chave_pix || ""
     })
     setIsDialogOpen(true)
   }

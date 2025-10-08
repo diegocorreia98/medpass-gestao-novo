@@ -18,6 +18,7 @@ import { useComissoes } from "@/hooks/useComissoes"
 import { useFranquias } from "@/hooks/useFranquias"
 import { supabase } from "@/integrations/supabase/client"
 import { useAuth } from "@/contexts/AuthContext"
+import { AdminComissoesTab } from "@/components/admin/AdminComissoesTab"
 
 export default function Admin() {
   const { toast } = useToast()
@@ -514,8 +515,8 @@ export default function Admin() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="franquia">Franquia</Label>
-                      <Select 
-                        value={unidadeForm.franquia_id} 
+                      <Select
+                        value={unidadeForm.franquia_id}
                         onValueChange={(value) => setUnidadeForm({...unidadeForm, franquia_id: value})}
                       >
                         <SelectTrigger>
@@ -874,38 +875,7 @@ export default function Admin() {
         </TabsContent>
 
         <TabsContent value="comissoes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Comissões</CardTitle>
-              <CardDescription>Visualize todas as comissões do sistema</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Unidade</TableHead>
-                    <TableHead>Mês</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {comissoes?.map((comissao) => (
-                    <TableRow key={comissao.id}>
-                      <TableCell>{comissao.unidade_id}</TableCell>
-                      <TableCell>{comissao.mes_referencia}</TableCell>
-                      <TableCell>R$ {comissao.valor_comissao.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant={comissao.pago ? "default" : "secondary"}>
-                          {comissao.pago ? "Pago" : "Pendente"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <AdminComissoesTab />
         </TabsContent>
 
         <TabsContent value="orcamentos" className="space-y-4">
