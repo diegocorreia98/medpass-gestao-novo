@@ -25,6 +25,11 @@ interface CreateUnitRequest {
     telefone?: string;
     franquia_id?: string;
     status: string;
+    banco?: string;
+    agencia?: string;
+    conta?: string;
+    tipo_conta?: string;
+    chave_pix?: string;
   };
   responsavel: {
     nome: string;
@@ -92,7 +97,12 @@ const handler = async (req: Request): Promise<Response> => {
         ...unidade,
         user_id: userData.user.id,
         responsavel: responsavel.nome,
-        email: responsavel.email
+        email: responsavel.email,
+        banco: unidade.banco,
+        agencia: unidade.agencia,
+        conta: unidade.conta,
+        tipo_conta: unidade.tipo_conta,
+        chave_pix: unidade.chave_pix
       })
       .select()
       .single();

@@ -64,7 +64,12 @@ export function useUnidades() {
                 estado: unidade.estado,
                 telefone: unidade.telefone,
                 franquia_id: unidade.franquia_id,
-                status: unidade.status || 'ativo'
+                status: unidade.status || 'ativo',
+                banco: unidade.banco,
+                agencia: unidade.agencia,
+                conta: unidade.conta,
+                tipo_conta: unidade.tipo_conta,
+                chave_pix: unidade.chave_pix
               },
               responsavel: {
                 nome: unidade.responsavel,
@@ -122,7 +127,12 @@ export function useUnidades() {
               user_id: user.id, // Temporary - will be updated when user accepts invite
               responsavel: unidade.responsavel,
               email: unidade.email,
-              status: unidade.status || 'ativo'
+              status: unidade.status || 'ativo',
+              banco: unidade.banco,
+              agencia: unidade.agencia,
+              conta: unidade.conta,
+              tipo_conta: unidade.tipo_conta,
+              chave_pix: unidade.chave_pix
             })
             .select()
             .single();
