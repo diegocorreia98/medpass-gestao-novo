@@ -78,7 +78,7 @@ export default function GestaoUnidades() {
   const handleCreateUnidade = async () => {
     setIsSubmitting(true)
     try {
-      createUnidade({
+      await createUnidade({
         nome: unidadeData.nome,
         cnpj: unidadeData.cnpj || null,
         endereco: unidadeData.endereco || null,
@@ -94,21 +94,14 @@ export default function GestaoUnidades() {
         conta: responsavelData.conta || null,
         tipo_conta: responsavelData.tipoConta || null,
         chave_pix: responsavelData.chavePix || null
-      }, {
-        onSuccess: () => {
-          toast.success("Unidade criada e convite enviado com sucesso!")
-          handleCloseDialog()
-          setIsSubmitting(false)
-        },
-        onError: (error) => {
-          console.error('Error creating unidade:', error)
-          toast.error("Erro ao criar unidade")
-          setIsSubmitting(false)
-        }
       })
+
+      toast.success("Unidade criada e convite enviado com sucesso!")
+      handleCloseDialog()
     } catch (error) {
       console.error('Error creating unidade:', error)
       toast.error("Erro ao criar unidade")
+    } finally {
       setIsSubmitting(false)
     }
   }
@@ -118,7 +111,7 @@ export default function GestaoUnidades() {
 
     setIsSubmitting(true)
     try {
-      updateUnidade({
+      await updateUnidade({
         id: editingUnidade.id,
         nome: unidadeData.nome,
         cnpj: unidadeData.cnpj || null,
@@ -134,21 +127,14 @@ export default function GestaoUnidades() {
         conta: responsavelData.conta || null,
         tipo_conta: responsavelData.tipoConta || null,
         chave_pix: responsavelData.chavePix || null
-      }, {
-        onSuccess: () => {
-          toast.success("Unidade atualizada com sucesso!")
-          handleCloseDialog()
-          setIsSubmitting(false)
-        },
-        onError: (error) => {
-          console.error('Error updating unidade:', error)
-          toast.error("Erro ao atualizar unidade")
-          setIsSubmitting(false)
-        }
       })
+
+      toast.success("Unidade atualizada com sucesso!")
+      handleCloseDialog()
     } catch (error) {
       console.error('Error updating unidade:', error)
       toast.error("Erro ao atualizar unidade")
+    } finally {
       setIsSubmitting(false)
     }
   }

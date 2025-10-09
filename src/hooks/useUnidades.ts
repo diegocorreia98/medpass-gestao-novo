@@ -193,6 +193,9 @@ export function useUnidades() {
 
       return data
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['unidades'] })
+    },
     onError: (error: any) => {
       // Handle duplicate key constraint error specifically
       if (error.code === '23505' && error.message.includes('unique_user_unidade')) {
@@ -287,8 +290,8 @@ export function useUnidades() {
     isLoading,
     error,
     refetch,
-    createUnidade: createUnidade.mutate,
-    updateUnidade: updateUnidade.mutate,
+    createUnidade: createUnidade.mutateAsync,
+    updateUnidade: updateUnidade.mutateAsync,
     deleteUnidade: deleteUnidade.mutate,
     getUnidadeById,
     isCreating: createUnidade.isPending,
