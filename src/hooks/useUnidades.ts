@@ -139,6 +139,12 @@ export function useUnidades() {
 
           if (tempUnitError) {
             console.error('Error creating unit with fallback method:', tempUnitError);
+            console.error('Error details:', {
+              code: tempUnitError.code,
+              message: tempUnitError.message,
+              details: tempUnitError.details,
+              hint: tempUnitError.hint
+            });
             throw tempUnitError;
           }
 
