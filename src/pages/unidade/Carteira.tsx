@@ -29,6 +29,7 @@ export default function Carteira() {
   const isLoading = comissoesLoading || beneficiariosLoading
 
   // Calcular métricas baseadas nos dados reais
+  // Comissão do mês = adesões (primeira parcela) + recorrentes (segunda parcela+) do mês atual
   const comissaoAtual = comissoes
     .filter(c => {
       const mesAtual = new Date().getMonth()
@@ -38,8 +39,10 @@ export default function Carteira() {
     })
     .reduce((total, c) => total + (c.valor_comissao || 0), 0)
 
-  const comissoesAtivas = comissoes.filter(c => !c.pago)
-  const recorrenciaTotal = comissoesAtivas.reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Receita recorrente = apenas comissões recorrentes (segunda parcela+) não pagas
+  const recorrenciaTotal = comissoes
+    .filter(c => c.tipo_comissao === 'recorrente' && !c.pago)
+    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
   
   const metaMensal = 20000
   const progressoMeta = Math.min((comissaoAtual / metaMensal) * 100, 100)
@@ -71,10 +74,32 @@ export default function Carteira() {
     }))
     .slice(-6) // Últimos 6 meses
 
-  // Calcular composição da receita
-  const novasVendas = comissaoAtual * 0.6 // Estimativa
-  const renovacoes = comissaoAtual * 0.3 // Estimativa
-  const bonus = comissaoAtual * 0.1 // Estimativa
+  // Calcular composição da receita por tipo
+  const comissoesAdesao = comissoes
+    .filter(c => {
+      const mesAtual = new Date().getMonth()
+      const anoAtual = new Date().getFullYear()
+      const comissaoData = new Date(c.mes_referencia)
+      return comissaoData.getMonth() === mesAtual &&
+             comissaoData.getFullYear() === anoAtual &&
+             c.tipo_comissao === 'adesao'
+    })
+    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+
+  const comissoesRecorrentes = comissoes
+    .filter(c => {
+      const mesAtual = new Date().getMonth()
+      const anoAtual = new Date().getFullYear()
+      const comissaoData = new Date(c.mes_referencia)
+      return comissaoData.getMonth() === mesAtual &&
+             comissaoData.getFullYear() === anoAtual &&
+             c.tipo_comissao === 'recorrente'
+    })
+    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+
+  const novasVendas = comissoesAdesao // Comissões de adesão (primeira parcela)
+  const renovacoes = comissoesRecorrentes // Comissões recorrentes (segunda parcela+)
+  const bonus = 0 // Não há bônus calculado ainda
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -178,36 +203,44 @@ export default function Carteira() {
           <CardContent className="p-4 sm:p-6 pt-0 space-y-3 sm:space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-medium">Comissões Novas Vendas</span>
+                <span className="text-xs sm:text-sm font-medium">Comissões de Adesão</span>
                 <span className="text-xs sm:text-sm">
                   {isLoading ? '...' : `R$ ${novasVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                 </span>
               </div>
-              <Progress value={60} className="h-2" />
-              <span className="text-xs text-muted-foreground">60% do total</span>
+              <Progress value={comissaoAtual > 0 ? (novasVendas / comissaoAtual) * 100 : 0} className="h-2" />
+              <span className="text-xs text-muted-foreground">
+                {comissaoAtual > 0 ? `${((novasVendas / comissaoAtual) * 100).toFixed(1)}% do total` : '0% do total'}
+              </span>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-medium">Comissões Renovação</span>
+                <span className="text-xs sm:text-sm font-medium">Comissões Recorrentes</span>
                 <span className="text-xs sm:text-sm">
                   {isLoading ? '...' : `R$ ${renovacoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                 </span>
               </div>
-              <Progress value={30} className="h-2" />
-              <span className="text-xs text-muted-foreground">30% do total</span>
+              <Progress value={comissaoAtual > 0 ? (renovacoes / comissaoAtual) * 100 : 0} className="h-2" />
+              <span className="text-xs text-muted-foreground">
+                {comissaoAtual > 0 ? `${((renovacoes / comissaoAtual) * 100).toFixed(1)}% do total` : '0% do total'}
+              </span>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-medium">Bônus Performance</span>
-                <span className="text-xs sm:text-sm">
-                  {isLoading ? '...' : `R$ ${bonus.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+            {bonus > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs sm:text-sm font-medium">Bônus Performance</span>
+                  <span className="text-xs sm:text-sm">
+                    {isLoading ? '...' : `R$ ${bonus.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  </span>
+                </div>
+                <Progress value={comissaoAtual > 0 ? (bonus / comissaoAtual) * 100 : 0} className="h-2" />
+                <span className="text-xs text-muted-foreground">
+                  {comissaoAtual > 0 ? `${((bonus / comissaoAtual) * 100).toFixed(1)}% do total` : '0% do total'}
                 </span>
               </div>
-              <Progress value={10} className="h-2" />
-              <span className="text-xs text-muted-foreground">10% do total</span>
-            </div>
+            )}
           </CardContent>
         </Card>
 

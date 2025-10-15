@@ -398,17 +398,19 @@ export default function UnidadeGerarOrcamentoModal({ open, onOpenChange }: Unida
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Comissão Adesão:</span>
-                  <span>R$ {comissaoAdesao.toFixed(2)}</span>
+                  <span>Total Comissão Adesão:</span>
+                  <span className="font-semibold">R$ {comissaoAdesao.toFixed(2)}</span>
                 </div>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Primeira parcela
+                </div>
+
                 <div className="flex justify-between">
-                  <span>Comissão Recorrente:</span>
-                  <span>R$ {comissaoRecorrente.toFixed(2)}</span>
+                  <span>Total Comissão Recorrente:</span>
+                  <span className="font-semibold">R$ {(comissaoRecorrente * 11).toFixed(2)}</span>
                 </div>
-                <hr />
-                <div className="flex justify-between font-semibold">
-                  <span>Total Comissões:</span>
-                  <span>R$ {(comissaoAdesao + comissaoRecorrente).toFixed(2)}</span>
+                <div className="text-xs text-muted-foreground">
+                  11 meses subsequentes (R$ {comissaoRecorrente.toFixed(2)}/mês)
                 </div>
               </CardContent>
             </Card>

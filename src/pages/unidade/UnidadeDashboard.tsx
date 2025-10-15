@@ -39,7 +39,8 @@ export default function UnidadeDashboard() {
 
   // Calcular métricas baseadas nos dados reais
   const clientesAtivos = beneficiarios.filter(b => b.status === 'ativo').length
-  
+
+  // Comissão mensal = adesões (primeira parcela) + recorrentes (segunda parcela+) do mês atual
   const comissaoMensal = comissoes
     .filter(c => {
       const mesAtual = new Date().getMonth()
@@ -49,8 +50,10 @@ export default function UnidadeDashboard() {
     })
     .reduce((total, c) => total + (c.valor_comissao || 0), 0)
 
-  const comissoesAtivas = comissoes.filter(c => !c.pago)
-  const receitaRecorrente = comissoesAtivas.reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Receita recorrente = apenas comissões recorrentes (segunda parcela+) de clientes ativos
+  const receitaRecorrente = comissoes
+    .filter(c => c.tipo_comissao === 'recorrente' && !c.pago)
+    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
   
   const metaMensal = 20000
   const progressoMeta = Math.min((comissaoMensal / metaMensal) * 100, 100)

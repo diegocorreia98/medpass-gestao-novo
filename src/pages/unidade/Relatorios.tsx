@@ -33,7 +33,8 @@ export default function Relatorios() {
   // Calcular métricas reais
   const totalVendas = beneficiarios.length
   const clientesAtivos = beneficiarios.filter(b => b.status === 'ativo').length
-  
+
+  // Comissão do mês atual = adesões (primeira parcela) + recorrentes (segunda parcela+)
   const comissaoMesAtual = comissoes
     .filter(c => {
       const mesAtual = new Date().getMonth()
