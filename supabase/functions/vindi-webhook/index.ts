@@ -59,6 +59,9 @@ serve(async (req) => {
           eventType = webhookData.type.trim();
         } else if (webhookData.event && typeof webhookData.event.type === 'string' && webhookData.event.type.trim()) {
           eventType = webhookData.event.type.trim();
+        } else if (webhookData.type && typeof webhookData.type === 'object') {
+          // ⚠️ CRITICAL: If webhookData.type is an object (the entire webhook), extract type from it
+          eventType = webhookData.type.type || 'unknown';
         } else if (webhookData.type) {
           // Try to convert to string
           eventType = String(webhookData.type).trim() || 'unknown';
@@ -73,6 +76,8 @@ serve(async (req) => {
           webhookDataKeys: Object.keys(webhookData || {})
         });
       }
+
+      logStep("✅ Event type extracted successfully", { eventType });
     } catch (parseError) {
       logStep("❌ ERROR parsing event type", { error: parseError.message });
       eventType = 'unknown';
