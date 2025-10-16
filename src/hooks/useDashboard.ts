@@ -21,10 +21,19 @@ export const useDashboard = () => {
       const startMonth = startOfMonth(currentDate).toISOString().split('T')[0];
       const endMonth = endOfMonth(currentDate).toISOString().split('T')[0];
 
-      // Buscar beneficiários
+      // Buscar beneficiários com informações do plano
       const { data: beneficiarios, error: beneficiariosError } = await supabase
         .from('beneficiarios')
-        .select('status, data_adesao');
+        .select(`
+          status,
+          data_adesao,
+          plano:planos(
+            valor,
+            custo,
+            comissao_adesao_percentual,
+            comissao_recorrente_percentual
+          )
+        `);
 
       if (beneficiariosError) throw beneficiariosError;
 
@@ -48,9 +57,30 @@ export const useDashboard = () => {
       const totalBeneficiarios = beneficiarios?.length || 0;
       const beneficiariosAtivos = beneficiarios?.filter(b => b.status === 'ativo').length || 0;
       const cancelamentosMes = cancelamentos?.length || 0;
-      
+
+      // Calcular Total Comissões Mensal da Matriz
+      // Fórmula: Valor do Plano - Comissão do Franqueado - Custo do Plano
+      const mesAtualFormatado = format(currentDate, 'yyyy-MM');
+      const valorTotalComissoes = beneficiarios
+        ?.filter(b => b.status === 'ativo' && b.plano)
+        .reduce((total, b) => {
+          const valorPlano = b.plano?.valor || 0;
+          const custoPlano = b.plano?.custo || 0;
+          const dataAdesao = b.data_adesao?.substring(0, 7); // YYYY-MM
+
+          // Se é adesão do mês atual, usa comissão de adesão do franqueado
+          // Se não, usa comissão recorrente do franqueado
+          const percentualFranqueado = dataAdesao === mesAtualFormatado
+            ? (b.plano?.comissao_adesao_percentual || 0)
+            : (b.plano?.comissao_recorrente_percentual || 0);
+
+          const comissaoFranqueado = valorPlano * (percentualFranqueado / 100);
+          const comissaoMatriz = valorPlano - comissaoFranqueado - custoPlano;
+
+          return total + comissaoMatriz;
+        }, 0) || 0;
+
       const totalComissoes = comissoes?.length || 0;
-      const valorTotalComissoes = comissoes?.reduce((acc, c) => acc + Number(c.valor_comissao), 0) || 0;
       const comissoesPendentes = comissoes?.filter(c => !c.pago).length || 0;
 
       return {

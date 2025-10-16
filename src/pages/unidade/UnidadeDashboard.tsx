@@ -88,7 +88,58 @@ export default function UnidadeDashboard() {
       const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
       return total + comissaoRecorrente
     }, 0)
-  
+
+  // Comissão Futura = soma das comissões restantes até o fim da vigência/fidelidade
+  const comissaoFutura = beneficiarios
+    .filter(b => b.status === 'ativo' && b.plano && b.data_adesao)
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+      const comissaoMensalRecorrente = valorPlano * (percentualRecorrente / 100)
+
+      // Calcular meses desde a adesão
+      const dataAdesao = new Date(b.data_adesao)
+      const hoje = new Date()
+      const mesesDesdeAdesao = (hoje.getFullYear() - dataAdesao.getFullYear()) * 12 +
+                               (hoje.getMonth() - dataAdesao.getMonth())
+
+      // Pegar meses de fidelidade do plano (campo meses_fidelidade ou vigência)
+      const mesesFidelidade = (b.plano as any)?.meses_fidelidade || 12
+
+      // Calcular meses restantes até o fim da fidelidade
+      const mesesRestantes = Math.max(0, mesesFidelidade - mesesDesdeAdesao)
+
+      // Comissão futura = comissão mensal * meses restantes
+      return total + (comissaoMensalRecorrente * mesesRestantes)
+    }, 0)
+
+  // Comissão Total Recebida (calcular baseado em todos os meses desde a adesão de cada beneficiário)
+  const comissaoTotalRecebida = beneficiarios.reduce((total, b) => {
+    if (!b.data_adesao || !b.plano) return total
+
+    const dataAdesao = new Date(b.data_adesao)
+    const hoje = new Date()
+
+    // Calcular número de meses desde a adesão até hoje
+    const mesesDesdeAdesao = (hoje.getFullYear() - dataAdesao.getFullYear()) * 12 +
+                             (hoje.getMonth() - dataAdesao.getMonth())
+
+    if (mesesDesdeAdesao < 0) return total
+
+    const valorPlano = b.plano?.valor || 0
+    const percentualAdesao = b.plano?.comissao_adesao_percentual || 0
+    const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+
+    // Comissão de adesão (primeiro mês)
+    const comissaoAdesao = valorPlano * (percentualAdesao / 100)
+
+    // Comissões recorrentes (meses seguintes)
+    const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+    const totalRecorrente = mesesDesdeAdesao > 0 ? comissaoRecorrente * mesesDesdeAdesao : 0
+
+    return total + comissaoAdesao + totalRecorrente
+  }, 0)
+
   const metaMensal = 20000
   const progressoMeta = Math.min((comissaoMensal / metaMensal) * 100, 100)
 
@@ -118,7 +169,7 @@ export default function UnidadeDashboard() {
       <ChartAreaInteractive unidadeId={unidadeDoUsuario?.id} />
 
       {/* Métricas Principais */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 p-4 sm:p-6 sm:pb-2">
             <CardTitle className="text-sm sm:text-base font-medium leading-tight">
@@ -166,6 +217,40 @@ export default function UnidadeDashboard() {
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Base recorrente mensal
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 p-4 sm:p-6 sm:pb-2">
+            <CardTitle className="text-sm sm:text-base font-medium leading-tight">
+              Comissão Futura
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-purple-600">
+              {isLoading ? '...' : `R$ ${comissaoFutura.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Até fim da fidelidade
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 p-4 sm:p-6 sm:pb-2">
+            <CardTitle className="text-sm sm:text-base font-medium leading-tight">
+              Comissão Total
+            </CardTitle>
+            <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="text-xl sm:text-2xl font-bold text-primary">
+              {isLoading ? '...' : `R$ ${comissaoTotalRecebida.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Total acumulado
             </p>
           </CardContent>
         </Card>

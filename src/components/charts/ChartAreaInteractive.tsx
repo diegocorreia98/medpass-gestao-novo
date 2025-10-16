@@ -32,7 +32,7 @@ import { useAdesoesCancelamentos } from "@/hooks/useAdesoesCancelamentos"
 const chartConfig = {
   adesoes: {
     label: "Adesões",
-    color: "hsl(var(--chart-2))",
+    color: "#008DFC",
   },
   cancelamentos: {
     label: "Cancelamentos",

@@ -28,78 +28,148 @@ export default function Carteira() {
   
   const isLoading = comissoesLoading || beneficiariosLoading
 
-  // Calcular métricas baseadas nos dados reais
-  // Comissão do mês = adesões (primeira parcela) + recorrentes (segunda parcela+) do mês atual
-  const comissaoAtual = comissoes
-    .filter(c => {
-      const mesAtual = new Date().getMonth()
-      const anoAtual = new Date().getFullYear()
-      const comissaoData = new Date(c.mes_referencia)
-      return comissaoData.getMonth() === mesAtual && comissaoData.getFullYear() === anoAtual
-    })
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Obter mês/ano atual
+  const hoje = new Date()
+  const anoAtual = hoje.getFullYear()
+  const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0')
+  const mesReferenciaAtual = `${anoAtual}-${mesAtual}`
 
-  // Receita recorrente = apenas comissões recorrentes (segunda parcela+) não pagas
-  const recorrenciaTotal = comissoes
-    .filter(c => c.tipo_comissao === 'recorrente' && !c.pago)
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Calcular métricas baseadas nos dados reais dos beneficiários e planos
+  // Comissões de adesão do mês atual (novas adesões)
+  const comissoesAdesaoAtual = beneficiarios
+    .filter(b => {
+      if (!b.data_adesao || !b.plano) return false
+      const dataAdesao = b.data_adesao.substring(0, 7) // YYYY-MM
+      return dataAdesao === mesReferenciaAtual
+    })
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualAdesao = b.plano?.comissao_adesao_percentual || 0
+      const comissaoAdesao = valorPlano * (percentualAdesao / 100)
+      return total + comissaoAdesao
+    }, 0)
+
+  // Comissões recorrentes do mês atual (clientes ativos que não são novas adesões)
+  const comissoesRecorrentesAtual = beneficiarios
+    .filter(b => {
+      if (b.status !== 'ativo' || !b.plano || !b.data_adesao) return false
+      const dataAdesao = b.data_adesao.substring(0, 7) // YYYY-MM
+      // Incluir apenas clientes cuja adesão NÃO foi no mês atual
+      return dataAdesao !== mesReferenciaAtual
+    })
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+      const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+      return total + comissaoRecorrente
+    }, 0)
+
+  // Comissão Mensal = Adesões do mês + Recorrentes do mês
+  const comissaoAtual = comissoesAdesaoAtual + comissoesRecorrentesAtual
+
+  // Receita recorrente = soma do valor dos planos ativos * comissão recorrente percentual
+  const recorrenciaTotal = beneficiarios
+    .filter(b => b.status === 'ativo' && b.plano)
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+      const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+      return total + comissaoRecorrente
+    }, 0)
   
   const metaMensal = 20000
   const progressoMeta = Math.min((comissaoAtual / metaMensal) * 100, 100)
 
-  const totalComissoes = comissoes.reduce((total, c) => total + (c.valor_comissao || 0), 0)
-  const mediaComissoes = comissoes.length > 0 ? totalComissoes / comissoes.length : 0
+  // Calcular histórico de comissões por mês com base nos beneficiários
+  const comissoesPorMes: Record<string, { valor: number; vendas: number; ordem: number }> = {}
 
-  // Agrupar comissões por mês para histórico
-  const comissoesPorMes = comissoes.reduce((acc, comissao) => {
-    const data = new Date(comissao.mes_referencia)
+  // Inicializar últimos 6 meses
+  for (let i = 5; i >= 0; i--) {
+    const data = new Date()
+    data.setMonth(data.getMonth() - i)
     const mesAno = `${data.toLocaleString('pt-BR', { month: 'long' })} ${data.getFullYear()}`
     const chave = mesAno.charAt(0).toUpperCase() + mesAno.slice(1)
-    
-    if (!acc[chave]) {
-      acc[chave] = { valor: 0, vendas: 0 }
-    }
-    acc[chave].valor += comissao.valor_comissao || 0
-    acc[chave].vendas += 1
-    
-    return acc
-  }, {} as Record<string, { valor: number; vendas: number }>)
+    const mesReferencia = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`
+    comissoesPorMes[chave] = { valor: 0, vendas: 0, ordem: i }
+
+    // Para cada mês, calcular comissões de todos os beneficiários
+    beneficiarios.forEach(b => {
+      if (!b.data_adesao || !b.plano || b.status !== 'ativo') return
+
+      const dataAdesaoMes = b.data_adesao.substring(0, 7)
+      const valorPlano = b.plano?.valor || 0
+
+      // Se a adesão foi neste mês, adicionar comissão de adesão
+      if (dataAdesaoMes === mesReferencia) {
+        const percentualAdesao = b.plano?.comissao_adesao_percentual || 0
+        const comissaoAdesao = valorPlano * (percentualAdesao / 100)
+        comissoesPorMes[chave].valor += comissaoAdesao
+        comissoesPorMes[chave].vendas += 1
+      }
+      // Se a adesão foi antes deste mês, adicionar comissão recorrente
+      else if (dataAdesaoMes < mesReferencia) {
+        const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+        const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+        comissoesPorMes[chave].valor += comissaoRecorrente
+      }
+    })
+  }
 
   const comissoesMensais: ComissaoMensal[] = Object.entries(comissoesPorMes)
+    .sort(([, a], [, b]) => a.ordem - b.ordem)
     .map(([mes, dados]) => ({
       mes,
       valor: dados.valor,
       vendas: dados.vendas,
       meta: metaMensal
     }))
-    .slice(-6) // Últimos 6 meses
 
-  // Calcular composição da receita por tipo
-  const comissoesAdesao = comissoes
-    .filter(c => {
-      const mesAtual = new Date().getMonth()
-      const anoAtual = new Date().getFullYear()
-      const comissaoData = new Date(c.mes_referencia)
-      return comissaoData.getMonth() === mesAtual &&
-             comissaoData.getFullYear() === anoAtual &&
-             c.tipo_comissao === 'adesao'
-    })
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Encontrar o mês da primeira venda
+  const primeiraDataAdesao = beneficiarios
+    .filter(b => b.data_adesao)
+    .map(b => b.data_adesao)
+    .sort()[0]
 
-  const comissoesRecorrentes = comissoes
-    .filter(c => {
-      const mesAtual = new Date().getMonth()
-      const anoAtual = new Date().getFullYear()
-      const comissaoData = new Date(c.mes_referencia)
-      return comissaoData.getMonth() === mesAtual &&
-             comissaoData.getFullYear() === anoAtual &&
-             c.tipo_comissao === 'recorrente'
-    })
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Filtrar apenas os meses com vendas (valor > 0) a partir da primeira venda
+  const comissoesMensaisComVendas = comissoesMensais.filter(m => m.vendas > 0 || m.valor > 0)
 
-  const novasVendas = comissoesAdesao // Comissões de adesão (primeira parcela)
-  const renovacoes = comissoesRecorrentes // Comissões recorrentes (segunda parcela+)
+  const totalComissoes = comissoesMensaisComVendas.reduce((total, m) => total + m.valor, 0)
+  const mediaComissoes = comissoesMensaisComVendas.length > 0 ? totalComissoes / comissoesMensaisComVendas.length : 0
+
+  // Composição da receita do mês atual
+  const novasVendas = comissoesAdesaoAtual // Comissões de adesão do mês
+  const renovacoes = comissoesRecorrentesAtual // Comissões recorrentes do mês
   const bonus = 0 // Não há bônus calculado ainda
+
+  // Comissões ativas (não pagas)
+  const comissoesAtivas = comissoes.filter(c => !c.pago)
+
+  // Comissão Total Recebida (calcular baseado em todos os meses desde a adesão de cada beneficiário)
+  const comissaoTotalRecebida = beneficiarios.reduce((total, b) => {
+    if (!b.data_adesao || !b.plano) return total
+
+    const dataAdesao = new Date(b.data_adesao)
+    const hoje = new Date()
+
+    // Calcular número de meses desde a adesão até hoje
+    const mesesDesdeAdesao = (hoje.getFullYear() - dataAdesao.getFullYear()) * 12 +
+                             (hoje.getMonth() - dataAdesao.getMonth())
+
+    if (mesesDesdeAdesao < 0) return total
+
+    const valorPlano = b.plano?.valor || 0
+    const percentualAdesao = b.plano?.comissao_adesao_percentual || 0
+    const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+
+    // Comissão de adesão (primeiro mês)
+    const comissaoAdesao = valorPlano * (percentualAdesao / 100)
+
+    // Comissões recorrentes (meses seguintes)
+    const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+    const totalRecorrente = mesesDesdeAdesao > 0 ? comissaoRecorrente * mesesDesdeAdesao : 0
+
+    return total + comissaoAdesao + totalRecorrente
+  }, 0)
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -130,7 +200,7 @@ export default function Carteira() {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
             <div className="text-xl sm:text-2xl font-bold text-primary">
-              {isLoading ? '...' : `R$ ${comissaoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              {isLoading ? '...' : `R$ ${comissaoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Mês atual
@@ -147,7 +217,7 @@ export default function Carteira() {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
             <div className="text-xl sm:text-2xl font-bold text-green-600">
-              {isLoading ? '...' : `R$ ${recorrenciaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              {isLoading ? '...' : `R$ ${recorrenciaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Base garantida mensal
@@ -164,7 +234,7 @@ export default function Carteira() {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
             <div className="text-xl sm:text-2xl font-bold">
-              {isLoading ? '...' : `R$ ${mediaComissoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              {isLoading ? '...' : `R$ ${mediaComissoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Histórico de comissões
@@ -185,11 +255,36 @@ export default function Carteira() {
             </div>
             <Progress value={progressoMeta} className="mt-2 h-2 sm:h-3" />
             <p className="text-xs sm:text-sm text-muted-foreground mt-2">
-              R$ {metaMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} meta
+              R$ {metaMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} meta
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Card Comissão Total */}
+      <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+        <CardHeader className="p-4 sm:p-6 pb-3 sm:pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg sm:text-xl font-bold">Comissão Total</CardTitle>
+              <CardDescription className="text-xs sm:text-sm mt-1">
+                Total de comissões recebidas
+              </CardDescription>
+            </div>
+            <div className="p-3 rounded-full bg-primary/10">
+              <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="text-3xl sm:text-4xl font-bold text-primary">
+            {isLoading ? '...' : `R$ ${comissaoTotalRecebida.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+            Acumulado de todas as comissões pagas
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Detalhamento da Receita */}
       <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
@@ -205,7 +300,7 @@ export default function Carteira() {
               <div className="flex items-center justify-between">
                 <span className="text-xs sm:text-sm font-medium">Comissões de Adesão</span>
                 <span className="text-xs sm:text-sm">
-                  {isLoading ? '...' : `R$ ${novasVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  {isLoading ? '...' : `R$ ${novasVendas.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               </div>
               <Progress value={comissaoAtual > 0 ? (novasVendas / comissaoAtual) * 100 : 0} className="h-2" />
@@ -218,7 +313,7 @@ export default function Carteira() {
               <div className="flex items-center justify-between">
                 <span className="text-xs sm:text-sm font-medium">Comissões Recorrentes</span>
                 <span className="text-xs sm:text-sm">
-                  {isLoading ? '...' : `R$ ${renovacoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                  {isLoading ? '...' : `R$ ${renovacoes.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 </span>
               </div>
               <Progress value={comissaoAtual > 0 ? (renovacoes / comissaoAtual) * 100 : 0} className="h-2" />
@@ -232,7 +327,7 @@ export default function Carteira() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-medium">Bônus Performance</span>
                   <span className="text-xs sm:text-sm">
-                    {isLoading ? '...' : `R$ ${bonus.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                    {isLoading ? '...' : `R$ ${bonus.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   </span>
                 </div>
                 <Progress value={comissaoAtual > 0 ? (bonus / comissaoAtual) * 100 : 0} className="h-2" />
@@ -275,7 +370,7 @@ export default function Carteira() {
                         </div>
                       </div>
                       <Badge variant="outline" className="text-xs sm:text-sm">
-                        R$ {(comissao.valor_comissao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        R$ {(comissao.valor_comissao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Badge>
                     </div>
                   )
@@ -329,13 +424,13 @@ export default function Carteira() {
                           <div>
                             <span className="text-muted-foreground">Comissão:</span>
                             <p className="font-medium">
-                              R$ {mes.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {mes.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                           </div>
                           <div>
                             <span className="text-muted-foreground">Meta:</span>
                             <p className="font-medium">
-                              R$ {mes.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {mes.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </p>
                           </div>
                         </div>
@@ -369,11 +464,11 @@ export default function Carteira() {
                           <TableRow key={mes.mes}>
                             <TableCell className="font-medium max-w-[150px] truncate">{mes.mes}</TableCell>
                             <TableCell className="whitespace-nowrap">
-                              R$ {mes.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {mes.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </TableCell>
                             <TableCell className="whitespace-nowrap">{mes.vendas}</TableCell>
                             <TableCell className="whitespace-nowrap">
-                              R$ {mes.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {mes.meta.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </TableCell>
                             <TableCell>
                               <Badge

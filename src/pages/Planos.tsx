@@ -24,6 +24,7 @@ interface PlanoForm {
   comissao_adesao_percentual: string
   comissao_recorrente_percentual: string
   vigencia: string
+  meses_fidelidade: string
   descricao: string
   vindi_product_id: string
   vindi_plan_id: string
@@ -50,6 +51,7 @@ export default function Planos() {
     comissao_adesao_percentual: "",
     comissao_recorrente_percentual: "",
     vigencia: "",
+    meses_fidelidade: "12",
     descricao: "",
     vindi_product_id: "",
     vindi_plan_id: "",
@@ -72,6 +74,7 @@ export default function Planos() {
         comissao_adesao_percentual: plano.comissao_adesao_percentual?.toString() || "100",
         comissao_recorrente_percentual: plano.comissao_recorrente_percentual?.toString() || "30",
         vigencia: "12", // Campo vigência não existe na tabela atual
+        meses_fidelidade: (plano as any).meses_fidelidade?.toString() || "12",
         descricao: plano.descricao || "",
         vindi_product_id: (plano as any).vindi_product_id || "",
         vindi_plan_id: (plano as any).vindi_plan_id?.toString() || "",
@@ -87,6 +90,7 @@ export default function Planos() {
         comissao_adesao_percentual: "100",
         comissao_recorrente_percentual: "30",
         vigencia: "",
+        meses_fidelidade: "12",
         descricao: "",
         vindi_product_id: "",
         vindi_plan_id: "",
@@ -97,7 +101,7 @@ export default function Planos() {
   }
 
   const salvarPlano = () => {
-    if (!formData.nome || !formData.valor || !formData.custo || !formData.comissao_adesao_percentual || !formData.comissao_recorrente_percentual) {
+    if (!formData.nome || !formData.valor || !formData.custo || !formData.comissao_adesao_percentual || !formData.comissao_recorrente_percentual || !formData.meses_fidelidade) {
       toast({
         title: "Erro",
         description: "Preencha todos os campos obrigatórios",
@@ -113,6 +117,7 @@ export default function Planos() {
       franquia_id: formData.franquia_id === "none" ? null : formData.franquia_id,
       comissao_adesao_percentual: parseFloat(formData.comissao_adesao_percentual),
       comissao_recorrente_percentual: parseFloat(formData.comissao_recorrente_percentual),
+      meses_fidelidade: parseInt(formData.meses_fidelidade),
       descricao: formData.descricao || null,
       vindi_product_id: formData.vindi_product_id || null,
       vindi_plan_id: formData.vindi_plan_id ? parseInt(formData.vindi_plan_id) : null,
@@ -134,6 +139,7 @@ export default function Planos() {
       comissao_adesao_percentual: "100",
       comissao_recorrente_percentual: "30",
       vigencia: "",
+      meses_fidelidade: "12",
       descricao: "",
       vindi_product_id: "",
       vindi_plan_id: "",
@@ -328,6 +334,22 @@ export default function Planos() {
                     />
                     <div className="text-xs text-muted-foreground mt-1">
                       Comissão sobre as mensalidades
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="meses_fidelidade">Meses de Fidelidade *</Label>
+                    <Input
+                      id="meses_fidelidade"
+                      type="number"
+                      min="0"
+                      max="60"
+                      value={formData.meses_fidelidade}
+                      onChange={(e) => setFormData({ ...formData, meses_fidelidade: e.target.value })}
+                      placeholder="12"
+                    />
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Período de fidelidade em meses
                     </div>
                   </div>
                 </div>
@@ -571,7 +593,7 @@ export default function Planos() {
                   {(selectedPlano as any).rms_plan_code && (
                     <div>
                       <Label className="text-sm font-medium text-muted-foreground">Código RMS</Label>
-                      <div className="text-base font-mono mt-1 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="text-base font-mono mt-1 p-3 bg-orange-500/10 dark:bg-orange-500/20 rounded-lg border border-orange-500/30 text-foreground">
                         {(selectedPlano as any).rms_plan_code}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
@@ -586,15 +608,15 @@ export default function Planos() {
                       <Label className="text-sm font-medium text-muted-foreground">Integração Vindi</Label>
                       <div className="grid grid-cols-1 gap-3">
                         {(selectedPlano as any).vindi_product_id && (
-                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Produto</div>
-                            <div className="text-base font-mono">{(selectedPlano as any).vindi_product_id}</div>
+                          <div className="p-3 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg border border-blue-500/30">
+                            <div className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">ID do Produto</div>
+                            <div className="text-base font-mono text-foreground">{(selectedPlano as any).vindi_product_id}</div>
                           </div>
                         )}
                         {(selectedPlano as any).vindi_plan_id && (
-                          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="text-xs font-medium text-blue-700 mb-1">ID do Plano</div>
-                            <div className="text-base font-mono">{(selectedPlano as any).vindi_plan_id}</div>
+                          <div className="p-3 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg border border-blue-500/30">
+                            <div className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">ID do Plano</div>
+                            <div className="text-base font-mono text-foreground">{(selectedPlano as any).vindi_plan_id}</div>
                           </div>
                         )}
                       </div>
@@ -617,19 +639,24 @@ export default function Planos() {
                   </div>
                 </div>
 
-                {/* Percentuais de Comissão */}
+                {/* Percentuais de Comissão e Fidelidade */}
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-sm border-b pb-2">Percentuais de Comissão</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <Label className="text-sm font-medium text-green-700">Comissão de Adesão</Label>
-                      <div className="text-2xl font-bold text-green-700">{selectedPlano.comissao_adesao_percentual || 100}%</div>
-                      <div className="text-sm text-green-600 mt-1">Aplicada na primeira parcela</div>
+                  <h4 className="font-semibold text-sm border-b pb-2">Percentuais de Comissão e Fidelidade</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 bg-green-500/10 dark:bg-green-500/20 rounded-lg border border-green-500/30">
+                      <Label className="text-sm font-medium text-green-700 dark:text-green-400">Comissão de Adesão</Label>
+                      <div className="text-2xl font-bold text-green-700 dark:text-green-400">{selectedPlano.comissao_adesao_percentual || 100}%</div>
+                      <div className="text-sm text-green-600 dark:text-green-500 mt-1">Aplicada na primeira parcela</div>
                     </div>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <Label className="text-sm font-medium text-blue-700">Comissão Recorrente</Label>
-                      <div className="text-2xl font-bold text-blue-700">{selectedPlano.comissao_recorrente_percentual || 30}%</div>
-                      <div className="text-sm text-blue-600 mt-1">Aplicada nas mensalidades</div>
+                    <div className="p-4 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <Label className="text-sm font-medium text-blue-700 dark:text-blue-400">Comissão Recorrente</Label>
+                      <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{selectedPlano.comissao_recorrente_percentual || 30}%</div>
+                      <div className="text-sm text-blue-600 dark:text-blue-500 mt-1">Aplicada nas mensalidades</div>
+                    </div>
+                    <div className="p-4 bg-purple-500/10 dark:bg-purple-500/20 rounded-lg border border-purple-500/30">
+                      <Label className="text-sm font-medium text-purple-700 dark:text-purple-400">Meses de Fidelidade</Label>
+                      <div className="text-2xl font-bold text-purple-700 dark:text-purple-400">{(selectedPlano as any).meses_fidelidade || 12}</div>
+                      <div className="text-sm text-purple-600 dark:text-purple-500 mt-1">Período de fidelidade</div>
                     </div>
                   </div>
                 </div>
@@ -638,36 +665,36 @@ export default function Planos() {
                 <div className="space-y-4">
                   <h4 className="font-semibold text-sm border-b pb-2">Cálculos Automáticos</h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <Label className="text-sm font-medium text-green-700">Comissão de Adesão</Label>
-                      <div className="text-xl font-bold text-green-700">
+                    <div className="p-4 bg-green-500/10 dark:bg-green-500/20 rounded-lg border border-green-500/30">
+                      <Label className="text-sm font-medium text-green-700 dark:text-green-400">Comissão de Adesão</Label>
+                      <div className="text-xl font-bold text-green-700 dark:text-green-400">
                         R$ {(selectedPlano.valor * (selectedPlano.comissao_adesao_percentual || 100) / 100).toFixed(2)}
                       </div>
-                      <div className="text-xs text-green-600 mt-1">
+                      <div className="text-xs text-green-600 dark:text-green-500 mt-1">
                         {selectedPlano.comissao_adesao_percentual || 100}% de R$ {selectedPlano.valor.toFixed(2)}
                       </div>
                     </div>
-                    
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <Label className="text-sm font-medium text-blue-700">Comissão Recorrente</Label>
-                      <div className="text-xl font-bold text-blue-700">
+
+                    <div className="p-4 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg border border-blue-500/30">
+                      <Label className="text-sm font-medium text-blue-700 dark:text-blue-400">Comissão Recorrente</Label>
+                      <div className="text-xl font-bold text-blue-700 dark:text-blue-400">
                         R$ {(selectedPlano.valor * (selectedPlano.comissao_recorrente_percentual || 30) / 100).toFixed(2)}
                       </div>
-                      <div className="text-xs text-blue-600 mt-1">
+                      <div className="text-xs text-blue-600 dark:text-blue-500 mt-1">
                         {selectedPlano.comissao_recorrente_percentual || 30}% de R$ {selectedPlano.valor.toFixed(2)}
                       </div>
                     </div>
 
-                    <div className="p-4 bg-primary/10 rounded-lg border border-primary/20">
+                    <div className="p-4 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/30">
                       <Label className="text-sm font-medium text-primary">Valor Líquido Recorrente</Label>
                       <div className="text-xl font-bold text-primary">
                         R$ {(
-                          selectedPlano.valor - 
-                          (selectedPlano.custo || 0) - 
+                          selectedPlano.valor -
+                          (selectedPlano.custo || 0) -
                           (selectedPlano.valor * (selectedPlano.comissao_recorrente_percentual || 30) / 100)
                         ).toFixed(2)}
                       </div>
-                      <div className="text-xs text-primary/70 mt-1">
+                      <div className="text-xs text-primary/70 dark:text-primary/80 mt-1">
                         Valor - Custo - Comissão
                       </div>
                     </div>
