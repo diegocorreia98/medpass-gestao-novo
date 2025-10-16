@@ -40,20 +40,54 @@ export default function UnidadeDashboard() {
   // Calcular métricas baseadas nos dados reais
   const clientesAtivos = beneficiarios.filter(b => b.status === 'ativo').length
 
-  // Comissão mensal = adesões (primeira parcela) + recorrentes (segunda parcela+) do mês atual
-  const comissaoMensal = comissoes
-    .filter(c => {
-      const mesAtual = new Date().getMonth()
-      const anoAtual = new Date().getFullYear()
-      const comissaoData = new Date(c.mes_referencia)
-      return comissaoData.getMonth() === mesAtual && comissaoData.getFullYear() === anoAtual
-    })
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Obter mês/ano atual
+  const hoje = new Date()
+  const anoAtual = hoje.getFullYear()
+  const mesAtual = String(hoje.getMonth() + 1).padStart(2, '0')
+  const mesReferenciaAtual = `${anoAtual}-${mesAtual}`
 
-  // Receita recorrente = apenas comissões recorrentes (segunda parcela+) de clientes ativos
-  const receitaRecorrente = comissoes
-    .filter(c => c.tipo_comissao === 'recorrente' && !c.pago)
-    .reduce((total, c) => total + (c.valor_comissao || 0), 0)
+  // Comissões de adesão do mês atual (novas adesões)
+  const comissoesAdesaoMensal = beneficiarios
+    .filter(b => {
+      if (!b.data_adesao || !b.plano) return false
+      const dataAdesao = b.data_adesao.substring(0, 7) // YYYY-MM
+      return dataAdesao === mesReferenciaAtual
+    })
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualAdesao = b.plano?.comissao_adesao_percentual || 0
+      const comissaoAdesao = valorPlano * (percentualAdesao / 100)
+      return total + comissaoAdesao
+    }, 0)
+
+  // Comissões recorrentes do mês atual (clientes ativos que não são novas adesões)
+  const comissoesRecorrentesMensal = beneficiarios
+    .filter(b => {
+      if (b.status !== 'ativo' || !b.plano || !b.data_adesao) return false
+      const dataAdesao = b.data_adesao.substring(0, 7) // YYYY-MM
+      // Incluir apenas clientes cuja adesão NÃO foi no mês atual
+      return dataAdesao !== mesReferenciaAtual
+    })
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+      const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+      return total + comissaoRecorrente
+    }, 0)
+
+  // Comissão Mensal = Adesões do mês + Recorrentes do mês
+  const comissaoMensal = comissoesAdesaoMensal + comissoesRecorrentesMensal
+
+  // Receita recorrente = soma do valor dos planos ativos * comissão recorrente percentual
+  // Representa o valor mensal total que a unidade recebe de clientes recorrentes
+  const valorRecorrente = beneficiarios
+    .filter(b => b.status === 'ativo' && b.plano)
+    .reduce((total, b) => {
+      const valorPlano = b.plano?.valor || 0
+      const percentualRecorrente = b.plano?.comissao_recorrente_percentual || 0
+      const comissaoRecorrente = valorPlano * (percentualRecorrente / 100)
+      return total + comissaoRecorrente
+    }, 0)
   
   const metaMensal = 20000
   const progressoMeta = Math.min((comissaoMensal / metaMensal) * 100, 100)
@@ -128,7 +162,7 @@ export default function UnidadeDashboard() {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
             <div className="text-xl sm:text-2xl font-bold text-green-600">
-              {isLoading ? '...' : `R$ ${receitaRecorrente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+              {isLoading ? '...' : `R$ ${valorRecorrente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Base recorrente mensal
