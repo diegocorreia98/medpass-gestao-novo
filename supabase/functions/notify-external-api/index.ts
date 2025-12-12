@@ -227,7 +227,16 @@ async function makeApiCall(data: any, operation: string, apiSettings: any, retry
       'Content-Type': 'application/json',
       'x-api-key': apiSettings.externalApiKey ? `${apiSettings.externalApiKey.substring(0, 8)}...` : 'NÃO CONFIGURADA'
     });
-    console.log('Dados enviados:', JSON.stringify(data, null, 2));
+    // ⚠️ Evitar logar dados sensíveis (CPF etc.) em console
+    console.log('Dados enviados (resumo):', {
+      operation,
+      hasNome: !!data?.nome,
+      hasCpf: !!data?.cpf,
+      hasEmail: !!data?.email,
+      codigoExterno: data?.codigoExterno,
+      idBeneficiarioTipo: data?.idBeneficiarioTipo,
+      idClienteContrato: data?.idClienteContrato,
+    });
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -246,6 +255,39 @@ async function makeApiCall(data: any, operation: string, apiSettings: any, retry
     // Validação do status HTTP
     if (!response.ok) {
       const errorMessage = `API retornou status ${response.status}: ${JSON.stringify(responseData)}`;
+
+      // ✅ Erro de negócio conhecido: beneficiário já existe ativo no contrato (permitir fluxo seguir no frontend)
+      // Exemplo: { codigoErro: "1016", mensagem: "Beneficiário [...] Já existe no Contrato: ... como ativo ..." }
+      const codigoErro =
+        responseData?.codigoErro ??
+        responseData?.codigoerro ??
+        responseData?.codigo ??
+        responseData?.erro?.codigoErro ??
+        responseData?.erro?.codigoerro ??
+        responseData?.error?.codigoErro ??
+        responseData?.error?.codigoerro ??
+        null;
+
+      const mensagemErro =
+        (typeof responseData?.mensagem === "string" ? responseData.mensagem : "") ||
+        (typeof responseData?.message === "string" ? responseData.message : "") ||
+        (typeof responseData?.erro?.mensagem === "string" ? responseData.erro.mensagem : "");
+
+      if (
+        response.status === 400 &&
+        (
+          codigoErro === "1016" ||
+          codigoErro === 1016 ||
+          // fallback por mensagem (algumas versões podem não retornar codigoErro no topo)
+          (mensagemErro.toLowerCase().includes("já existe") && mensagemErro.toLowerCase().includes("como ativo"))
+        )
+      ) {
+        return {
+          ...responseData,
+          __business_error: "BENEFICIARIO_JA_ATIVO",
+          __http_status: response.status,
+        };
+      }
       
       // Não fazer retry para erros de autenticação (401) ou autorização (403)
       if (response.status === 401 || response.status === 403) {
@@ -276,6 +318,13 @@ async function makeApiCall(data: any, operation: string, apiSettings: any, retry
     
     throw error;
   }
+}
+
+function maskCpf(cpf: string | null | undefined): string {
+  if (!cpf) return "";
+  const clean = cpf.replace(/\D/g, "");
+  if (clean.length !== 11) return "***";
+  return `${clean.slice(0, 3)}.***.***-${clean.slice(9)}`;
 }
 
 // Função para validar CPF
@@ -684,7 +733,7 @@ serve(async (req) => {
       console.log(`Beneficiário: ${nome}`);
       console.log(`Tipo Beneficiário: ${id_beneficiario_tipo || 1}`);
       console.log(`Email: ${email}`);
-      console.log(`CPF: ${cpf}`);
+      console.log(`CPF (mascarado): ${maskCpf(cpf)}`);
 
       // Add cpfTitular field if this is a dependent (idBeneficiarioTipo = 3)
       if (id_beneficiario_tipo === 3 && cpf_titular) {
@@ -693,6 +742,39 @@ serve(async (req) => {
 
       try {
         const response = await makeApiCall(requestData, 'adesao', apiSettings);
+
+        // ✅ Tratamento especial: beneficiário já existe ativo na RMS (código 1016)
+        if (response?.__business_error === 'BENEFICIARIO_JA_ATIVO') {
+          const rmsMensagem = typeof response?.mensagem === 'string' ? response.mensagem : '';
+          const contratoMatch = rmsMensagem.match(/Contrato:\s*(\d+)/i);
+          const contrato = contratoMatch?.[1] ?? null;
+
+          const userMessage = contrato
+            ? `Beneficiário já existe como ativo na RMS (contrato ${contrato}). Para enviar nova adesão é necessário cancelar o cadastro existente.`
+            : 'Beneficiário já existe como ativo na RMS. Para enviar nova adesão é necessário cancelar o cadastro existente.';
+
+          await logApiCall(
+            beneficiarioId,
+            'adesao',
+            requestData,
+            { ...response, mensagem: userMessage },
+            'warning',
+            userMessage,
+          );
+
+          // Retornar 200 para o frontend conseguir exibir mensagem e seguir com geração de link (reativação)
+          return new Response(JSON.stringify({
+            success: false,
+            rms_code: 1016,
+            rms_error_type: 'BENEFICIARIO_JA_ATIVO',
+            error: userMessage,
+            canProceedToPayment: true,
+            contrato,
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+          });
+        }
         
         // Validar resposta da API (similar aos testes do Postman)
         const validation = validateApiResponse('adesao', response);
@@ -1197,6 +1279,33 @@ serve(async (req) => {
     // Dar mensagens de erro mais específicas dependendo do tipo de erro
     let errorMessage = error.message;
     let statusCode = 500;
+
+    // ✅ Fallback de negócio: RMS retornou "já existe ativo" mas acabou caindo no catch global.
+    // Isso evita o Supabase SDK retornar "non-2xx" e permite o frontend seguir com reativação + geração de link.
+    const raw = typeof error?.message === 'string' ? error.message : '';
+    if (
+      raw.includes('"codigoErro":"1016"') ||
+      raw.includes('"codigoErro":1016') ||
+      (raw.toLowerCase().includes('já existe') && raw.toLowerCase().includes('como ativo'))
+    ) {
+      const contratoMatch = raw.match(/Contrato:\s*(\d+)/i);
+      const contrato = contratoMatch?.[1] ?? null;
+      const userMessage = contrato
+        ? `Beneficiário já existe como ativo na RMS (contrato ${contrato}). Para enviar nova adesão é necessário cancelar o cadastro existente.`
+        : 'Beneficiário já existe como ativo na RMS. Para enviar nova adesão é necessário cancelar o cadastro existente.';
+
+      return new Response(JSON.stringify({
+        success: false,
+        rms_code: 1016,
+        rms_error_type: 'BENEFICIARIO_JA_ATIVO',
+        error: userMessage,
+        canProceedToPayment: true,
+        contrato,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     if (error.message.includes('VINDI_API_KEY não configurada')) {
       statusCode = 400;

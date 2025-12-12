@@ -91,14 +91,35 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
       });
 
       if (apiError) {
-        throw new Error(`Erro na API RMS: ${apiError.message}`);
+        // ✅ Fallback: algumas versões retornam erro HTTP 400 para "já existe ativo" (codigoErro 1016)
+        const msg = apiError.message?.toLowerCase?.() || '';
+        const isAlreadyActive1016 =
+          msg.includes('"codigoerro":"1016"') ||
+          msg.includes('codigoerro') && msg.includes('1016') ||
+          msg.includes('já existe') ||
+          msg.includes('como ativo');
+
+        if (isAlreadyActive1016) {
+          console.log('ℹ️ [REATIVAÇÃO] RMS retornou "já existe ativo" via apiError, continuando com geração do link...');
+          rmsUserAlreadyExists = true;
+          setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
+
+          toast({
+            title: "Usuário já cadastrado na RMS",
+            description: "O beneficiário já possui cadastro ativo na RMS. Prosseguindo com a geração do link de pagamento.",
+          });
+        } else {
+          throw new Error(`Erro na API RMS: ${apiError.message}`);
+        }
       }
 
       // Verificar se o usuário já existe na RMS (código 1001 ou mensagem de duplicidade)
-      if (!apiResult.success) {
+      if (!apiError && apiResult && !apiResult.success) {
         const errorMsg = apiResult.error?.toLowerCase() || '';
         const isAlreadyExists =
           apiResult.rms_code === 1001 ||
+          apiResult.rms_code === 1016 ||
+          apiResult.rms_error_type === 'BENEFICIARIO_JA_ATIVO' ||
           errorMsg.includes('já existe') ||
           errorMsg.includes('already exists') ||
           errorMsg.includes('duplicado') ||
