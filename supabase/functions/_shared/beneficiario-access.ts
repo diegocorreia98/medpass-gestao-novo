@@ -25,24 +25,53 @@ export async function fetchUserAccessProfile(
   supabaseService: SupabaseClient,
   userId: string,
 ): Promise<UserAccessProfile | null> {
-  // O frontend busca o profile por `user_id` (ver `AuthContext.fetchProfile`),
-  // então priorizamos essa chave. Mantemos fallback para `id` por compatibilidade.
-  const primary = await supabaseService
+  console.log("[ACCESS] Buscando profile para userId:", userId);
+
+  // 1) Tentar por user_id (padrão do AuthContext.fetchProfile)
+  const byUserId = await supabaseService
     .from("profiles")
     .select("user_type, unidade_id")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (primary.data) return primary.data as UserAccessProfile;
+  console.log("[ACCESS] Query por user_id:", { data: byUserId.data, error: byUserId.error?.message });
 
-  const fallback = await supabaseService
+  if (byUserId.data) {
+    console.log("[ACCESS] Profile encontrado por user_id:", byUserId.data);
+    return byUserId.data as UserAccessProfile;
+  }
+
+  // 2) Tentar por id (compatibilidade)
+  const byId = await supabaseService
     .from("profiles")
     .select("user_type, unidade_id")
     .eq("id", userId)
     .maybeSingle();
 
-  if (fallback.data) return fallback.data as UserAccessProfile;
+  console.log("[ACCESS] Query por id:", { data: byId.data, error: byId.error?.message });
 
+  if (byId.data) {
+    console.log("[ACCESS] Profile encontrado por id:", byId.data);
+    return byId.data as UserAccessProfile;
+  }
+
+  // 3) Última tentativa: buscar qualquer profile que tenha esse userId em algum campo
+  // Isso ajuda a diagnosticar se o schema é diferente do esperado
+  const debug = await supabaseService
+    .from("profiles")
+    .select("id, user_id, user_type, unidade_id")
+    .or(`id.eq.${userId},user_id.eq.${userId}`)
+    .limit(1)
+    .maybeSingle();
+
+  console.log("[ACCESS] Debug query (or):", { data: debug.data, error: debug.error?.message });
+
+  if (debug.data) {
+    console.log("[ACCESS] Profile encontrado via debug:", debug.data);
+    return { user_type: debug.data.user_type, unidade_id: debug.data.unidade_id } as UserAccessProfile;
+  }
+
+  console.error("[ACCESS] Profile NÃO encontrado para userId:", userId);
   return null;
 }
 
@@ -100,14 +129,31 @@ export async function assertBeneficiarioAccess(params: {
     fetchBeneficiarioAccessRow(params.supabaseService, params.beneficiarioId),
   ]);
 
-  const allowed = hasBeneficiarioPermission({
+  let allowed = hasBeneficiarioPermission({
     userId: params.userId,
     userProfile,
     beneficiario: beneficiarioAccess,
   });
 
+  // Se ainda não permitido, verificar se o usuário é dono de uma unidade via `unidades.user_id`
+  // (o sistema associa usuários tipo "unidade" à sua unidade pela tabela unidades, não pelo profiles)
+  if (!allowed && beneficiarioAccess.unidade_id) {
+    console.log("[ACCESS] Verificando se usuário é dono da unidade via unidades.user_id...");
+    const { data: unidadeData } = await params.supabaseService
+      .from("unidades")
+      .select("id, user_id")
+      .eq("id", beneficiarioAccess.unidade_id)
+      .eq("user_id", params.userId)
+      .maybeSingle();
+
+    if (unidadeData) {
+      console.log("[ACCESS] ✅ Usuário é dono da unidade:", unidadeData.id);
+      allowed = true;
+    }
+  }
+
   if (!allowed) {
-    console.error("[ACCESS] Sem permissão para beneficiário", {
+    console.error("[ACCESS] ❌ Sem permissão para beneficiário", {
       userId: params.userId,
       userType: (userProfile?.user_type ?? "").toString(),
       userUnidadeId: userProfile?.unidade_id ?? null,
