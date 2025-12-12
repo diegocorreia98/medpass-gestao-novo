@@ -76,7 +76,7 @@ serve(async (req) => {
       beneficiarioId: beneficiario_id,
     });
 
-    const isMatriz = userProfile?.user_type === 'matriz';
+    const isMatriz = (userProfile?.user_type || '').toString().toLowerCase() === 'matriz';
     console.log(`👤 Usuário: ${userData.user.id}, Tipo: ${userProfile?.user_type || 'desconhecido'}, É Matriz: ${isMatriz}`);
     console.log(`✅ Beneficiário com acesso validado:`, {
       id: beneficiarioAccess.id,

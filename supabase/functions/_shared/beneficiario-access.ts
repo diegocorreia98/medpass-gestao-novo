@@ -60,7 +60,8 @@ export function hasBeneficiarioPermission(params: {
   userProfile: UserAccessProfile | null;
   beneficiario: BeneficiarioAccessRow;
 }): boolean {
-  const isMatriz = params.userProfile?.user_type === "matriz";
+  const userType = (params.userProfile?.user_type ?? "").toString().toLowerCase();
+  const isMatriz = userType === "matriz";
   if (isMatriz) return true;
 
   if (
