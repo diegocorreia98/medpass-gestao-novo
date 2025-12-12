@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserPlus, Save } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { UserPlus, Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlanos } from "@/hooks/usePlanos";
@@ -50,6 +51,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
   const [apiStatus, setApiStatus] = useState<'idle' | 'loading' | 'success' | 'error' | 'partial'>('idle');
   const [apiMessage, setApiMessage] = useState<string>('');
   const [cpfError, setCpfError] = useState<string>('');
+  const [generatePaymentLink, setGeneratePaymentLink] = useState(true); // Toggle para gerar link de pagamento
 
   // Filtrar empresas do usuário
   const empresasUsuario = user && profile ? empresas.filter(empresa => 
@@ -141,72 +143,61 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
 
       console.log('Beneficiário salvo com sucesso:', beneficiarioData);
 
-      console.log('🔄 [MATRIZ-ADESAO] Creating Vindi customer for beneficiary:', beneficiarioData.id);
-
-      // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
-      console.log('🔄 [MATRIZ-ADESAO] Chamando create-vindi-customer para beneficiário:', beneficiarioData.id);
-
-      const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
-        body: { beneficiario_id: beneficiarioData.id }
-      });
-
-      console.log('📋 [MATRIZ-ADESAO] Resposta da função create-vindi-customer:', {
-        success: vindiData?.success,
-        hasCheckoutUrl: !!vindiData?.checkout_url,
-        error: vindiError?.message,
-        fullResponse: vindiData
-      });
-
-      if (vindiError) {
-        console.error('❌ [MATRIZ-ADESAO] Erro ao criar cliente Vindi:', vindiError);
-        // Don't throw error here, beneficiary is already saved
-      }
-
       let checkoutUrl = null;
-      if (vindiData?.success && vindiData?.checkout_url) {
-        checkoutUrl = vindiData.checkout_url;
-        console.log('✅ [MATRIZ-ADESAO] Checkout URL gerada:', checkoutUrl);
 
-        // Update beneficiary with checkout link
-        const { error: updateError } = await supabase
-          .from('beneficiarios')
-          .update({
-            checkout_link: checkoutUrl,
-            payment_status: 'payment_requested'
-          })
-          .eq('id', beneficiarioData.id);
+      // Só gerar link de pagamento se o toggle estiver ativado
+      if (generatePaymentLink) {
+        console.log('🔄 [MATRIZ-ADESAO] Creating Vindi customer for beneficiary:', beneficiarioData.id);
 
-        if (updateError) {
-          console.error('❌ [MATRIZ-ADESAO] Erro ao salvar link de checkout:', updateError);
-        } else {
-          console.log('✅ [MATRIZ-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
+        // ✅ NOVO FLUXO CORRETO: Apenas criar cliente + checkout (não assinatura ainda)
+        console.log('🔄 [MATRIZ-ADESAO] Chamando create-vindi-customer para beneficiário:', beneficiarioData.id);
 
-          // ✅ DEBUG: Verificar se o campo foi realmente salvo no banco
-          setTimeout(async () => {
-            const { data: checkData, error: checkError } = await supabase
-              .from('beneficiarios')
-              .select('id, nome, checkout_link, payment_status')
-              .eq('id', beneficiarioData.id)
-              .single();
+        const { data: vindiData, error: vindiError } = await supabase.functions.invoke('create-vindi-customer', {
+          body: { beneficiario_id: beneficiarioData.id }
+        });
 
-            console.log('🔍 [MATRIZ-ADESAO] Verificação pós-save no banco:', {
-              id: checkData?.id,
-              nome: checkData?.nome,
-              checkout_link: checkData?.checkout_link,
-              payment_status: checkData?.payment_status,
-              error: checkError
-            });
-          }, 1000);
+        console.log('📋 [MATRIZ-ADESAO] Resposta da função create-vindi-customer:', {
+          success: vindiData?.success,
+          hasCheckoutUrl: !!vindiData?.checkout_url,
+          error: vindiError?.message,
+          fullResponse: vindiData
+        });
+
+        if (vindiError) {
+          console.error('❌ [MATRIZ-ADESAO] Erro ao criar cliente Vindi:', vindiError);
+          // Don't throw error here, beneficiary is already saved
         }
-      } else if (vindiData && !vindiData.success) {
-        console.error('❌ [MATRIZ-ADESAO] Função retornou sucesso = false:', vindiData);
+
+        if (vindiData?.success && vindiData?.checkout_url) {
+          checkoutUrl = vindiData.checkout_url;
+          console.log('✅ [MATRIZ-ADESAO] Checkout URL gerada:', checkoutUrl);
+
+          // Update beneficiary with checkout link
+          const { error: updateError } = await supabase
+            .from('beneficiarios')
+            .update({
+              checkout_link: checkoutUrl,
+              payment_status: 'payment_requested'
+            })
+            .eq('id', beneficiarioData.id);
+
+          if (updateError) {
+            console.error('❌ [MATRIZ-ADESAO] Erro ao salvar link de checkout:', updateError);
+          } else {
+            console.log('✅ [MATRIZ-ADESAO] Link de checkout salvo para beneficiário:', beneficiarioData.id);
+          }
+        } else if (vindiData && !vindiData.success) {
+          console.error('❌ [MATRIZ-ADESAO] Função retornou sucesso = false:', vindiData);
+        } else {
+          console.warn('⚠️ [MATRIZ-ADESAO] Checkout URL não foi gerada - resposta:', vindiData);
+        }
       } else {
-        console.warn('⚠️ [MATRIZ-ADESAO] Checkout URL não foi gerada - resposta:', vindiData);
+        console.log('ℹ️ [MATRIZ-ADESAO] Geração de link de pagamento desativada pelo usuário');
       }
 
       toast({
         title: "Adesão processada com sucesso",
-        description: checkoutUrl
+        description: generatePaymentLink && checkoutUrl
           ? "Beneficiário salvo e link de pagamento gerado!"
           : "Beneficiário salvo com sucesso!"
       });
@@ -214,7 +205,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
       // ✅ Force refresh da tabela para mostrar novo beneficiário
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('refresh-beneficiarios'));
-      }, 2000);
+      }, 500);
 
       // Show payment link if available
       if (checkoutUrl) {
@@ -253,6 +244,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
         empresa_id: "",
       });
       setDependentes([]);
+      setGeneratePaymentLink(true); // Reset toggle para valor padrão
       onClose();
     } catch (error: unknown) {
       console.error('Erro ao criar adesão:', error);
@@ -549,6 +541,31 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
             />
           </div>
         )}
+
+        {/* Toggle para gerar link de pagamento */}
+        <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CreditCard className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <Label htmlFor="generate-payment-link" className="text-sm font-medium cursor-pointer">
+                  Gerar link de pagamento
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {generatePaymentLink
+                    ? "Um link de pagamento será gerado automaticamente"
+                    : "O beneficiário será salvo sem link de pagamento"}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="generate-payment-link"
+              checked={generatePaymentLink}
+              onCheckedChange={setGeneratePaymentLink}
+              disabled={isCreating}
+            />
+          </div>
+        </div>
 
         <div className="flex justify-end gap-2 mt-6">
           <Button variant="outline" onClick={onClose}>

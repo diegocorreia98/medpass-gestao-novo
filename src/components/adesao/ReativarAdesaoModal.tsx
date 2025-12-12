@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RefreshCw, User, CreditCard, MapPin, Calendar, Edit, Copy, ExternalLink, CheckCircle } from "lucide-react";
+import { RefreshCw, User, CreditCard, MapPin, Calendar, Edit, Copy, ExternalLink, CheckCircle, AlertCircle } from "lucide-react";
 import { EditarAdesaoModal } from "./EditarAdesaoModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -28,6 +28,7 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
   const [generatedLink, setGeneratedLink] = useState<string>("");
   const [reactivationStatus, setReactivationStatus] = useState({
     rms: false,
+    rmsExisting: false, // Indica se o usuário já existia na RMS
     payment: false
   });
   const { updateBeneficiario } = useBeneficiarios();
@@ -59,7 +60,9 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
     if (!beneficiario) return;
 
     setIsReactivating(true);
-    setReactivationStatus({ rms: false, payment: false });
+    setReactivationStatus({ rms: false, rmsExisting: false, payment: false });
+
+    let rmsUserAlreadyExists = false;
 
     try {
       // 1. Enviar para RMS (API externa de adesão)
@@ -91,12 +94,32 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
         throw new Error(`Erro na API RMS: ${apiError.message}`);
       }
 
+      // Verificar se o usuário já existe na RMS (código 1001 ou mensagem de duplicidade)
       if (!apiResult.success) {
-        throw new Error(apiResult.error || 'Erro na adesão RMS');
-      }
+        const errorMsg = apiResult.error?.toLowerCase() || '';
+        const isAlreadyExists =
+          apiResult.rms_code === 1001 ||
+          errorMsg.includes('já existe') ||
+          errorMsg.includes('already exists') ||
+          errorMsg.includes('duplicado') ||
+          errorMsg.includes('cadastrado');
 
-      console.log('✅ [REATIVAÇÃO] RMS concluído com sucesso');
-      setReactivationStatus(prev => ({ ...prev, rms: true }));
+        if (isAlreadyExists) {
+          console.log('ℹ️ [REATIVAÇÃO] Usuário já existe na RMS, continuando com geração do link...');
+          rmsUserAlreadyExists = true;
+          setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
+
+          toast({
+            title: "Usuário já cadastrado na RMS",
+            description: "O beneficiário já possui cadastro ativo na RMS. Prosseguindo com a geração do link de pagamento.",
+          });
+        } else {
+          throw new Error(apiResult.error || 'Erro na adesão RMS');
+        }
+      } else {
+        console.log('✅ [REATIVAÇÃO] RMS concluído com sucesso');
+        setReactivationStatus(prev => ({ ...prev, rms: true }));
+      }
 
       // 2. Gerar novo link de pagamento (Vindi)
       console.log('🔄 [REATIVAÇÃO] Passo 2: Gerando link de pagamento...');
@@ -172,7 +195,7 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
   const handleClose = () => {
     setCurrentStep('confirm');
     setGeneratedLink('');
-    setReactivationStatus({ rms: false, payment: false });
+    setReactivationStatus({ rms: false, rmsExisting: false, payment: false });
     onClose();
   };
 
@@ -222,12 +245,20 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
                 <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
                   <div className="flex items-center gap-2 text-sm">
                     {reactivationStatus.rms ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      reactivationStatus.rmsExisting ? (
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      )
                     ) : (
                       <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
                     )}
-                    <span className={reactivationStatus.rms ? 'text-green-700' : 'text-blue-700'}>
-                      {reactivationStatus.rms ? 'RMS: Enviado com sucesso' : 'Enviando para RMS...'}
+                    <span className={reactivationStatus.rms ? (reactivationStatus.rmsExisting ? 'text-amber-700' : 'text-green-700') : 'text-blue-700'}>
+                      {reactivationStatus.rms
+                        ? (reactivationStatus.rmsExisting
+                            ? 'RMS: Usuário já cadastrado (continuando...)'
+                            : 'RMS: Enviado com sucesso')
+                        : 'Enviando para RMS...'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
@@ -385,8 +416,17 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
             {/* Resumo das ações */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span>Enviado para RMS com sucesso</span>
+                {reactivationStatus.rmsExisting ? (
+                  <>
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <span>Usuário já cadastrado na RMS (cadastro mantido)</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span>Enviado para RMS com sucesso</span>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle className="h-4 w-4 text-green-600" />
