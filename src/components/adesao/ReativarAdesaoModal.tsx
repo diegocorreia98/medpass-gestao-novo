@@ -65,8 +65,38 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
     let rmsUserAlreadyExists = false;
 
     try {
-      // 1. Enviar para RMS (API externa de adesão)
-      console.log('🔄 [REATIVAÇÃO] Passo 1: Enviando para RMS...');
+      // 1. Consultar RMS primeiro (se já existir ATIVO, pular adesão e ir direto para o link)
+      console.log('🔄 [REATIVAÇÃO] Passo 1: Consultando RMS por CPF...');
+
+      let rmsIsActive = false;
+      try {
+        const { data: consultaData, error: consultaError } = await supabase.functions.invoke('notify-external-api', {
+          body: {
+            operation: 'consulta-beneficiario',
+            data: { cpf: beneficiario.cpf }
+          }
+        });
+
+        if (!consultaError && consultaData?.success && consultaData?.isActive) {
+          rmsIsActive = true;
+        }
+      } catch (e) {
+        // Se consulta falhar, seguimos com o fluxo antigo de adesão (fallback)
+        console.warn('⚠️ [REATIVAÇÃO] Falha ao consultar RMS, seguindo com adesão:', e);
+      }
+
+      if (rmsIsActive) {
+        console.log('ℹ️ [REATIVAÇÃO] Beneficiário já está ATIVO na RMS. Pulando adesão e indo para geração do link...');
+        rmsUserAlreadyExists = true;
+        setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
+
+        toast({
+          title: "Usuário já cadastrado na RMS",
+          description: "O beneficiário já possui cadastro ativo na RMS. Prosseguindo com a geração do link de pagamento.",
+        });
+      } else {
+        // 1.2 Enviar para RMS (API externa de adesão)
+        console.log('🔄 [REATIVAÇÃO] Passo 1.2: Enviando para RMS (adesão)...');
 
       const adesaoData = {
         id: beneficiario.id,
@@ -140,6 +170,7 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
       } else {
         console.log('✅ [REATIVAÇÃO] RMS concluído com sucesso');
         setReactivationStatus(prev => ({ ...prev, rms: true }));
+      }
       }
 
       // 2. Gerar novo link de pagamento (Vindi)

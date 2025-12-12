@@ -36,13 +36,18 @@ if (missingVars.length > 0) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Função para buscar configurações da API na base de dados
-async function getApiSettings() {
+async function getApiSettings(operation: string) {
   console.log('=== BUSCANDO CONFIGURAÇÕES DA API ===');
   
   const { data: settings, error } = await supabase
     .from('api_settings')
     .select('setting_name, setting_value')
-    .in('setting_name', ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL', 'EXTERNAL_API_CANCELAMENTO_URL']);
+    .in('setting_name', [
+      'EXTERNAL_API_KEY',
+      'EXTERNAL_API_ADESAO_URL',
+      'EXTERNAL_API_CANCELAMENTO_URL',
+      'EXTERNAL_API_CONSULTA_BENEFICIARIOS_URL',
+    ]);
 
   if (error) {
     console.error('Erro ao buscar configurações da API:', error);
@@ -60,7 +65,18 @@ async function getApiSettings() {
 
   console.log('Configurações encontradas:', Object.keys(settingsMap));
   
-  const requiredSettings = ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL', 'EXTERNAL_API_CANCELAMENTO_URL'];
+  // Validar apenas as chaves necessárias para a operação solicitada
+  const requiredSettingsByOperation: Record<string, string[]> = {
+    'adesao': ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL'],
+    'test-adesao': ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL'],
+    'cancelamento': ['EXTERNAL_API_KEY', 'EXTERNAL_API_CANCELAMENTO_URL'],
+    'test-cancelamento': ['EXTERNAL_API_KEY', 'EXTERNAL_API_CANCELAMENTO_URL'],
+    'test-credentials': ['EXTERNAL_API_KEY', 'EXTERNAL_API_ADESAO_URL'],
+    'consulta-beneficiario': ['EXTERNAL_API_KEY', 'EXTERNAL_API_CONSULTA_BENEFICIARIOS_URL'],
+    'consulta-beneficiarios': ['EXTERNAL_API_KEY', 'EXTERNAL_API_CONSULTA_BENEFICIARIOS_URL'],
+  };
+
+  const requiredSettings = requiredSettingsByOperation[operation] || ['EXTERNAL_API_KEY'];
   const missingSettings = requiredSettings.filter(key => !settingsMap[key]);
   
   if (missingSettings.length > 0) {
@@ -70,7 +86,8 @@ async function getApiSettings() {
   return {
     externalApiKey: settingsMap['EXTERNAL_API_KEY'],
     externalApiAdesaoUrl: settingsMap['EXTERNAL_API_ADESAO_URL'],
-    externalApiCancelamentoUrl: settingsMap['EXTERNAL_API_CANCELAMENTO_URL']
+    externalApiCancelamentoUrl: settingsMap['EXTERNAL_API_CANCELAMENTO_URL'],
+    externalApiConsultaBeneficiariosUrl: settingsMap['EXTERNAL_API_CONSULTA_BENEFICIARIOS_URL'],
   };
 }
 
@@ -327,6 +344,13 @@ function maskCpf(cpf: string | null | undefined): string {
   return `${clean.slice(0, 3)}.***.***-${clean.slice(9)}`;
 }
 
+function formatDateDDMMYYYY(date: Date): string {
+  const dia = String(date.getDate()).padStart(2, '0');
+  const mes = String(date.getMonth() + 1).padStart(2, '0');
+  const ano = String(date.getFullYear());
+  return `${dia}/${mes}/${ano}`;
+}
+
 // Função para validar CPF
 function isValidCPF(cpf: string): boolean {
   // Remove caracteres não numéricos
@@ -427,7 +451,7 @@ serve(async (req) => {
     let apiSettings = null;
     if (operation !== 'test') {
       try {
-        apiSettings = await getApiSettings();
+        apiSettings = await getApiSettings(operation);
       } catch (error) {
         console.error('Erro ao buscar configurações:', error.message);
         return new Response(JSON.stringify({ 
@@ -439,6 +463,96 @@ serve(async (req) => {
           status: 400
         });
       }
+    }
+
+    // ✅ Consulta rápida para checar se beneficiário já existe na RMS (antes de tentar adesão)
+    // Evita cair no erro 1016 como caminho normal no fluxo de reativação.
+    if (operation === 'consulta-beneficiario') {
+      const cpf = (data?.cpf || '').toString();
+      const cleanCpf = cpf.replace(/\D/g, '');
+
+      if (!cleanCpf || cleanCpf.length !== 11) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'CPF inválido para consulta. Informe um CPF com 11 dígitos.',
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        });
+      }
+
+      const consultaUrl = apiSettings?.externalApiConsultaBeneficiariosUrl;
+      if (!consultaUrl) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'URL de consulta de beneficiários RMS não configurada (EXTERNAL_API_CONSULTA_BENEFICIARIOS_URL).',
+          needsConfiguration: true,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        });
+      }
+
+      // Janela ampla: do início de 2000 até hoje (RMS exige dataInicial/dataFinal)
+      const dataInicial = '01/01/2000';
+      const dataFinal = formatDateDDMMYYYY(new Date());
+
+      const url = new URL(consultaUrl);
+      url.searchParams.append('idCliente', String(idCliente));
+      url.searchParams.append('idClienteContrato', String(idClienteContrato));
+      url.searchParams.append('dataInicial', dataInicial);
+      url.searchParams.append('dataFinal', dataFinal);
+      url.searchParams.append('offset', '0');
+      url.searchParams.append('cpf', cleanCpf);
+
+      console.log('🔎 [RMS-CONSULTA] Consultando beneficiário por CPF (mascarado):', maskCpf(cleanCpf));
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiSettings.externalApiKey,
+        },
+      });
+
+      const responseData = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage = responseData?.mensagem || `Erro ${response.status} ao consultar beneficiário na RMS`;
+        await logApiCall(null, 'consulta-beneficiario', { cpf: maskCpf(cleanCpf) }, responseData, 'error', errorMessage);
+
+        return new Response(JSON.stringify({
+          success: false,
+          error: errorMessage,
+          httpStatus: response.status,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200, // manter 200 para o front conseguir decidir fallback/continuidade
+        });
+      }
+
+      const beneficiarios = Array.isArray(responseData?.beneficiarios) ? responseData.beneficiarios : [];
+      const encontrado = beneficiarios.find((b: any) => (b?.cpf || '').toString().replace(/\D/g, '') === cleanCpf);
+      const status = encontrado?.status || null;
+      const isAtivo = status === 'ATIVO';
+
+      await logApiCall(
+        null,
+        'consulta-beneficiario',
+        { cpf: maskCpf(cleanCpf), dataInicial, dataFinal },
+        { count: responseData?.count, found: !!encontrado, status },
+        'success',
+      );
+
+      return new Response(JSON.stringify({
+        success: true,
+        found: !!encontrado,
+        status,
+        isActive: isAtivo,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
     }
 
     // Handle test operation
