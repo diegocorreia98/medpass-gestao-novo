@@ -142,6 +142,17 @@ export function AdesoesDataTable({ beneficiarios, isLoading }: AdesoesDataTableP
           title: "Adesão RMS gerada com sucesso!",
           description: "O beneficiário foi registrado na RMS.",
         });
+      } else if (
+        data?.rms_code === 1016 ||
+        data?.rms_error_type === 'BENEFICIARIO_JA_ATIVO' ||
+        data?.canProceedToPayment === true
+      ) {
+        // ✅ Caso de negócio: beneficiário já existe ativo na RMS (não tratar como erro bloqueante)
+        toast({
+          title: "Usuário já cadastrado na RMS",
+          description: data?.error || "O beneficiário já possui cadastro ativo na RMS.",
+        });
+        return;
       } else {
         throw new Error(data?.error || 'Erro desconhecido ao gerar adesão');
       }
