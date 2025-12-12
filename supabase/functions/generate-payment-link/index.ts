@@ -76,29 +76,53 @@ serve(async (req) => {
     const userId = userData.user.id;
     console.log('🔐 [PERM] Iniciando verificação de permissão inline', { userId, beneficiario_id });
 
-    // 1) Buscar profile do usuário (por user_id primeiro, depois id como fallback)
+    // 1) Buscar profile do usuário - testar TODAS as formas possíveis
     let userProfile: { user_type: string | null; unidade_id: string | null } | null = null;
 
+    // Primeiro: listar todos os profiles para debug
+    const allProfiles = await supabaseService
+      .from('profiles')
+      .select('id, user_id, user_type, unidade_id')
+      .limit(5);
+    console.log('🔐 [PERM] DEBUG - Primeiros 5 profiles:', JSON.stringify(allProfiles.data), allProfiles.error?.message);
+
+    // Tentativa 1: por user_id
     const profileByUserId = await supabaseService
       .from('profiles')
       .select('user_type, unidade_id')
       .eq('user_id', userId)
       .maybeSingle();
-    console.log('🔐 [PERM] Profile por user_id:', profileByUserId.data, profileByUserId.error?.message);
+    console.log('🔐 [PERM] Profile por user_id:', JSON.stringify(profileByUserId.data), profileByUserId.error?.message);
 
     if (profileByUserId.data) {
       userProfile = profileByUserId.data;
     } else {
+      // Tentativa 2: por id
       const profileById = await supabaseService
         .from('profiles')
         .select('user_type, unidade_id')
         .eq('id', userId)
         .maybeSingle();
-      console.log('🔐 [PERM] Profile por id:', profileById.data, profileById.error?.message);
+      console.log('🔐 [PERM] Profile por id:', JSON.stringify(profileById.data), profileById.error?.message);
+      
       if (profileById.data) {
         userProfile = profileById.data;
+      } else {
+        // Tentativa 3: buscar profile onde user_id contém o ID (debug)
+        const profileSearch = await supabaseService
+          .from('profiles')
+          .select('id, user_id, user_type, unidade_id')
+          .or(`id.eq.${userId},user_id.eq.${userId}`)
+          .maybeSingle();
+        console.log('🔐 [PERM] Profile por OR (id ou user_id):', JSON.stringify(profileSearch.data), profileSearch.error?.message);
+        
+        if (profileSearch.data) {
+          userProfile = { user_type: profileSearch.data.user_type, unidade_id: profileSearch.data.unidade_id };
+        }
       }
     }
+
+    console.log('🔐 [PERM] Profile final encontrado:', JSON.stringify(userProfile));
 
     // 2) Buscar dados mínimos do beneficiário
     const { data: beneficiarioAccess, error: beneficiarioAccessError } = await supabaseService
@@ -765,7 +789,7 @@ serve(async (req) => {
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: error instanceof HttpError ? error.status : 500,
+      status: (error as any)?.status || 500,
     });
   }
 });
