@@ -25,14 +25,25 @@ export async function fetchUserAccessProfile(
   supabaseService: SupabaseClient,
   userId: string,
 ): Promise<UserAccessProfile | null> {
-  const { data, error } = await supabaseService
+  // O frontend busca o profile por `user_id` (ver `AuthContext.fetchProfile`),
+  // então priorizamos essa chave. Mantemos fallback para `id` por compatibilidade.
+  const primary = await supabaseService
+    .from("profiles")
+    .select("user_type, unidade_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (primary.data) return primary.data as UserAccessProfile;
+
+  const fallback = await supabaseService
     .from("profiles")
     .select("user_type, unidade_id")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
-  if (error) return null;
-  return data as UserAccessProfile;
+  if (fallback.data) return fallback.data as UserAccessProfile;
+
+  return null;
 }
 
 export async function fetchBeneficiarioAccessRow(
