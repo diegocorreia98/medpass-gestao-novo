@@ -2,6 +2,16 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreditCard, QrCode, FileText } from 'lucide-react';
 
+// ============================================
+// CONFIGURAÇÃO DE MÉTODOS DE PAGAMENTO
+// Para reativar PIX: mude pix: false para pix: true
+// ============================================
+const PAYMENT_METHODS_ENABLED = {
+  credit_card: true,
+  pix: false,  // PIX desativado temporariamente
+  boleto: true,
+};
+
 interface PaymentMethodSelectorProps {
   selectedMethod: 'credit_card' | 'pix' | 'boleto' | null;
   onSelectMethod: (method: 'credit_card' | 'pix' | 'boleto') => void;
@@ -33,7 +43,9 @@ const PAYMENT_METHODS = [
 ];
 
 export function PaymentMethodSelector({ selectedMethod, onSelectMethod, hideMethod }: PaymentMethodSelectorProps) {
-  const filteredMethods = PAYMENT_METHODS.filter(method => method.id !== hideMethod);
+  const filteredMethods = PAYMENT_METHODS.filter(
+    method => PAYMENT_METHODS_ENABLED[method.id] && method.id !== hideMethod
+  );
   return (
     <div className="space-y-4 sm:space-y-6">
       <h3 className="text-base sm:text-lg lg:text-xl font-semibold">Método de Pagamento</h3>

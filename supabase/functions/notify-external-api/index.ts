@@ -647,6 +647,21 @@ serve(async (req) => {
       // Buscar código RMS do plano
       const rmsPlanoCode = await getRmsPlanoCode(plano_id);
 
+      // Garantir que numero seja um valor numérico válido (até 10 caracteres)
+      const formatarNumero = (num: string | null | undefined): string => {
+        if (!num) return '123';
+        // Remove tudo que não é número
+        const apenasNumeros = num.replace(/\D/g, '');
+        // Se não sobrou nada ou é muito longo, usa padrão
+        if (!apenasNumeros || apenasNumeros.length === 0 || apenasNumeros.length > 10) {
+          return '123';
+        }
+        return apenasNumeros;
+      };
+
+      const numeroFormatado = formatarNumero(numero_endereco);
+      console.log(`🏠 Número original: "${numero_endereco}" -> formatado: "${numeroFormatado}"`);
+
       const requestData = {
         idClienteContrato: parseInt(idClienteContrato),
         idBeneficiarioTipo: id_beneficiario_tipo || 1,
@@ -658,7 +673,7 @@ serve(async (req) => {
         celular: telefone || '',
         email: email || '',
         cep: cep || '',
-        numero: numero_endereco || '123',
+        numero: numeroFormatado,
         uf: estado || '',
         tipoPlano: parseInt(rmsPlanoCode)
       };

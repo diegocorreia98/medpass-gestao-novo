@@ -4,7 +4,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, User, CreditCard, MapPin, Calendar, Edit } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RefreshCw, User, CreditCard, MapPin, Calendar, Edit, Copy, ExternalLink, CheckCircle } from "lucide-react";
 import { EditarAdesaoModal } from "./EditarAdesaoModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,78 +24,156 @@ interface ReativarAdesaoModalProps {
 export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAdesaoModalProps) {
   const [isReactivating, setIsReactivating] = useState(false);
   const [editarModalOpen, setEditarModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'confirm' | 'success'>('confirm');
+  const [generatedLink, setGeneratedLink] = useState<string>("");
+  const [reactivationStatus, setReactivationStatus] = useState({
+    rms: false,
+    payment: false
+  });
   const { updateBeneficiario } = useBeneficiarios();
   const { toast } = useToast();
+
+  // Gerar código externo usando nome da unidade
+  const generateExternalCode = () => {
+    if (!beneficiario) return '';
+    const unidadeName = beneficiario.unidade?.nome || 'MATRIZ';
+    const beneficiarioNumbers = beneficiario.id.replace(/[^0-9]/g, '').slice(0, 6);
+    const cleanUnitName = unidadeName
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8);
+    return `${cleanUnitName}${beneficiarioNumbers}`.slice(0, 15);
+  };
+
+  // Formatar data para RMS (DDMMYYYY)
+  const formatDateForRMS = (dateStr: string | null) => {
+    if (!dateStr) return '01011990';
+    const date = new Date(dateStr);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear().toString();
+    return `${day}${month}${year}`;
+  };
 
   const handleReativar = async () => {
     if (!beneficiario) return;
 
     setIsReactivating(true);
-    
+    setReactivationStatus({ rms: false, payment: false });
+
     try {
-      // 1. Chamar a API externa de adesão com os dados existentes
-      // Formatação correta da data de nascimento (DDMMYYYY)
-      const formatarDataParaApi = (data: string) => {
-        if (!data) return '';
-        const date = new Date(data);
-        const dia = String(date.getDate()).padStart(2, '0');
-        const mes = String(date.getMonth() + 1).padStart(2, '0');
-        const ano = date.getFullYear();
-        return `${dia}${mes}${ano}`;
+      // 1. Enviar para RMS (API externa de adesão)
+      console.log('🔄 [REATIVAÇÃO] Passo 1: Enviando para RMS...');
+
+      const adesaoData = {
+        id: beneficiario.id,
+        nome: beneficiario.nome,
+        cpf: beneficiario.cpf,
+        data_nascimento: formatDateForRMS(beneficiario.data_nascimento),
+        telefone: beneficiario.telefone || '11999999999',
+        email: beneficiario.email,
+        cep: beneficiario.cep || '01234567',
+        numero_endereco: '123', // Valor padrão para evitar erros
+        estado: beneficiario.estado || 'SP',
+        plano_id: beneficiario.plano_id,
+        id_beneficiario_tipo: 1,
+        codigo_externo: generateExternalCode()
       };
 
       const { data: apiResult, error: apiError } = await supabase.functions.invoke('notify-external-api', {
         body: {
           operation: 'adesao',
-          data: {
-            id: beneficiario.id,
-            nome: beneficiario.nome,
-            cpf: beneficiario.cpf,
-            data_nascimento: formatarDataParaApi(beneficiario.data_nascimento),
-            telefone: beneficiario.telefone,
-            email: beneficiario.email,
-            cep: beneficiario.cep,
-            numero_endereco: beneficiario.endereco?.split(',').pop()?.trim() || '123',
-            estado: beneficiario.estado,
-            plano_id: beneficiario.plano_id,
-            id_beneficiario_tipo: 1, // Padrão para titular
-            codigo_externo: `BEN${beneficiario.id.slice(0, 8)}`
-          }
+          data: adesaoData
         }
       });
 
       if (apiError) {
-        throw new Error(`Erro na API externa: ${apiError.message}`);
+        throw new Error(`Erro na API RMS: ${apiError.message}`);
       }
 
       if (!apiResult.success) {
-        throw new Error(apiResult.error || 'Erro na reativação via API externa');
+        throw new Error(apiResult.error || 'Erro na adesão RMS');
       }
 
-      // 2. Atualizar o status do beneficiário no banco de dados
+      console.log('✅ [REATIVAÇÃO] RMS concluído com sucesso');
+      setReactivationStatus(prev => ({ ...prev, rms: true }));
+
+      // 2. Gerar novo link de pagamento (Vindi)
+      console.log('🔄 [REATIVAÇÃO] Passo 2: Gerando link de pagamento...');
+
+      const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('generate-payment-link', {
+        body: { beneficiario_id: beneficiario.id }
+      });
+
+      if (paymentError) {
+        throw new Error(`Erro ao gerar link de pagamento: ${paymentError.message}`);
+      }
+
+      if (paymentResult?.error) {
+        throw new Error(paymentResult.error);
+      }
+
+      console.log('✅ [REATIVAÇÃO] Link de pagamento gerado:', paymentResult?.payment_url);
+      setGeneratedLink(paymentResult?.payment_url || '');
+      setReactivationStatus(prev => ({ ...prev, payment: true }));
+
+      // 3. Atualizar o status do beneficiário no banco de dados
+      console.log('🔄 [REATIVAÇÃO] Passo 3: Atualizando status...');
+
       await updateBeneficiario.mutateAsync({
         id: beneficiario.id,
         updates: {
-          status: 'ativo'
+          status: 'ativo',
+          checkout_link: paymentResult?.payment_url || null
         }
       });
 
+      console.log('✅ [REATIVAÇÃO] Beneficiário reativado com sucesso!');
+
       toast({
-        title: "Sucesso",
-        description: "Beneficiário reativado com sucesso!",
+        title: "Reativação concluída!",
+        description: "Beneficiário reativado e link de pagamento gerado com sucesso.",
       });
 
-      onClose();
+      setCurrentStep('success');
+
     } catch (error: any) {
-      console.error('Erro na reativação:', error);
+      console.error('❌ [REATIVAÇÃO] Erro:', error);
       toast({
-        title: "Erro",
+        title: "Erro na reativação",
         description: error.message || "Erro ao reativar beneficiário",
         variant: "destructive",
       });
     } finally {
       setIsReactivating(false);
     }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedLink);
+      toast({
+        title: "Link copiado!",
+        description: "Link de pagamento copiado para a área de transferência",
+      });
+    } catch {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o link",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenLink = () => {
+    window.open(generatedLink, '_blank');
+  };
+
+  const handleClose = () => {
+    setCurrentStep('confirm');
+    setGeneratedLink('');
+    setReactivationStatus({ rms: false, payment: false });
+    onClose();
   };
 
   const formatarData = (data: string) => {
@@ -110,144 +190,252 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
   if (!beneficiario) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-green-600" />
-            Reativar Beneficiário
+            {currentStep === 'success' ? (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            ) : (
+              <RefreshCw className="h-5 w-5 text-green-600" />
+            )}
+            {currentStep === 'success' ? 'Reativação Concluída!' : 'Reativar Beneficiário'}
           </DialogTitle>
           <DialogDescription>
-            Confirme a reativação do beneficiário. Esta ação irá enviar os dados novamente para a API externa e alterar o status para ativo.
+            {currentStep === 'success'
+              ? 'O beneficiário foi reativado com sucesso. Um novo link de pagamento foi gerado.'
+              : 'Confirme a reativação do beneficiário. Esta ação irá enviar os dados para a RMS e gerar um novo link de pagamento.'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Status atual */}
-          <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-            <span className="font-medium">Status atual:</span>
-            <Badge variant="destructive">Inativo</Badge>
-          </div>
-
-          {/* Dados do beneficiário */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">Dados Pessoais</span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Nome:</span>
-                <p className="font-medium">{beneficiario.nome}</p>
+        {currentStep === 'confirm' ? (
+          <>
+            <div className="space-y-6">
+              {/* Status atual */}
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <span className="font-medium">Status atual:</span>
+                <Badge variant="destructive">Inativo</Badge>
               </div>
-              <div>
-                <span className="text-muted-foreground">CPF:</span>
-                <p className="font-medium">{beneficiario.cpf}</p>
+
+              {/* Progresso durante reativação */}
+              {isReactivating && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    {reactivationStatus.rms ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
+                    )}
+                    <span className={reactivationStatus.rms ? 'text-green-700' : 'text-blue-700'}>
+                      {reactivationStatus.rms ? 'RMS: Enviado com sucesso' : 'Enviando para RMS...'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    {reactivationStatus.payment ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : reactivationStatus.rms ? (
+                      <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
+                    ) : (
+                      <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
+                    )}
+                    <span className={reactivationStatus.payment ? 'text-green-700' : reactivationStatus.rms ? 'text-blue-700' : 'text-gray-500'}>
+                      {reactivationStatus.payment ? 'Link de pagamento gerado' : reactivationStatus.rms ? 'Gerando link de pagamento...' : 'Aguardando...'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Dados do beneficiário */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-semibold">Dados Pessoais</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Nome:</span>
+                    <p className="font-medium">{beneficiario.nome}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">CPF:</span>
+                    <p className="font-medium">{beneficiario.cpf}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">E-mail:</span>
+                    <p className="font-medium">{beneficiario.email || "Não informado"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Telefone:</span>
+                    <p className="font-medium">{beneficiario.telefone || "Não informado"}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-semibold">Plano</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Plano:</span>
+                    <p className="font-medium">{beneficiario.plano?.nome}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Valor:</span>
+                    <p className="font-medium">{formatarMoeda(Number(beneficiario.valor_plano))}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-semibold">Localização</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Cidade:</span>
+                    <p className="font-medium">{beneficiario.cidade || "Não informado"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Estado:</span>
+                    <p className="font-medium">{beneficiario.estado || "Não informado"}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-semibold">Data de Adesão Original</span>
+                </div>
+
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Adesão:</span>
+                  <p className="font-medium">{formatarData(beneficiario.data_adesao)}</p>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">E-mail:</span>
-                <p className="font-medium">{beneficiario.email || "Não informado"}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Telefone:</span>
-                <p className="font-medium">{beneficiario.telefone || "Não informado"}</p>
+
+              {/* Aviso importante */}
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Atenção:</strong> A reativação irá:
+                </p>
+                <ul className="text-sm text-yellow-800 dark:text-yellow-200 list-disc list-inside mt-2 space-y-1">
+                  <li>Enviar os dados para a RMS (API externa)</li>
+                  <li>Gerar um novo link de pagamento na Vindi</li>
+                  <li>Alterar o status para "Ativo"</li>
+                </ul>
               </div>
             </div>
 
-            <Separator />
-
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">Plano</span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Plano:</span>
-                <p className="font-medium">{beneficiario.plano?.nome}</p>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                disabled={isReactivating}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setEditarModalOpen(true)}
+                disabled={isReactivating}
+                className="mr-auto"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Editar Dados
+              </Button>
+              <Button
+                onClick={handleReativar}
+                disabled={isReactivating}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isReactivating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Reativando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Confirmar Reativação
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          /* Tela de sucesso com link de pagamento */
+          <div className="space-y-6">
+            <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center gap-2 text-green-800 dark:text-green-200 mb-2">
+                <CheckCircle className="h-5 w-5" />
+                <span className="font-semibold">Reativação realizada com sucesso!</span>
               </div>
-              <div>
-                <span className="text-muted-foreground">Valor:</span>
-                <p className="font-medium">{formatarMoeda(Number(beneficiario.valor_plano))}</p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                O beneficiário {beneficiario.nome} foi reativado e um novo link de pagamento foi gerado.
+              </p>
+            </div>
+
+            {/* Resumo das ações */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span>Enviado para RMS com sucesso</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span>Link de pagamento gerado</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span>Status atualizado para "Ativo"</span>
               </div>
             </div>
 
-            <Separator />
-
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">Localização</span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Cidade:</span>
-                <p className="font-medium">{beneficiario.cidade || "Não informado"}</p>
+            {/* Link de pagamento */}
+            {generatedLink && (
+              <div className="space-y-2">
+                <Label>Link de Pagamento</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={generatedLink}
+                    readOnly
+                    className="flex-1 text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyLink}
+                    title="Copiar link"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleOpenLink}
+                  className="w-full"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Abrir Link de Pagamento
+                </Button>
               </div>
-              <div>
-                <span className="text-muted-foreground">Estado:</span>
-                <p className="font-medium">{beneficiario.estado || "Não informado"}</p>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold">Data de Adesão Original</span>
-            </div>
-            
-            <div className="text-sm">
-              <span className="text-muted-foreground">Adesão:</span>
-              <p className="font-medium">{formatarData(beneficiario.data_adesao)}</p>
-            </div>
-          </div>
-
-          {/* Aviso importante */}
-          <div className="p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Atenção:</strong> A reativação irá enviar os dados deste beneficiário novamente para a API externa 
-              e alterar o status para "Ativo". Verifique se todos os dados estão corretos antes de prosseguir.
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isReactivating}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setEditarModalOpen(true)}
-            disabled={isReactivating}
-            className="mr-auto"
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Editar Dados
-          </Button>
-          <Button
-            onClick={handleReativar}
-            disabled={isReactivating}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            {isReactivating ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Reativando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Confirmar Reativação
-              </>
             )}
-          </Button>
-        </DialogFooter>
+
+            <DialogFooter>
+              <Button onClick={handleClose} className="w-full">
+                Fechar
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
       </DialogContent>
 
       <EditarAdesaoModal
