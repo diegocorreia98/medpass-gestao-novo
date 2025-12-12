@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { assertBeneficiarioAccess, HttpError } from "../_shared/beneficiario-access.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,70 +69,20 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Verificar perfil do usuário para permissões
-    const { data: userProfile, error: profileError } = await supabaseService
-      .from('profiles')
-      .select('user_type, unidade_id')
-      .eq('id', userData.user.id)
-      .single();
-
-    if (profileError) {
-      console.error('Erro ao buscar perfil do usuário:', profileError);
-    }
+    // Verificar permissão de acesso (matriz/unidade/dono) e obter dados mínimos para debug
+    const { userProfile, beneficiarioAccess } = await assertBeneficiarioAccess({
+      supabaseService,
+      userId: userData.user.id,
+      beneficiarioId: beneficiario_id,
+    });
 
     const isMatriz = userProfile?.user_type === 'matriz';
     console.log(`👤 Usuário: ${userData.user.id}, Tipo: ${userProfile?.user_type || 'desconhecido'}, É Matriz: ${isMatriz}`);
-    console.log(`📋 Buscando beneficiário: ${beneficiario_id}`);
-
-    // PRIMEIRO: Tentar buscar o beneficiário SEM filtros de permissão usando service role
-    // Isso permite que usuários matriz acessem todos os beneficiários
-    const { data: beneficiarioCheck, error: checkError } = await supabaseService
-      .from('beneficiarios')
-      .select('id, user_id, unidade_id')
-      .eq('id', beneficiario_id)
-      .single();
-
-    if (checkError) {
-      console.error('❌ Beneficiário não existe no banco:', {
-        beneficiario_id,
-        error: checkError
-      });
-      throw new Error(`Beneficiário com ID ${beneficiario_id} não encontrado no banco de dados`);
-    }
-
-    console.log(`✅ Beneficiário encontrado:`, {
-      id: beneficiarioCheck.id,
-      user_id: beneficiarioCheck.user_id,
-      unidade_id: beneficiarioCheck.unidade_id
+    console.log(`✅ Beneficiário com acesso validado:`, {
+      id: beneficiarioAccess.id,
+      user_id: beneficiarioAccess.user_id,
+      unidade_id: beneficiarioAccess.unidade_id,
     });
-
-    // Verificar permissão de acesso
-    let hasPermission = false;
-
-    if (isMatriz) {
-      // Matriz tem acesso a todos os beneficiários
-      hasPermission = true;
-      console.log('✅ Acesso permitido: usuário é matriz');
-    } else if (userProfile?.unidade_id && beneficiarioCheck.unidade_id === userProfile.unidade_id) {
-      // Unidade tem acesso aos beneficiários da mesma unidade
-      hasPermission = true;
-      console.log('✅ Acesso permitido: mesma unidade');
-    } else if (beneficiarioCheck.user_id === userData.user.id) {
-      // Usuário tem acesso aos seus próprios beneficiários
-      hasPermission = true;
-      console.log('✅ Acesso permitido: próprio usuário');
-    }
-
-    if (!hasPermission) {
-      console.error('❌ Sem permissão para acessar beneficiário:', {
-        userId: userData.user.id,
-        userType: userProfile?.user_type,
-        userUnidadeId: userProfile?.unidade_id,
-        beneficiarioUserId: beneficiarioCheck.user_id,
-        beneficiarioUnidadeId: beneficiarioCheck.unidade_id
-      });
-      throw new Error('Sem permissão para acessar este beneficiário');
-    }
 
     // Agora buscar os dados completos do beneficiário
     const { data: beneficiario, error: beneficiarioError } = await supabaseService
@@ -710,14 +661,14 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in generate-payment-link:', error);
     return new Response(JSON.stringify({
-      error: error.message || 'Erro interno do servidor',
+      error: error instanceof Error ? error.message : 'Erro interno do servidor',
       debug_info: {
         function: 'generate-payment-link',
         timestamp: new Date().toISOString()
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: error instanceof HttpError ? error.status : 500,
     });
   }
 });

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { assertBeneficiarioAccess, HttpError } from "../_shared/beneficiario-access.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,6 +108,13 @@ serve(async (req) => {
 
     logStep("🔍 Buscando beneficiário", { beneficiario_id, user_id: userData.user.id });
 
+    // Verificar permissão de acesso (matriz/unidade/dono)
+    await assertBeneficiarioAccess({
+      supabaseService,
+      userId: userData.user.id,
+      beneficiarioId: beneficiario_id,
+    });
+
     // Get beneficiario with plan details
     const { data: beneficiario, error: beneficiarioError } = await supabaseService
       .from('beneficiarios')
@@ -115,7 +123,6 @@ serve(async (req) => {
         plano:planos (*)
       `)
       .eq('id', beneficiario_id)
-      .eq('user_id', userData.user.id)
       .single();
 
     if (beneficiarioError || !beneficiario) {
@@ -124,7 +131,7 @@ serve(async (req) => {
         beneficiario_id,
         user_id: userData.user.id
       });
-      throw new Error('Beneficiário não encontrado ou sem permissão de acesso');
+      throw new Error('Erro ao carregar dados do beneficiário');
     }
 
     logStep("📋 Beneficiário encontrado", {
@@ -484,7 +491,7 @@ serve(async (req) => {
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      status: error instanceof HttpError ? error.status : 500,
     });
   }
 });
