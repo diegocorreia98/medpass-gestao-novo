@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
-const FUNCTION_VERSION = '2025-12-12-generate-payment-link-inline-v4';
+const FUNCTION_VERSION = '2025-12-12-generate-payment-link-v5-no-unidade-id';
 
 interface GeneratePaymentLinkRequest {
   beneficiario_id: string;
@@ -72,134 +72,88 @@ serve(async (req) => {
 
     // ============================================================
     // VERIFICAÇÃO DE PERMISSÃO INLINE (sem dependência de _shared)
+    // A tabela profiles NÃO TEM unidade_id - a relação é via unidades.user_id
     // ============================================================
     const userId = userData.user.id;
-    console.log('🔐 [PERM] Iniciando verificação de permissão inline', { userId, beneficiario_id });
+    console.log('🔐 [PERM] Iniciando verificação de permissão inline v5', { userId, beneficiario_id });
 
-    // 1) Buscar profile do usuário - testar TODAS as formas possíveis
-    let userProfile: { user_type: string | null; unidade_id: string | null } | null = null;
+    // 1) Buscar profile do usuário - apenas user_type (profiles não tem unidade_id!)
+    let userType: string | null = null;
 
-    // Primeiro: listar todos os profiles para debug
-    const allProfiles = await supabaseService
+    const { data: profileData, error: profileError } = await supabaseService
       .from('profiles')
-      .select('id, user_id, user_type, unidade_id')
-      .limit(5);
-    console.log('🔐 [PERM] DEBUG - Primeiros 5 profiles:', JSON.stringify(allProfiles.data), allProfiles.error?.message);
-
-    // Tentativa 1: por user_id
-    const profileByUserId = await supabaseService
-      .from('profiles')
-      .select('user_type, unidade_id')
+      .select('user_type')
       .eq('user_id', userId)
       .maybeSingle();
-    console.log('🔐 [PERM] Profile por user_id:', JSON.stringify(profileByUserId.data), profileByUserId.error?.message);
+    
+    console.log('🔐 [PERM] Profile encontrado:', JSON.stringify(profileData), profileError?.message);
 
-    if (profileByUserId.data) {
-      userProfile = profileByUserId.data;
+    if (profileData) {
+      userType = profileData.user_type;
+    }
+
+    const isMatriz = (userType || '').toString().toLowerCase() === 'matriz';
+    console.log('🔐 [PERM] Tipo do usuário:', { userType, isMatriz });
+
+    // 2) Se for matriz, tem acesso total - não precisa verificar mais nada
+    if (isMatriz) {
+      console.log('🔐 [PERM] ✅ Acesso permitido: usuário é MATRIZ - acesso total');
     } else {
-      // Tentativa 2: por id
-      const profileById = await supabaseService
-        .from('profiles')
-        .select('user_type, unidade_id')
-        .eq('id', userId)
-        .maybeSingle();
-      console.log('🔐 [PERM] Profile por id:', JSON.stringify(profileById.data), profileById.error?.message);
-      
-      if (profileById.data) {
-        userProfile = profileById.data;
-      } else {
-        // Tentativa 3: buscar profile onde user_id contém o ID (debug)
-        const profileSearch = await supabaseService
-          .from('profiles')
-          .select('id, user_id, user_type, unidade_id')
-          .or(`id.eq.${userId},user_id.eq.${userId}`)
-          .maybeSingle();
-        console.log('🔐 [PERM] Profile por OR (id ou user_id):', JSON.stringify(profileSearch.data), profileSearch.error?.message);
-        
-        if (profileSearch.data) {
-          userProfile = { user_type: profileSearch.data.user_type, unidade_id: profileSearch.data.unidade_id };
+      // 3) Para não-matriz, buscar dados do beneficiário e verificar permissões
+      const { data: beneficiarioAccess, error: beneficiarioAccessError } = await supabaseService
+        .from('beneficiarios')
+        .select('id, user_id, unidade_id')
+        .eq('id', beneficiario_id)
+        .single();
+
+      if (beneficiarioAccessError || !beneficiarioAccess) {
+        console.error('🔐 [PERM] Beneficiário não encontrado:', beneficiarioAccessError);
+        throw new Error(`Beneficiário com ID ${beneficiario_id} não encontrado no banco de dados`);
+      }
+
+      console.log('🔐 [PERM] Dados do beneficiário:', {
+        id: beneficiarioAccess.id,
+        user_id: beneficiarioAccess.user_id,
+        unidade_id: beneficiarioAccess.unidade_id,
+      });
+
+      let hasPermission = false;
+
+      // 3.1) Beneficiário pertence ao próprio usuário
+      if (beneficiarioAccess.user_id === userId) {
+        hasPermission = true;
+        console.log('🔐 [PERM] ✅ Acesso permitido: beneficiário do próprio usuário');
+      }
+
+      // 3.2) Usuário é dono da unidade do beneficiário (via tabela unidades.user_id)
+      if (!hasPermission && beneficiarioAccess.unidade_id) {
+        console.log('🔐 [PERM] Verificando se usuário é dono da unidade...');
+        const { data: unidadeData, error: unidadeError } = await supabaseService
+          .from('unidades')
+          .select('id, user_id, nome')
+          .eq('id', beneficiarioAccess.unidade_id)
+          .single();
+
+        console.log('🔐 [PERM] Dados da unidade:', JSON.stringify(unidadeData), unidadeError?.message);
+
+        if (unidadeData && unidadeData.user_id === userId) {
+          hasPermission = true;
+          console.log('🔐 [PERM] ✅ Acesso permitido: usuário é dono da unidade', unidadeData.nome);
         }
       }
-    }
 
-    console.log('🔐 [PERM] Profile final encontrado:', JSON.stringify(userProfile));
-
-    // 2) Buscar dados mínimos do beneficiário
-    const { data: beneficiarioAccess, error: beneficiarioAccessError } = await supabaseService
-      .from('beneficiarios')
-      .select('id, user_id, unidade_id')
-      .eq('id', beneficiario_id)
-      .single();
-
-    if (beneficiarioAccessError || !beneficiarioAccess) {
-      console.error('🔐 [PERM] Beneficiário não encontrado:', beneficiarioAccessError);
-      throw new Error(`Beneficiário com ID ${beneficiario_id} não encontrado no banco de dados`);
-    }
-
-    console.log('🔐 [PERM] Dados para verificação:', {
-      userId,
-      userType: userProfile?.user_type,
-      userUnidadeId: userProfile?.unidade_id,
-      beneficiarioUserId: beneficiarioAccess.user_id,
-      beneficiarioUnidadeId: beneficiarioAccess.unidade_id,
-    });
-
-    // 3) Verificar permissões
-    let hasPermission = false;
-    const userType = (userProfile?.user_type || '').toString().toLowerCase();
-    const isMatriz = userType === 'matriz';
-
-    // 3.1) Matriz tem acesso total
-    if (isMatriz) {
-      hasPermission = true;
-      console.log('🔐 [PERM] ✅ Acesso permitido: usuário é matriz');
-    }
-
-    // 3.2) Mesma unidade_id no profile
-    if (!hasPermission && userProfile?.unidade_id && beneficiarioAccess.unidade_id === userProfile.unidade_id) {
-      hasPermission = true;
-      console.log('🔐 [PERM] ✅ Acesso permitido: mesma unidade_id no profile');
-    }
-
-    // 3.3) Beneficiário pertence ao próprio usuário
-    if (!hasPermission && beneficiarioAccess.user_id === userId) {
-      hasPermission = true;
-      console.log('🔐 [PERM] ✅ Acesso permitido: beneficiário do próprio usuário');
-    }
-
-    // 3.4) Usuário é dono da unidade do beneficiário (via tabela unidades.user_id)
-    if (!hasPermission && beneficiarioAccess.unidade_id) {
-      console.log('🔐 [PERM] Verificando se usuário é dono da unidade via unidades.user_id...');
-      const { data: unidadeData } = await supabaseService
-        .from('unidades')
-        .select('id, user_id')
-        .eq('id', beneficiarioAccess.unidade_id)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (unidadeData) {
-        hasPermission = true;
-        console.log('🔐 [PERM] ✅ Acesso permitido: usuário é dono da unidade', unidadeData.id);
+      if (!hasPermission) {
+        console.error('🔐 [PERM] ❌ Sem permissão para acessar beneficiário', {
+          userId,
+          userType,
+          beneficiarioUserId: beneficiarioAccess.user_id,
+          beneficiarioUnidadeId: beneficiarioAccess.unidade_id,
+        });
+        throw new Error('Sem permissão para acessar este beneficiário');
       }
     }
 
-    if (!hasPermission) {
-      console.error('🔐 [PERM] ❌ Sem permissão para acessar beneficiário', {
-        userId,
-        userType: userProfile?.user_type,
-        userUnidadeId: userProfile?.unidade_id,
-        beneficiarioUserId: beneficiarioAccess.user_id,
-        beneficiarioUnidadeId: beneficiarioAccess.unidade_id,
-      });
-      throw new Error('Sem permissão para acessar este beneficiário');
-    }
-
-    console.log(`👤 Usuário: ${userId}, Tipo: ${userProfile?.user_type || 'desconhecido'}, É Matriz: ${isMatriz}`);
-    console.log(`✅ Beneficiário com acesso validado:`, {
-      id: beneficiarioAccess.id,
-      user_id: beneficiarioAccess.user_id,
-      unidade_id: beneficiarioAccess.unidade_id,
-    });
+    console.log(`👤 Usuário: ${userId}, Tipo: ${userType || 'desconhecido'}, É Matriz: ${isMatriz}`);
     // ============================================================
     // FIM DA VERIFICAÇÃO DE PERMISSÃO INLINE
     // ============================================================
