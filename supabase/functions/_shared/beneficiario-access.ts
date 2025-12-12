@@ -96,6 +96,14 @@ export async function assertBeneficiarioAccess(params: {
   });
 
   if (!allowed) {
+    console.error("[ACCESS] Sem permissão para beneficiário", {
+      userId: params.userId,
+      userType: (userProfile?.user_type ?? "").toString(),
+      userUnidadeId: userProfile?.unidade_id ?? null,
+      beneficiarioId: beneficiarioAccess.id,
+      beneficiarioUserId: beneficiarioAccess.user_id ?? null,
+      beneficiarioUnidadeId: beneficiarioAccess.unidade_id ?? null,
+    });
     throw new HttpError("Beneficiário não encontrado ou sem permissão de acesso", 403);
   }
 

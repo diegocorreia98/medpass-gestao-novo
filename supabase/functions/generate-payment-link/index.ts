@@ -8,6 +8,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
+const FUNCTION_VERSION = '2025-12-12-generate-payment-link-access-v3';
+
 interface GeneratePaymentLinkRequest {
   beneficiario_id: string;
   payment_method?: 'credit_card' | 'bank_slip' | 'pix';
@@ -21,7 +23,7 @@ serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
 
-    console.log('🔄 [GENERATE-PAYMENT-LINK] Function updated - Version 2.1 - Syntax Fixed');
+    console.log('🔄 [GENERATE-PAYMENT-LINK] Start', { functionVersion: FUNCTION_VERSION });
 
     // Validação prévia de variáveis de ambiente críticas
     const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
@@ -664,6 +666,7 @@ serve(async (req) => {
       error: error instanceof Error ? error.message : 'Erro interno do servidor',
       debug_info: {
         function: 'generate-payment-link',
+        function_version: FUNCTION_VERSION,
         timestamp: new Date().toISOString()
       }
     }), {
