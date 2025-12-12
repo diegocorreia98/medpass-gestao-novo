@@ -531,16 +531,32 @@ serve(async (req) => {
         });
       }
 
-      const beneficiarios = Array.isArray(responseData?.beneficiarios) ? responseData.beneficiarios : [];
-      const encontrado = beneficiarios.find((b: any) => (b?.cpf || '').toString().replace(/\D/g, '') === cleanCpf);
-      const status = encontrado?.status || null;
-      const isAtivo = status === 'ATIVO';
+      const beneficiariosRaw =
+        responseData?.beneficiarios ??
+        responseData?.data?.beneficiarios ??
+        responseData?.result?.beneficiarios ??
+        [];
+
+      const beneficiarios = Array.isArray(beneficiariosRaw) ? beneficiariosRaw : [];
+
+      // Como a consulta já é filtrada por CPF, consideramos "encontrado" se veio qualquer item.
+      // Ainda assim tentamos confirmar por CPF se o campo existir no payload.
+      const encontrado =
+        beneficiarios.find((b: any) => (b?.cpf || '').toString().replace(/\D/g, '') === cleanCpf) ??
+        (beneficiarios.length > 0 ? beneficiarios[0] : null);
+
+      const status = (encontrado?.status || null) as string | null;
+
+      // Se existir QUALQUER beneficiário ATIVO no retorno, tratamos como ativo para o fluxo de reativação.
+      const isAtivo =
+        beneficiarios.some((b: any) => (b?.status || '').toString().toUpperCase() === 'ATIVO') ||
+        (status || '').toString().toUpperCase() === 'ATIVO';
 
       await logApiCall(
         null,
         'consulta-beneficiario',
         { cpf: maskCpf(cleanCpf), dataInicial, dataFinal },
-        { count: responseData?.count, found: !!encontrado, status },
+        { count: responseData?.count, found: !!encontrado, status, returned: beneficiarios.length },
         'success',
       );
 

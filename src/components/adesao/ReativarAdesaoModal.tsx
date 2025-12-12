@@ -75,8 +75,22 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
           }
         });
 
-        if (!consultaError && consultaData?.success && consultaData?.isActive) {
-          rmsIsActive = true;
+        console.log('🔎 [REATIVAÇÃO] Resultado consulta RMS:', {
+          success: consultaData?.success,
+          found: consultaData?.found,
+          status: consultaData?.status,
+          isActive: consultaData?.isActive,
+          error: consultaData?.error,
+          consultaError: consultaError?.message,
+        });
+
+        const status = (consultaData?.status || '').toString().toUpperCase();
+        // ✅ Regra do fluxo: se EXISTE na RMS (found=true) OU está ATIVO, pular adesão e ir direto para gerar link
+        const existsInRms = consultaData?.found === true;
+        const isActive = consultaData?.isActive === true || status === 'ATIVO';
+
+        if (!consultaError && consultaData?.success && (existsInRms || isActive)) {
+          rmsIsActive = true; // (nome histórico) significa "não precisa criar"
         }
       } catch (e) {
         // Se consulta falhar, seguimos com o fluxo antigo de adesão (fallback)
