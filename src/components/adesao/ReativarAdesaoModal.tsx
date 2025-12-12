@@ -53,7 +53,7 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
             telefone: beneficiario.telefone,
             email: beneficiario.email,
             cep: beneficiario.cep,
-            numero_endereco: beneficiario.endereco?.split(',').pop()?.trim() || '',
+            numero_endereco: beneficiario.endereco?.split(',').pop()?.trim() || '123',
             estado: beneficiario.estado,
             plano_id: beneficiario.plano_id,
             id_beneficiario_tipo: 1, // Padrão para titular

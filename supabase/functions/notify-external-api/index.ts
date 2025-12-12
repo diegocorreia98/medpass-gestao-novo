@@ -599,6 +599,51 @@ serve(async (req) => {
         cpf_titular // CPF do titular (obrigatório para dependentes)
       } = data;
 
+      // Validar campos obrigatórios
+      if (!nome || !cpf) {
+        console.error('❌ Campos obrigatórios faltando: nome ou cpf');
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Campos obrigatórios faltando: nome e cpf são obrigatórios'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      // Formatar data de nascimento se necessário
+      const formatarDataNascimento = (data: string | null | undefined): string => {
+        if (!data) {
+          console.warn('⚠️ Data de nascimento não fornecida, usando padrão');
+          return '01011990'; // Data padrão
+        }
+
+        // Se já está no formato DDMMYYYY (8 dígitos numéricos)
+        const cleanData = data.replace(/\D/g, '');
+        if (cleanData.length === 8) {
+          return cleanData;
+        }
+
+        // Se está no formato ISO (YYYY-MM-DD) ou similar
+        try {
+          const date = new Date(data);
+          if (!isNaN(date.getTime())) {
+            const dia = String(date.getDate()).padStart(2, '0');
+            const mes = String(date.getMonth() + 1).padStart(2, '0');
+            const ano = date.getFullYear();
+            return `${dia}${mes}${ano}`;
+          }
+        } catch (e) {
+          console.warn('⚠️ Erro ao parsear data:', e);
+        }
+
+        console.warn('⚠️ Formato de data inválido, usando padrão');
+        return '01011990';
+      };
+
+      const dataNascimentoFormatada = formatarDataNascimento(data_nascimento);
+      console.log(`📅 Data nascimento original: ${data_nascimento} -> formatada: ${dataNascimentoFormatada}`);
+
       // Buscar código RMS do plano
       const rmsPlanoCode = await getRmsPlanoCode(plano_id);
 
@@ -609,12 +654,12 @@ serve(async (req) => {
         codigoExterno: codigo_externo,
         idCliente: parseInt(idCliente),
         cpf,
-        dataNascimento: data_nascimento,
-        celular: telefone,
-        email,
-        cep,
-        numero: numero_endereco,
-        uf: estado,
+        dataNascimento: dataNascimentoFormatada,
+        celular: telefone || '',
+        email: email || '',
+        cep: cep || '',
+        numero: numero_endereco || '123',
+        uf: estado || '',
         tipoPlano: parseInt(rmsPlanoCode)
       };
 
