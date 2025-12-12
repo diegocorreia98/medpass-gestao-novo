@@ -546,17 +546,24 @@ serve(async (req) => {
         (beneficiarios.length > 0 ? beneficiarios[0] : null);
 
       const status = (encontrado?.status || null) as string | null;
+      const statusUpper = (status || '').toString().toUpperCase();
 
-      // Se existir QUALQUER beneficiário ATIVO no retorno, tratamos como ativo para o fluxo de reativação.
-      const isAtivo =
-        beneficiarios.some((b: any) => (b?.status || '').toString().toUpperCase() === 'ATIVO') ||
-        (status || '').toString().toUpperCase() === 'ATIVO';
+      // ✅ CORRIGIDO: Verificar apenas o status do beneficiário ENCONTRADO, não de qualquer um
+      const isAtivo = statusUpper === 'ATIVO';
+
+      console.log('🔎 [RMS-CONSULTA] Resultado:', {
+        cpf: maskCpf(cleanCpf),
+        found: !!encontrado,
+        status,
+        isAtivo,
+        totalRetornados: beneficiarios.length,
+      });
 
       await logApiCall(
         null,
         'consulta-beneficiario',
         { cpf: maskCpf(cleanCpf), dataInicial, dataFinal },
-        { count: responseData?.count, found: !!encontrado, status, returned: beneficiarios.length },
+        { count: responseData?.count, found: !!encontrado, status, returned: beneficiarios.length, isAtivo },
         'success',
       );
 
