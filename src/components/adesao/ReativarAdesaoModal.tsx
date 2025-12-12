@@ -62,8 +62,6 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
     setIsReactivating(true);
     setReactivationStatus({ rms: false, rmsExisting: false, payment: false });
 
-    let rmsUserAlreadyExists = false;
-
     try {
       // 1. Consultar RMS primeiro (se já existir ATIVO, pular adesão e ir direto para o link)
       console.log('🔄 [REATIVAÇÃO] Passo 1: Consultando RMS por CPF...');
@@ -87,7 +85,6 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
 
       if (rmsIsActive) {
         console.log('ℹ️ [REATIVAÇÃO] Beneficiário já está ATIVO na RMS. Pulando adesão e indo para geração do link...');
-        rmsUserAlreadyExists = true;
         setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
 
         toast({
@@ -131,7 +128,6 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
 
         if (isAlreadyActive1016) {
           console.log('ℹ️ [REATIVAÇÃO] RMS retornou "já existe ativo" via apiError, continuando com geração do link...');
-          rmsUserAlreadyExists = true;
           setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
 
           toast({
@@ -157,7 +153,6 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
 
         if (isAlreadyExists) {
           console.log('ℹ️ [REATIVAÇÃO] Usuário já existe na RMS, continuando com geração do link...');
-          rmsUserAlreadyExists = true;
           setReactivationStatus(prev => ({ ...prev, rms: true, rmsExisting: true }));
 
           toast({
