@@ -173,8 +173,10 @@ serve(async (req) => {
       throw new Error('Erro ao carregar dados completos do beneficiário');
     }
 
-    if (beneficiario.status !== 'ativo') {
-      throw new Error('Beneficiário deve estar ativo para gerar link de pagamento');
+    // Permitir geração de link para beneficiários ativos, pendentes ou aguardando pagamento
+    const allowedStatuses = ['ativo', 'pendente', 'pending_payment'];
+    if (!allowedStatuses.includes(beneficiario.status)) {
+      throw new Error(`Beneficiário deve estar ativo ou pendente para gerar link de pagamento. Status atual: ${beneficiario.status}`);
     }
 
     // Validate required fields
