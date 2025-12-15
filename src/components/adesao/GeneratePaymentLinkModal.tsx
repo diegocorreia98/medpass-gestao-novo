@@ -52,7 +52,7 @@ export function GeneratePaymentLinkModal({
         throw new Error(data.error);
       }
 
-      setPaymentUrl(data.payment_url);
+      setPaymentUrl(data.checkout_url || data.payment_url);
       setDueDate(data.due_date);
 
       console.log('✅ [GENERATE-LINK] Link gerado com sucesso:', {

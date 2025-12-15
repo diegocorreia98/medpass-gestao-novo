@@ -75,7 +75,7 @@ export function GerarLinkModal({ open, onClose, beneficiarios }: GerarLinkModalP
         throw new Error(data.error);
       }
 
-      setGeneratedLink(data.payment_url);
+      setGeneratedLink(data.checkout_url || data.payment_url);
       setDueDate(data.due_date);
 
       console.log('✅ [GERAR-LINK-MODAL] Link gerado com sucesso:', {

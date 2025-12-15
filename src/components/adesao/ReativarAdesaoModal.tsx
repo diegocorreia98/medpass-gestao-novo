@@ -197,8 +197,8 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
         throw new Error(paymentResult.error);
       }
 
-      console.log('✅ [REATIVAÇÃO] Link de pagamento gerado:', paymentResult?.payment_url);
-      setGeneratedLink(paymentResult?.payment_url || '');
+      console.log('✅ [REATIVAÇÃO] Link de pagamento gerado:', paymentResult?.checkout_url || paymentResult?.payment_url);
+      setGeneratedLink(paymentResult?.checkout_url || paymentResult?.payment_url || '');
       setReactivationStatus(prev => ({ ...prev, payment: true }));
 
       // 3. Atualizar o status do beneficiário no banco de dados
@@ -208,7 +208,7 @@ export function ReativarAdesaoModal({ open, onClose, beneficiario }: ReativarAde
         id: beneficiario.id,
         updates: {
           status: 'ativo',
-          checkout_link: paymentResult?.payment_url || null
+          checkout_link: paymentResult?.checkout_url || paymentResult?.payment_url || null
         }
       });
 
