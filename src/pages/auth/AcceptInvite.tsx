@@ -165,78 +165,56 @@ export function AcceptInvite() {
         console.log('Processing invite for:', data.email, 'Type:', conviteData.tipo)
 
         if (conviteData.tipo === 'franqueado') {
-          // For franchise invites, user was created via inviteUserByEmail by our Edge Function
-          // First check if user exists in auth system
+          // Para convites de franqueado, usar a Edge Function que lida com usuários existentes
+          console.log('Processing franchise invite via Edge Function...')
 
-          console.log('Attempting to sign in with provided credentials...')
+          const { data: acceptResult, error: acceptError } = await supabase.functions.invoke('accept-franchise-invite', {
+            body: {
+              token: token,
+              email: data.email,
+              password: data.password
+            }
+          })
+
+          if (acceptError) {
+            console.error('Accept invite error:', acceptError)
+            throw new Error(acceptError.message || 'Erro ao processar convite')
+          }
+
+          if (!acceptResult?.success) {
+            console.error('Accept invite failed:', acceptResult?.error)
+            throw new Error(acceptResult?.error || 'Erro ao aceitar convite')
+          }
+
+          console.log('Invite accepted successfully:', acceptResult)
+
+          // Agora fazer login com as credenciais definidas
+          console.log('Attempting to sign in with new credentials...')
           const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
             email: data.email,
             password: data.password
           })
 
-          if (signInData.user) {
-            // User successfully signed in
-            userId = signInData.user.id
-            console.log('Sign in successful:', userId)
-          } else if (signInError) {
-            console.log('Sign in failed:', signInError.message)
-            console.log('Sign in error details:', signInError)
-
-            // If user doesn't exist or credentials are wrong, create new account
-            if (signInError.message.includes('Invalid login credentials')) {
-              console.log('User does not exist - creating new account...')
-
-              // Create new user account
-              const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-                email: data.email,
-                password: data.password,
-                options: {
-                  data: {
-                    user_type: 'unidade',
-                    full_name: conviteData.unidades?.nome || data.email
-                  }
-                }
-              })
-
-              if (signUpError) {
-                console.error('Sign up error:', signUpError)
-                if (signUpError.message.includes('User already registered')) {
-                  toast({
-                    title: "Usuário já existe",
-                    description: "Este email já está cadastrado. Use 'Esqueci minha senha' para redefinir sua senha.",
-                    variant: "destructive"
-                  })
-                  return
-                }
-                throw signUpError
-              }
-
-              if (!signUpData.user) {
-                throw new Error("Falha ao criar conta do usuário")
-              }
-
-              userId = signUpData.user.id
-              console.log('Account created successfully:', userId)
-
-            } else if (signInError.message.includes('Email not confirmed')) {
-              console.log('Email not confirmed - resending confirmation...')
-
-              const { error: resendError } = await supabase.auth.resend({
-                type: 'signup',
-                email: data.email
-              })
-
-              if (!resendError) {
-                toast({
-                  title: "Email de confirmação reenviado",
-                  description: "Verifique seu email e clique no link de confirmação.",
-                })
-              }
-              return
-            } else {
-              throw signInError
-            }
+          if (signInError) {
+            console.error('Sign in after accept error:', signInError)
+            throw new Error('Convite aceito, mas houve um erro ao fazer login. Tente fazer login manualmente.')
           }
+
+          if (!signInData.user) {
+            throw new Error('Falha ao autenticar após aceitar convite')
+          }
+
+          userId = signInData.user.id
+          console.log('Sign in successful:', userId)
+
+          // Convite já foi marcado como aceito pela Edge Function
+          toast({
+            title: "Convite aceito com sucesso!",
+            description: "Você foi autenticado e vinculado à unidade.",
+          })
+
+          navigate('/unidade')
+          return
         } else {
           // For matriz invites, use the existing flow
           console.log('Processing matriz invite...')
@@ -284,86 +262,28 @@ export function AcceptInvite() {
         return
       }
 
-      // 2. Marcar convite como aceito
-      if (conviteData.tipo === 'matriz') {
-        const { error: updateError } = await supabase
-          .from('convites_matriz')
-          .update({
-            aceito: true,
-            user_id_aceito: userId
-          })
-          .eq('token', token)
-
-        if (updateError) {
-          console.error('Erro ao marcar convite matriz como aceito:', updateError)
-          throw updateError
-        }
-
-        console.log('Convite matriz aceito com sucesso')
-        
-        // Para usuários matriz, só precisa marcar como aceito
-        toast({
-          title: "Convite aceito!",
-          description: "Bem-vindo ao painel de administração.",
+      // 2. Marcar convite matriz como aceito (franqueado já foi tratado acima com return)
+      const { error: updateError } = await supabase
+        .from('convites_matriz')
+        .update({
+          aceito: true,
+          user_id_aceito: userId
         })
+        .eq('token', token)
 
-        navigate("/")
-        return
-        
-      } else {
-        // Convite de franqueado - fallback to direct database operations
-        console.log('Accepting franchise invite using direct operations...')
-
-        // First, get the invite details again to ensure we have the unidade_id
-        const { data: inviteDetails, error: inviteError } = await supabase
-          .rpc('get_convite_by_token', {
-            invitation_token: token
-          })
-
-        if (inviteError || !inviteDetails || inviteDetails.length === 0) {
-          console.error('Erro ao buscar detalhes do convite:', inviteError)
-          throw new Error('Convite não encontrado ou expirado')
-        }
-
-        const invite = inviteDetails[0]
-
-        // Update the invite to mark as accepted
-        const { error: updateInviteError } = await supabase
-          .from('convites_franqueados')
-          .update({
-            aceito: true,
-            user_id_aceito: userId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('token', token)
-
-        if (updateInviteError) {
-          console.error('Erro ao atualizar convite:', updateInviteError)
-          throw updateInviteError
-        }
-
-        // Update the unit to associate it with the user
-        const { error: updateUnitError } = await supabase
-          .from('unidades')
-          .update({ user_id: userId })
-          .eq('id', invite.unidade_id)
-
-        if (updateUnitError) {
-          console.error('Erro ao associar unidade ao usuário:', updateUnitError)
-          // Don't throw here, as the invite was already marked as accepted
-          console.log('Convite aceito, mas falhou ao associar unidade automaticamente')
-        }
-
-        console.log('Convite aceito e usuário vinculado à unidade com sucesso')
-
-        toast({
-          title: "Convite aceito com sucesso!",
-          description: "Você foi autenticado e vinculado à unidade.",
-        })
-
-        // Redirecionar para o dashboard da unidade
-        navigate('/unidade')
+      if (updateError) {
+        console.error('Erro ao marcar convite matriz como aceito:', updateError)
+        throw updateError
       }
+
+      console.log('Convite matriz aceito com sucesso')
+
+      toast({
+        title: "Convite aceito!",
+        description: "Bem-vindo ao painel de administração.",
+      })
+
+      navigate("/")
         
     } catch (error: any) {
       console.error('Erro ao aceitar convite:', error)
@@ -478,8 +398,8 @@ export function AcceptInvite() {
               )}
             </div>
 
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full"
               disabled={accepting}
             >
