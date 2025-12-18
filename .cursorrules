@@ -1,0 +1,268 @@
+# MedPass Gestão - Sistema de Gestão de Benefícios de Saúde
+
+## Visão Geral do Projeto
+
+**MedPass Gestão** é uma plataforma completa de gestão de benefícios de saúde, desenvolvida para gerenciar adesões de planos, pagamentos recorrentes, comissões e integração com sistemas externos.
+
+### Stack Tecnológica
+
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI**: shadcn/ui + Tailwind CSS + Radix UI
+- **Backend**: Supabase (PostgreSQL + Edge Functions + Auth)
+- **Pagamentos**: Vindi (gateway de pagamentos)
+- **Contratos**: Autentique (assinatura digital)
+- **Integrações**: RMS API (gestão de beneficiários externos)
+- **Mapas**: Mapbox GL JS
+- **Gráficos**: Recharts
+
+---
+
+## Estrutura do Projeto
+
+```
+medpass-gestao/
+├── src/
+│   ├── components/         # Componentes React organizados por domínio
+│   │   ├── adesao/         # Gestão de adesões e beneficiários
+│   │   ├── checkout/       # Fluxo de pagamento e checkout
+│   │   ├── empresas/       # Gestão de empresas (PJ)
+│   │   ├── franquias/      # Gestão de franquias
+│   │   ├── unidades/       # Gestão de unidades/franqueados
+│   │   ├── layout/         # Layouts e navegação
+│   │   ├── maps/           # Mapa de distribuição geográfica
+│   │   └── ui/             # Componentes base (shadcn/ui)
+│   ├── contexts/           # Contextos React (Auth, Panel)
+│   ├── hooks/              # Custom hooks para lógica de negócio
+│   ├── pages/              # Páginas da aplicação
+│   ├── services/           # Serviços de API
+│   ├── types/              # Definições TypeScript
+│   └── utils/              # Utilitários
+├── supabase/
+│   ├── functions/          # Edge Functions (39 funções)
+│   └── migrations/         # Migrações SQL (70+ arquivos)
+└── docs/                   # Documentação técnica
+```
+
+---
+
+## Principais Funcionalidades
+
+### 1. Gestão de Adesões (Beneficiários)
+- Cadastro individual e importação em lote (Excel/CSV)
+- Fluxo completo: cadastro → contrato → pagamento → ativação RMS
+- Status: `ativo`, `inativo`, `pendente`, `pending_payment`, `payment_confirmed`, `rms_sent`, `rms_failed`
+
+### 2. Sistema de Pagamentos (Vindi)
+- Checkout transparente (cartão de crédito, PIX, boleto)
+- Assinaturas recorrentes com billing automático
+- Webhooks para atualização de status em tempo real
+- Links de pagamento seguros com tokens temporários
+
+### 3. Contratos Digitais (Autentique)
+- Geração automática de contratos em HTML
+- Assinatura digital via iframe no checkout
+- Webhooks para confirmação de assinatura
+- Fluxo: gera contrato → assina → libera pagamento
+
+### 4. Sistema de Comissões
+- Comissão de adesão (primeira venda)
+- Comissão recorrente (mensalidades)
+- Cálculo automático baseado em percentuais do plano
+
+### 5. Hierarquia de Usuários
+- **Matriz**: Acesso completo, gestão de todas as unidades
+- **Unidade**: Acesso restrito aos seus beneficiários e comissões
+- Sistema de convites para novos franqueados
+
+### 6. Integrações Externas
+- **RMS API**: Sincronização de beneficiários com sistema externo
+- **Vindi**: Gateway de pagamentos e assinaturas
+- **Autentique**: Assinatura digital de contratos
+- **Mapbox**: Visualização geográfica de unidades
+
+---
+
+## Banco de Dados (Principais Tabelas)
+
+### Tabelas Core
+- `profiles` - Perfis de usuário (matriz/unidade)
+- `beneficiarios` - Beneficiários/adesões
+- `planos` - Planos de saúde disponíveis
+- `unidades` - Unidades franqueadas
+- `franquias` - Franquias (grupo de unidades)
+- `empresas` - Empresas (clientes PJ)
+
+### Tabelas de Pagamento
+- `subscriptions` - Assinaturas Vindi
+- `transactions` - Transações de pagamento
+- `subscription_checkout_links` - Links de checkout seguros
+- `vindi_webhook_events` - Eventos de webhook Vindi
+
+### Tabelas de Suporte
+- `comissoes` - Registro de comissões
+- `convites_franqueados` - Convites para unidades
+- `api_integrations_log` - Logs de integração RMS
+- `notificacoes` - Sistema de notificações
+
+---
+
+## Edge Functions (Supabase)
+
+### Pagamentos
+- `create-vindi-customer` - Cria cliente no Vindi
+- `process-vindi-subscription` - Processa assinatura
+- `vindi-webhook` - Recebe webhooks do Vindi
+- `generate-payment-link` - Gera links de pagamento
+- `secure-checkout-validation` - Valida tokens de checkout
+
+### Contratos
+- `create-autentique-contract` - Gera e envia contrato para assinatura
+- `autentique-webhook` - Recebe webhooks do Autentique
+
+### Integrações
+- `notify-external-api` - Envia adesão para RMS
+- `retry-rms-adesao` - Retry de adesões com falha
+- `rms-adesao-manual` - Envio manual para RMS
+
+### Usuários
+- `send-franchise-invite` - Envia convite para unidade
+- `accept-franchise-invite` - Aceita convite
+- `create-unit-with-user` - Cria unidade com usuário
+- `send-password-reset` - Reset de senha customizado
+
+---
+
+## Fluxos Principais
+
+### Fluxo de Adesão Completa
+```
+1. Cadastra beneficiário (AdesaoModal)
+2. Gera link de checkout (generate-payment-link)
+3. Cliente acessa checkout (SubscriptionCheckout)
+4. Exibe contrato para assinatura (ContractSignatureModal)
+5. Cliente assina contrato (Autentique)
+6. Webhook confirma assinatura (autentique-webhook)
+7. Libera formulário de pagamento
+8. Processa pagamento (process-vindi-subscription)
+9. Webhook confirma pagamento (vindi-webhook)
+10. Notifica RMS (notify-external-api)
+11. Gera comissão para unidade
+```
+
+### Fluxo de Contrato (Autentique)
+```
+1. create-autentique-contract:
+   - Busca dados do beneficiário
+   - Gera HTML do contrato com dados preenchidos
+   - Envia para Autentique via GraphQL (multipart/form-data)
+   - Usa delivery_method: DELIVERY_METHOD_LINK (importante!)
+   - Busca documento para obter short_link
+   - Salva link no banco
+
+2. Frontend (ContractSignatureModal):
+   - Exibe iframe com link de assinatura
+   - Polling verifica status do contrato
+   - Quando assinado, libera pagamento
+
+3. autentique-webhook:
+   - Recebe eventos: document.finished, signature.accepted, signature.rejected
+   - Atualiza contract_status no beneficiário
+```
+
+---
+
+## Variáveis de Ambiente
+
+### Supabase (Edge Functions)
+```
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+### Vindi
+```
+VINDI_API_KEY
+VINDI_API_URL (sandbox ou produção)
+```
+
+### Autentique
+```
+AUTENTIQUE_API_KEY
+```
+
+### RMS
+```
+RMS_USERNAME
+RMS_PASSWORD
+RMS_API_URL
+```
+
+---
+
+## Convenções de Código
+
+### Componentes React
+- Use TypeScript estrito
+- Hooks customizados para lógica de negócio (hooks/)
+- Componentes funcionais com React Query para data fetching
+- shadcn/ui para UI base
+
+### Edge Functions
+- Deno runtime (imports via URLs)
+- CORS headers obrigatórios
+- Logs detalhados com emojis para facilitar debug
+- Tratamento de erros com mensagens claras
+
+### SQL/Migrations
+- Nomes em snake_case
+- Comentários explicativos
+- Migrações idempotentes quando possível
+
+---
+
+## Dicas de Debug
+
+### Logs de Edge Functions
+```bash
+npx supabase functions logs <function-name> --follow
+```
+
+### Deploy de Edge Functions
+```bash
+npx supabase functions deploy <function-name>
+# Para webhooks externos (sem JWT):
+npx supabase functions deploy <function-name> --no-verify-jwt
+```
+
+### Testar API Autentique
+```bash
+curl -X POST https://api.autentique.com.br/v2/graphql \
+  -H "Authorization: Bearer $AUTENTIQUE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "query { documents(limit: 5) { data { id name } } }"}'
+```
+
+---
+
+## Pontos de Atenção
+
+1. **Autentique**: Sempre usar `delivery_method: "DELIVERY_METHOD_LINK"` com `name` do signer para obter o `short_link`
+
+2. **Webhooks**: Funções de webhook devem ser deployadas com `--no-verify-jwt`
+
+3. **Checkout**: Tokens expiram em 24h, validar antes de processar pagamento
+
+4. **RMS**: Retry automático em caso de falha, máximo 3 tentativas
+
+5. **Comissões**: Calculadas automaticamente após confirmação de pagamento
+
+---
+
+## Documentação Adicional
+
+- `/docs/autentique-setup.md` - Configuração Autentique
+- `/docs/vindi_apis/` - Documentação APIs Vindi
+- `/docs/rms_apis/` - Documentação APIs RMS
+- `/CONTRATO_MEDPASS_PF.md` - Template do contrato PF
+

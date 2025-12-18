@@ -36,6 +36,7 @@ import Franqueados from "./pages/Franqueados";
 import FranqueadoDetalhes from "./pages/FranqueadoDetalhes";
 import ApiLogs from "./pages/ApiLogs";
 import Transacoes from "./pages/Transacoes";
+import Contratos from "./pages/Contratos";
 import { GestaoEmpresas } from "./pages/GestaoEmpresas";
 import GestaoUnidades from "./pages/GestaoUnidades";
 import { Login } from "./pages/auth/Login";
@@ -145,6 +146,11 @@ const App = () => (
               <Route path="/transacoes" element={
                 <ProtectedRoute requiredUserType="matriz">
                   <Layout><Transacoes /></Layout>
+                </ProtectedRoute>
+              } />
+              <Route path="/contratos" element={
+                <ProtectedRoute requiredUserType="matriz">
+                  <Layout><Contratos /></Layout>
                 </ProtectedRoute>
               } />
               <Route path="/gestao-empresas" element={

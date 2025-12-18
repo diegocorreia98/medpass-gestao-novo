@@ -215,6 +215,18 @@ function generateContractHTML(customerData: any, planoData: any): string {
         .annexes h1 {
             font-size: 12pt;
         }
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+        }
+        .page-number {
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
         .service-section {
             background: #f1f5f9;
             padding: 12px;
@@ -277,6 +289,11 @@ function generateContractHTML(customerData: any, planoData: any): string {
         <p>3.3. O atraso no pagamento superior a 30 (trinta) dias poderá acarretar a suspensão temporária dos serviços até a regularização das parcelas em atraso.</p>
     </div>
 
+    <div class="page-number">Página 1 de 5</div>
+
+    <!-- PÁGINA 2 -->
+    <div class="page-break"></div>
+
     <div class="clause">
         <h2>CLÁUSULA 4 – DA MULTA POR RESCISÃO ANTECIPADA</h2>
         <p>4.1. Caso o CONTRATANTE rescinda o contrato antes do término do prazo de fidelização, ficará sujeito ao pagamento de multa rescisória correspondente a <strong>${percentualMulta}%</strong> (<strong>${numberToWords(percentualMulta)} por cento</strong>) do valor das mensalidades vincendas até o final do período contratado.</p>
@@ -299,6 +316,111 @@ function generateContractHTML(customerData: any, planoData: any): string {
         <p>7.1. Este contrato não substitui plano de saúde ou seguro saúde, tratando-se de serviço de assistência e benefícios em saúde.</p>
         <p>7.2. As partes elegem o foro da comarca de <strong>Umuarama/PR</strong>, renunciando a qualquer outro, para dirimir eventuais controvérsias oriundas deste contrato.</p>
     </div>
+
+    <div class="page-number">Página 2 de 5</div>
+
+    <!-- PÁGINA 3 - ANEXO PARTE 1 -->
+    <div class="page-break"></div>
+
+    <!-- ANEXO: DESCRIÇÃO DOS SERVIÇOS -->
+    <div class="annexes">
+        <h1>ANEXO I - DESCRIÇÃO DOS SERVIÇOS OFERECIDOS</h1>
+        
+        <p>O Grupo Cotafácil unificou diversas empresas, como Healthtechs, Odontotechs, Fintechs, Bentechs e várias outras, complementando serviços e benefícios alinhados com o core business em saúde com total sinergia entre serviços de saúde, assistências, odontologia, benefícios e bem-estar, transformando-se no maior ecossistema de saúde do Brasil.</p>
+        
+        <p>A Medpass, uma empresa do Grupo Cotafacil é uma Healthtech inovadora que oferece uma jornada completa de saúde, conectando empresas e clientes a um ecossistema digital completo. Por meio do aplicativo Medpass, garantimos o acesso facilitado integrado ao usuário: serviços médicos, exames, medicamentos e terapias com condições especiais.</p>
+
+        <div class="service-section">
+            <h3>PRODUTOS</h3>
+            <p>Dentre as principais soluções disponíveis, destacam-se:</p>
+            <ul>
+                <li>Consultas médicas online 24h</li>
+                <li>Consultas presenciais com descontos em rede nacional</li>
+                <li>Exames laboratoriais e de imagem com condições especiais</li>
+                <li>Descontos em Medicamentos</li>
+                <li>Check-Up</li>
+                <li>E muito mais</li>
+            </ul>
+        </div>
+
+        <div class="service-section">
+            <h3>AGENDAMENTO DE SAÚDE</h3>
+            <p>Entendemos as necessidades de cada usuário, disponibilizamos uma equipe multidisciplinar capacitada para fornecer indicações de clínicas e serviços em determinada região, horário ou faixa de preço. Além disso, possibilitamos o acesso a descontos de até 80% no valor particular e oferecemos orientações sobre os serviços de saúde públicos e privados.</p>
+            <ul>
+                <li><strong>Acionamento:</strong> Central de atendimento, WhatsApp, Portal Web ou Aplicativo</li>
+                <li><strong>Horário:</strong> Atendimento 24x7x365</li>
+                <li><strong>Dependentes:</strong> Até 3 dependentes sem comprovação de vínculo familiar</li>
+                <li><strong>Vigência:</strong> Até 48 horas úteis após adesão</li>
+                <li><strong>Abrangência:</strong> Nacional</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="page-number">Página 3 de 5</div>
+
+    <!-- PÁGINA 4 - ANEXO PARTE 2 -->
+    <div class="page-break"></div>
+
+    <div class="service-section">
+        <h3>ORIENTAÇÃO DE SAÚDE ONLINE</h3>
+        <p>Atendimento realizado por equipe especializada de profissionais de enfermagem para orientar o paciente na adoção de melhores práticas para o cuidado com a saúde.</p>
+        <ul>
+            <li><strong>Atendimento:</strong> Disponível 24 horas, 7 dias na semana</li>
+            <li><strong>Dependentes:</strong> Até 3 dependentes</li>
+            <li><strong>Limite:</strong> 15 acionamentos mensais por usuário</li>
+        </ul>
+    </div>
+
+    <div class="service-section">
+        <h3>CONSULTA ONLINE + CLÍNICO GERAL + ESPECIALISTAS</h3>
+        <p>Atendimento com profissionais de enfermagem para triagem e direcionamento a médico generalista ou especialista quando necessário.</p>
+        <ul>
+            <li><strong>Clínico Geral:</strong> Disponível 24h, 7 dias na semana</li>
+            <li><strong>Especialidades:</strong> Segunda a sexta, 09h às 18h (Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Neurologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia)</li>
+            <li><strong>Dependentes:</strong> Até 3 dependentes</li>
+            <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
+        </ul>
+    </div>
+
+    <div class="service-section">
+        <h3>APOIO EMOCIONAL</h3>
+        <p>Serviço de apoio emocional com psicólogos qualificados para acolhimento em saúde mental.</p>
+        <ul>
+            <li><strong>Horário:</strong> 8h às 18h, segunda a sexta-feira</li>
+            <li><strong>Duração:</strong> Até 30 minutos por atendimento</li>
+            <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
+        </ul>
+    </div>
+
+    <div class="service-section">
+        <h3>APOIO NUTRI ONLINE</h3>
+        <p>Orientação de nutricionistas qualificados para esclarecimentos sobre educação alimentar, IMC, hábitos alimentares e estilo de vida saudável.</p>
+        <ul>
+            <li><strong>Horário:</strong> Segunda a sexta, 9h às 18h</li>
+            <li><strong>Duração:</strong> Até 30 minutos</li>
+            <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
+        </ul>
+    </div>
+
+    <div class="service-section">
+        <h3>ASSISTÊNCIA FITNESS</h3>
+        <p>Orientação personalizada sobre atividades físicas, condicionamento e qualidade de vida.</p>
+        <ul>
+            <li><strong>Horário:</strong> 8h às 18h, segunda a sexta-feira</li>
+            <li><strong>Retorno:</strong> Em até 72 horas</li>
+            <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
+        </ul>
+    </div>
+
+    <div class="service-section">
+        <h3>CHECK-UP ANUAL ROTINA</h3>
+        <p>Serviço de Medicina Preventiva com conjunto de exames periódicos para avaliar o estado de saúde geral, possibilitando intervenções precoces e diagnósticos preventivos.</p>
+    </div>
+
+    <div class="page-number">Página 4 de 5</div>
+
+    <!-- PÁGINA 5 - ASSINATURAS -->
+    <div class="page-break"></div>
 
     <div class="signature-area">
         <p>E, por estarem de pleno acordo, as partes assinam o presente contrato em duas vias de igual teor e forma.</p>
@@ -323,102 +445,12 @@ function generateContractHTML(customerData: any, planoData: any): string {
         </div>
     </div>
 
-    <!-- ANEXO: DESCRIÇÃO DOS SERVIÇOS -->
-    <div class="annexes">
-        <h1>DESCRIÇÃO DOS SERVIÇOS OFERECIDOS</h1>
-        
-        <p>O Grupo Cotafácil unificou diversas empresas, como Healthtechs, Odontotechs, Fintechs, Bentechs e várias outras, complementando serviços e benefícios alinhados com o core business em saúde com total sinergia entre serviços de saúde, assistências, odontologia, benefícios e bem-estar, transformando-se no maior ecossistema de saúde do Brasil.</p>
-        
-        <p>A Medpass, uma empresa do Grupo Cotafacil é uma Healthtech inovadora que oferece uma jornada completa de saúde, conectando empresas e clientes a um ecossistema digital completo. Por meio do aplicativo Medpass, garantimos o acesso facilitado integrado ao usuário: serviços médicos, exames, medicamentos e terapias com condições especiais.</p>
-
-        <div class="service-section">
-            <h3>PRODUTOS</h3>
-            <p>Dentre as principais soluções disponíveis, destacam-se:</p>
-            <ul>
-                <li>Consultas médicas online 24h</li>
-                <li>Consultas presenciais com descontos em rede nacional</li>
-                <li>Exames laboratoriais e de imagem com condições especiais</li>
-                <li>Descontos em Medicamentos</li>
-                <li>Check-Up</li>
-                <li>E muito mais</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>AGENDAMENTO DE SAÚDE</h3>
-            <p>Entendendo as necessidades de cada usuário, disponibilizamos uma equipe multidisciplinar capacitada para fornecer indicações de clínicas e serviços em determinada região, horário ou faixa de preço. Além disso, possibilitamos o acesso a descontos de até 80% no valor particular e oferecemos orientações sobre os serviços de saúde públicos e privados.</p>
-            <ul>
-                <li><strong>Acionamento:</strong> Central de atendimento, WhatsApp, Portal Web ou Aplicativo</li>
-                <li><strong>Horário:</strong> Atendimento 24x7x365</li>
-                <li><strong>Dependentes:</strong> Até 3 dependentes sem comprovação de vínculo familiar</li>
-                <li><strong>Vigência:</strong> Até 48 horas úteis após adesão</li>
-                <li><strong>Abrangência:</strong> Nacional</li>
-            </ul>
-            <p>Serviços que podem ser agendados: Consultas (Clínico geral, Cardiologista, Pediatra, Neurologista, Ginecologia, Ortopedista, entre outros), Exames Laboratoriais e de Imagem, Serviços de Bem-Estar e Estética, Vacinas.</p>
-        </div>
-
-        <div class="service-section">
-            <h3>ORIENTAÇÃO DE SAÚDE ONLINE</h3>
-            <p>Atendimento realizado por equipe especializada de profissionais de enfermagem para orientar o paciente na adoção de melhores práticas para o cuidado com a saúde.</p>
-            <ul>
-                <li><strong>Atendimento:</strong> Disponível 24 horas, 7 dias na semana</li>
-                <li><strong>Dependentes:</strong> Até 3 dependentes</li>
-                <li><strong>Limite:</strong> 15 acionamentos mensais por usuário</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>CONSULTA ONLINE + CLÍNICO GERAL + ESPECIALISTAS</h3>
-            <p>Atendimento com profissionais de enfermagem para triagem e direcionamento a médico generalista ou especialista quando necessário.</p>
-            <ul>
-                <li><strong>Clínico Geral:</strong> Disponível 24h, 7 dias na semana</li>
-                <li><strong>Especialidades:</strong> Segunda a sexta, 09h às 18h (Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Neurologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia)</li>
-                <li><strong>Dependentes:</strong> Até 3 dependentes</li>
-                <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>APOIO EMOCIONAL</h3>
-            <p>Serviço de apoio emocional com psicólogos qualificados para acolhimento em saúde mental.</p>
-            <ul>
-                <li><strong>Horário:</strong> 8h às 18h, segunda a sexta-feira</li>
-                <li><strong>Duração:</strong> Até 30 minutos por atendimento</li>
-                <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
-                <li><strong>Disponível:</strong> Até 2 dias úteis após adesão</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>APOIO NUTRI ONLINE</h3>
-            <p>Orientação de nutricionistas qualificados para esclarecimentos sobre educação alimentar, IMC, hábitos alimentares e estilo de vida saudável.</p>
-            <ul>
-                <li><strong>Horário:</strong> Segunda a sexta, 9h às 18h</li>
-                <li><strong>Duração:</strong> Até 30 minutos</li>
-                <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>ASSISTÊNCIA FITNESS</h3>
-            <p>Orientação personalizada sobre atividades físicas, condicionamento e qualidade de vida.</p>
-            <ul>
-                <li><strong>Horário:</strong> 8h às 18h, segunda a sexta-feira</li>
-                <li><strong>Retorno:</strong> Em até 72 horas</li>
-                <li><strong>Limite:</strong> 5 acionamentos mensais por usuário</li>
-            </ul>
-        </div>
-
-        <div class="service-section">
-            <h3>CHECK-UP ANUAL ROTINA</h3>
-            <p>Serviço de Medicina Preventiva com conjunto de exames periódicos para avaliar o estado de saúde geral, possibilitando intervenções precoces e diagnósticos preventivos.</p>
-        </div>
-    </div>
-
     <div class="footer-note">
         <p>Documento assinado digitalmente via Autentique.com.br<br>
         A autenticidade deste documento pode ser verificada através do ID do documento.</p>
     </div>
+
+    <div class="page-number">Página 5 de 5</div>
 </body>
 </html>
   `.trim();
@@ -591,22 +623,45 @@ serve(async (req) => {
     `;
 
     // Preparar variáveis no formato correto da API v2
+    // Configuração com 2 assinantes: CONTRATANTE (cliente) e CONTRATADA (MedPass)
+    // Rubricas nas páginas 1-4 e assinatura completa na página 5
     const variables = {
       document: {
         name: `Contrato Adesão MedPass - ${customer_data.nome}`
       },
       signers: [
+        // CONTRATANTE (Cliente) - Assina no lado esquerdo
         {
+          name: customer_data.nome,
           email: customer_data.email,
           action: "SIGN",
-          // IMPORTANTE: delivery_method LINK gera o short_link para exibir no iframe
           delivery_method: "DELIVERY_METHOD_LINK",
           positions: [
-            {
-              x: "50.00",
-              y: "88.00",
-              z: 1
-            }
+            // Rubricas nas páginas 1-4 (canto inferior direito)
+            { x: "85.00", y: "95.00", z: 1 },  // Página 1
+            { x: "85.00", y: "95.00", z: 2 },  // Página 2
+            { x: "85.00", y: "95.00", z: 3 },  // Página 3
+            { x: "85.00", y: "95.00", z: 4 },  // Página 4
+            // Assinatura completa na página 5 (área de assinatura - lado esquerdo)
+            { x: "25.00", y: "75.00", z: 5 }   // Página 5 - Assinatura principal
+          ]
+        },
+        // CONTRATADA (MedPass - Ismael) - Assina AUTOMATICAMENTE no lado direito
+        {
+          name: "ISMAEL DE OLIVEIRA DIAS",
+          email: "medpassbeneficios@gmail.com",
+          action: "SIGN",
+          configs: {
+            auto_sign: true  // Assinatura automática - aplica assim que o documento é criado
+          },
+          positions: [
+            // Rubricas nas páginas 1-4 (canto inferior esquerdo)
+            { x: "15.00", y: "95.00", z: 1 },  // Página 1
+            { x: "15.00", y: "95.00", z: 2 },  // Página 2
+            { x: "15.00", y: "95.00", z: 3 },  // Página 3
+            { x: "15.00", y: "95.00", z: 4 },  // Página 4
+            // Assinatura completa na página 5 (área de assinatura - lado direito)
+            { x: "75.00", y: "75.00", z: 5 }   // Página 5 - Assinatura principal
           ]
         }
       ],
