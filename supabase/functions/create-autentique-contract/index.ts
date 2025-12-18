@@ -471,11 +471,26 @@ serve(async (req) => {
     // 1. Gerar HTML do contrato preenchido
     console.log('📝 [CREATE-AUTENTIQUE-CONTRACT] Gerando HTML do contrato...');
     const contratoHTML = generateContractHTML(customer_data, plano_data);
+    console.log('📝 [CREATE-AUTENTIQUE-CONTRACT] HTML gerado, tamanho:', contratoHTML.length, 'caracteres');
 
-    // Converter HTML para base64
-    const encoder = new TextEncoder();
-    const htmlBytes = encoder.encode(contratoHTML);
-    const base64HTML = btoa(String.fromCharCode(...htmlBytes));
+    // Converter HTML para base64 de forma segura (UTF-8)
+    let base64HTML: string;
+    try {
+      const encoder = new TextEncoder();
+      const htmlBytes = encoder.encode(contratoHTML);
+      
+      // Converter bytes para base64 de forma segura
+      let binary = '';
+      const len = htmlBytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(htmlBytes[i]);
+      }
+      base64HTML = btoa(binary);
+      console.log('📝 [CREATE-AUTENTIQUE-CONTRACT] Base64 gerado, tamanho:', base64HTML.length, 'caracteres');
+    } catch (encodeError) {
+      console.error('❌ [CREATE-AUTENTIQUE-CONTRACT] Erro ao converter HTML para Base64:', encodeError);
+      throw new Error(`Erro ao codificar contrato: ${encodeError instanceof Error ? encodeError.message : 'erro desconhecido'}`);
+    }
 
     // 2. Criar documento no Autentique via GraphQL
     console.log('🌐 [CREATE-AUTENTIQUE-CONTRACT] Enviando para Autentique API...');
@@ -509,13 +524,17 @@ serve(async (req) => {
       }
     `;
 
+    // Limpar nome para usar no arquivo
+    const nomeArquivo = customer_data.nome.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+    
     const variables = {
       document: {
         name: `Contrato Adesão MedPass - ${customer_data.nome}`,
         refusable: false,
         sortable: false,
         file: {
-          base64: base64HTML,
+          name: `contrato_medpass_${nomeArquivo}.html`,
+          content_base64: base64HTML,
         },
         signers: [
           {
@@ -533,6 +552,13 @@ serve(async (req) => {
         ]
       }
     };
+    
+    console.log('📤 [CREATE-AUTENTIQUE-CONTRACT] Enviando documento:', {
+      document_name: variables.document.name,
+      file_name: variables.document.file.name,
+      signer_email: customer_data.email,
+      base64_preview: base64HTML.substring(0, 100) + '...'
+    });
 
     const autentiqueResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
       method: 'POST',
