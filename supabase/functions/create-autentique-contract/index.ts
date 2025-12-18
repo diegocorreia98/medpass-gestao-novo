@@ -676,6 +676,7 @@ serve(async (req) => {
 
     // 2.5. Buscar o documento para obter o link de assinatura correto
     // A API não retorna o link na criação, precisamos fazer uma query separada
+    // Às vezes o link demora um pouco para ser gerado, então fazemos retry
     console.log('🔍 [CREATE-AUTENTIQUE-CONTRACT] Buscando documento para obter link de assinatura...');
     
     const fetchDocumentQuery = `
@@ -694,60 +695,79 @@ serve(async (req) => {
       }
     `;
 
-    const fetchResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${AUTENTIQUE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query: fetchDocumentQuery })
-    });
-
     let signatureLink = null;
     let signaturePublicId = null;
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 segundos
 
-    if (fetchResponse.ok) {
-      const fetchResult = await fetchResponse.json();
-      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Resultado da busca:', JSON.stringify(fetchResult, null, 2));
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`🔄 [CREATE-AUTENTIQUE-CONTRACT] Tentativa ${attempt}/${maxRetries} de buscar link...`);
       
-      if (fetchResult.data?.document?.signatures) {
-        const signatures = fetchResult.data.document.signatures;
-        
-        // Procurar pelo signatário que tem action: SIGN (o cliente)
-        let clientSignature = signatures.find(
-          (sig: any) => sig.action?.name === 'SIGN' || sig.email === customer_data.email
-        );
-        
-        // Se não encontrou, usar a primeira signature com link
-        if (!clientSignature) {
-          clientSignature = signatures.find((sig: any) => sig.link?.short_link);
-        }
-        
-        // Se ainda não encontrou, usar a primeira
-        if (!clientSignature && signatures.length > 0) {
-          clientSignature = signatures[0];
-        }
-        
-        if (clientSignature) {
-          console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Client signature encontrada:', {
-            email: clientSignature?.email,
-            public_id: clientSignature?.public_id,
-            action: clientSignature?.action?.name,
-            link: clientSignature?.link
-          });
-          
-          signatureLink = clientSignature?.link?.short_link;
-          signaturePublicId = clientSignature?.public_id;
-        }
+      // Aguardar antes de buscar (dar tempo ao Autentique processar)
+      if (attempt > 1) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-    } else {
-      console.warn('⚠️ [CREATE-AUTENTIQUE-CONTRACT] Não foi possível buscar documento:', await fetchResponse.text());
+
+      const fetchResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${AUTENTIQUE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: fetchDocumentQuery })
+      });
+
+      if (fetchResponse.ok) {
+        const fetchResult = await fetchResponse.json();
+        console.log(`📋 [CREATE-AUTENTIQUE-CONTRACT] Resultado da busca (tentativa ${attempt}):`, JSON.stringify(fetchResult, null, 2));
+        
+        if (fetchResult.data?.document?.signatures) {
+          const signatures = fetchResult.data.document.signatures;
+          
+          // Procurar pelo signatário que tem action: SIGN (o cliente)
+          let clientSignature = signatures.find(
+            (sig: any) => sig.action?.name === 'SIGN' || sig.email === customer_data.email
+          );
+          
+          // Se não encontrou, usar a primeira signature com link
+          if (!clientSignature) {
+            clientSignature = signatures.find((sig: any) => sig.link?.short_link);
+          }
+          
+          // Se ainda não encontrou, usar a primeira
+          if (!clientSignature && signatures.length > 0) {
+            clientSignature = signatures[0];
+          }
+          
+          if (clientSignature) {
+            console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Client signature encontrada:', {
+              email: clientSignature?.email,
+              public_id: clientSignature?.public_id,
+              action: clientSignature?.action?.name,
+              link: clientSignature?.link
+            });
+            
+            signatureLink = clientSignature?.link?.short_link;
+            signaturePublicId = clientSignature?.public_id;
+            
+            // Se encontrou o link, sair do loop
+            if (signatureLink) {
+              console.log('✅ [CREATE-AUTENTIQUE-CONTRACT] Link encontrado na tentativa', attempt);
+              break;
+            }
+          }
+        }
+      } else {
+        console.warn(`⚠️ [CREATE-AUTENTIQUE-CONTRACT] Erro na tentativa ${attempt}:`, await fetchResponse.text());
+      }
     }
 
-    // Se ainda não temos link, usar o document ID como fallback
+    // Se ainda não temos link após todos os retries, usar fallback
     if (!signatureLink) {
-      signatureLink = `https://painel.autentique.com.br/documento/${documentId}`;
-      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Usando link fallback do documento:', signatureLink);
+      // Tentar construir link com o document_id no formato de visualização/assinatura
+      // O Autentique permite assinar via: https://painel.autentique.com.br/sign/{document_id}
+      signatureLink = `https://painel.autentique.com.br/sign/${documentId}`;
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Usando link de assinatura construído:', signatureLink);
     }
 
     console.log('✅ [CREATE-AUTENTIQUE-CONTRACT] Documento criado:', {

@@ -61,8 +61,23 @@ serve(async (req) => {
 
     // Extrair dados no formato correto do Autentique
     const eventType = webhook.event?.type;
-    const documentData = webhook.event?.data;
-    const documentId = documentData?.id;
+    const eventData = webhook.event?.data;
+    
+    // Para eventos de document.*, o ID está em event.data.id
+    // Para eventos de signature.*, o ID do documento está em event.data.document
+    let documentId: string | undefined;
+    
+    if (eventType?.startsWith('signature.')) {
+      // Evento de assinatura - document ID está em event.data.document
+      documentId = eventData?.document;
+      console.log('📋 [AUTENTIQUE-WEBHOOK] Evento de signature, document ID:', documentId);
+    } else {
+      // Evento de documento - ID está em event.data.id
+      documentId = eventData?.id;
+      console.log('📋 [AUTENTIQUE-WEBHOOK] Evento de document, ID:', documentId);
+    }
+    
+    const documentData = eventData;
 
     console.log('📄 [AUTENTIQUE-WEBHOOK] Evento:', eventType, '| Documento:', documentId);
 
