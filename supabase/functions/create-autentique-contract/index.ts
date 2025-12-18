@@ -549,11 +549,10 @@ serve(async (req) => {
       throw new Error(`Erro ao codificar contrato: ${encodeError instanceof Error ? encodeError.message : 'erro desconhecido'}`);
     }
 
-    // 2. Criar documento no Autentique via GraphQL
+    // 2. Criar documento no Autentique via GraphQL Multipart Upload
     console.log('🌐 [CREATE-AUTENTIQUE-CONTRACT] Enviando para Autentique API...');
 
     // Mutation correta para Autentique API v2
-    // Os argumentos devem ser separados: document, signers, file
     const mutation = `
       mutation CreateDocumentMutation(
         $document: DocumentInput!,
@@ -609,26 +608,43 @@ serve(async (req) => {
           ]
         }
       ],
-      file: base64HTML  // Base64 do arquivo HTML
+      file: null  // Será substituído pelo arquivo no multipart
     };
     
-    console.log('📤 [CREATE-AUTENTIQUE-CONTRACT] Enviando documento:', {
+    console.log('📤 [CREATE-AUTENTIQUE-CONTRACT] Enviando documento via multipart:', {
       document_name: variables.document.name,
       signer_email: customer_data.email,
-      signers_count: variables.signers.length,
-      file_size: base64HTML.length
+      html_size: contratoHTML.length
     });
+
+    // Criar FormData para upload multipart (GraphQL Upload Specification)
+    const formData = new FormData();
+    
+    // Operations (query + variables com file: null)
+    const operations = JSON.stringify({
+      query: mutation,
+      variables: variables
+    });
+    formData.append('operations', operations);
+    
+    // Map (indica onde o arquivo deve ser colocado)
+    const map = JSON.stringify({
+      "0": ["variables.file"]
+    });
+    formData.append('map', map);
+    
+    // O arquivo HTML como Blob
+    const htmlBlob = new Blob([contratoHTML], { type: 'text/html' });
+    const nomeArquivo = customer_data.nome.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+    formData.append('0', htmlBlob, `contrato_medpass_${nomeArquivo}.html`);
 
     const autentiqueResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${AUTENTIQUE_API_KEY}`,
-        'Content-Type': 'application/json',
+        // Não definir Content-Type - o FormData define automaticamente com boundary
       },
-      body: JSON.stringify({
-        query: mutation,
-        variables: variables
-      })
+      body: formData
     });
 
     if (!autentiqueResponse.ok) {
