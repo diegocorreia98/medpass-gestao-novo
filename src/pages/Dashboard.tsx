@@ -112,16 +112,21 @@ export default function Dashboard() {
             <CardTitle>Adesões por Mês por Plano</CardTitle>
             <CardDescription>Distribuição de adesões por plano nos últimos meses</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {adesoesPorMesPorPlano && adesoesPorMesPorPlano.data.length > 0 ? (
-              <ChartContainer config={adesoesPorMesPorPlano.config}>
-                <BarChart accessibilityLayer data={adesoesPorMesPorPlano.data}>
-                  <CartesianGrid vertical={false} />
+              <ChartContainer config={adesoesPorMesPorPlano.config} className="h-[350px]">
+                <BarChart 
+                  accessibilityLayer 
+                  data={adesoesPorMesPorPlano.data}
+                  margin={{ top: 20, left: 12, right: 12, bottom: 8 }}
+                >
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.3} />
                   <XAxis
                     dataKey="mesFormatado"
                     tickLine={false}
                     tickMargin={10}
                     axisLine={false}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   />
                   <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                   <ChartLegend content={<ChartLegendContent />} />
@@ -153,21 +158,22 @@ export default function Dashboard() {
             <CardTitle>Comissões por Mês por Plano</CardTitle>
             <CardDescription>Evolução das comissões separadas por plano nos últimos meses</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             {comissoesPorMes && comissoesPorMes.data.length > 0 ? (
-              <ChartContainer config={comissoesPorMes.config}>
+              <ChartContainer config={comissoesPorMes.config} className="h-[350px]">
                 <AreaChart 
                   accessibilityLayer 
                   data={comissoesPorMes.data}
-                  margin={{ left: 12, right: 12 }}
+                  margin={{ top: 20, left: 12, right: 12, bottom: 8 }}
                 >
-                  <CartesianGrid vertical={false} />
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.3} />
                   <XAxis
                     dataKey="mesFormatado"
                     tickLine={false}
                     axisLine={false}
                     tickMargin={8}
                     tickFormatter={(value) => value.slice(0, 3)}
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   />
                   <ChartTooltip 
                     cursor={false} 
@@ -218,8 +224,8 @@ export default function Dashboard() {
             <CardTitle>Meta de Unidades Cadastradas</CardTitle>
             <CardDescription>Progresso da meta mensal</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-[300px]">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-center h-[326px]">
               <div className="relative w-40 h-40">
                 {(() => {
                   const meta = 10
@@ -233,24 +239,26 @@ export default function Dashboard() {
                           cx="50"
                           cy="50"
                           r="40"
-                          stroke="hsl(var(--border))"
+                          stroke="hsl(var(--muted))"
                           strokeWidth="8"
                           fill="none"
+                          opacity="0.2"
                         />
                         <circle
                           cx="50"
                           cy="50"
                           r="40"
-                          stroke="hsl(var(--accent))"
+                          stroke="#60D5FE"
                           strokeWidth="8"
                           fill="none"
                           strokeDasharray={`${percentual * 2.51} ${(100 - percentual) * 2.51}`}
                           strokeLinecap="round"
+                          style={{ filter: 'drop-shadow(0 0 8px rgba(96, 213, 254, 0.4))' }}
                         />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-center">
-                          <div className="text-2xl font-bold text-accent">{Math.round(percentual)}%</div>
+                          <div className="text-2xl font-bold" style={{ color: '#60D5FE' }}>{Math.round(percentual)}%</div>
                           <div className="text-sm text-muted-foreground">{atual}/{meta}</div>
                         </div>
                       </div>

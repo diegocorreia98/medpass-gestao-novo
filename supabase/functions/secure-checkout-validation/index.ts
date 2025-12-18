@@ -66,6 +66,14 @@ serve(async (req) => {
         // payment_method: subscriptionData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
         status: subscriptionData.status,
         plan_name: subscriptionData.plan_name,
+        // ✅ Dados para assinatura de contrato
+        contract_status: subscriptionData.contract_status || 'not_requested',
+        telefone: subscriptionData.telefone,
+        endereco: subscriptionData.endereco,
+        cidade: subscriptionData.cidade,
+        estado: subscriptionData.estado,
+        cep: subscriptionData.cep,
+        data_nascimento: subscriptionData.data_nascimento,
         // IDs da Vindi necessários para o checkout
         vindi_customer_id: subscriptionData.vindi_customer_id,
         vindi_plan_id: subscriptionData.vindi_plan_id,

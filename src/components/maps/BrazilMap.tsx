@@ -77,9 +77,12 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
     try {
       mapboxgl.accessToken = mapboxToken;
       
+      // Detectar tema atual
+      const isDarkMode = document.documentElement.classList.contains('dark');
+      
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/light-v11',
+        style: isDarkMode ? 'mapbox://styles/mapbox/dark-v11' : 'mapbox://styles/mapbox/light-v11',
         center: [-51.9253, -14.2350], // Center of Brazil
         zoom: 3.5,
         maxZoom: 8,
@@ -170,7 +173,9 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
       if (coordinates && map.current) {
         // Calculate color intensity based on count
         const intensity = count / maxCount;
-        const color = `hsl(var(--primary))`;
+        
+        // Cores vibrantes para dark mode
+        const baseColor = '#60D5FE'; // Ciano vibrante
         const size = Math.max(20, Math.min(60, 20 + (intensity * 40)));
 
         // Create marker element
@@ -179,8 +184,8 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
         markerEl.style.cssText = `
           width: ${size}px;
           height: ${size}px;
-          background-color: ${color};
-          border: 2px solid hsl(var(--background));
+          background: linear-gradient(135deg, ${baseColor} 0%, #46B4E6 100%);
+          border: 3px solid rgba(96, 213, 254, 0.3);
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -189,20 +194,40 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
           font-weight: bold;
           color: white;
           cursor: pointer;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          opacity: ${0.7 + (intensity * 0.3)};
+          box-shadow: 0 4px 12px rgba(96, 213, 254, 0.3), 0 0 20px rgba(96, 213, 254, ${0.2 + (intensity * 0.3)});
+          opacity: ${0.85 + (intensity * 0.15)};
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transform-origin: center center;
+          will-change: transform, box-shadow;
         `;
         markerEl.textContent = count.toString();
+        
+        // Adicionar efeito hover
+        markerEl.addEventListener('mouseenter', () => {
+          markerEl.style.transform = 'scale(1.15) translate(0, 0)';
+          markerEl.style.boxShadow = `0 6px 16px rgba(96, 213, 254, 0.5), 0 0 30px rgba(96, 213, 254, 0.4)`;
+        });
+        markerEl.addEventListener('mouseleave', () => {
+          markerEl.style.transform = 'scale(1) translate(0, 0)';
+          markerEl.style.boxShadow = `0 4px 12px rgba(96, 213, 254, 0.3), 0 0 20px rgba(96, 213, 254, ${0.2 + (intensity * 0.3)})`;
+        });
 
-        // Create popup
+        // Create popup com estilo dark mode
         const popup = new mapboxgl.Popup({
           offset: 25,
           closeButton: false,
-          closeOnClick: false
+          closeOnClick: false,
+          className: 'map-popup-dark'
         }).setHTML(`
-          <div style="padding: 8px;">
-            <strong>${state}</strong><br>
-            ${count} unidade${count !== 1 ? 's' : ''}
+          <div style="
+            padding: 12px 16px;
+            background: rgba(17, 24, 39, 0.95);
+            border: 1px solid rgba(96, 213, 254, 0.3);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+          ">
+            <strong style="color: #60D5FE; font-size: 14px;">${state}</strong><br>
+            <span style="color: #E5E7EB; font-size: 13px;">${count} unidade${count !== 1 ? 's' : ''}</span>
           </div>
         `);
 
@@ -212,12 +237,16 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
           .setPopup(popup)
           .addTo(map.current);
 
-        // Add hover events
+        // Add hover events para popup
+        let popupTimeout: NodeJS.Timeout;
         markerEl.addEventListener('mouseenter', () => {
+          clearTimeout(popupTimeout);
           popup.addTo(map.current!);
         });
         markerEl.addEventListener('mouseleave', () => {
-          popup.remove();
+          popupTimeout = setTimeout(() => {
+            popup.remove();
+          }, 200);
         });
       }
     });
@@ -230,7 +259,7 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
           <CardTitle>Distribuição por Estado</CardTitle>
           <CardDescription>Mapa interativo das unidades por estado</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -249,12 +278,12 @@ const BrazilMap: React.FC<BrazilMapProps> = ({ data, isLoading }) => {
         <CardTitle>Distribuição por Estado</CardTitle>
         <CardDescription>Unidades cadastradas por estado no Brasil</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <div className="relative">
           <div
             ref={mapContainer}
-            className="w-full h-[400px] rounded-lg overflow-hidden"
-            style={{ minHeight: '400px' }}
+            className="w-full h-[326px] rounded-lg overflow-hidden"
+            style={{ minHeight: '326px' }}
           />
           {isLoading && (
             <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">

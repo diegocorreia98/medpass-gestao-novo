@@ -163,18 +163,20 @@ export const useDashboard = () => {
           ...planos
         }));
 
-      // Mapeamento específico de cores por plano
+      // Mapeamento específico de cores por plano - Otimizado para tema dark
       const planColorMap: Record<string, string> = {
-        'Plano Familiar': '#FF7E15',
-        'Plano Individual': '#46ECFE',
-        'Plano Individual ': '#46ECFE', // Caso tenha espaço extra
+        'Plano Familiar': '#FF8C42',  // Laranja mais vibrante para dark mode
+        'Plano Individual': '#60D5FE', // Ciano mais brilhante para dark mode
+        'Plano Individual ': '#60D5FE', // Caso tenha espaço extra
       };
 
-      // Cores de fallback para outros planos
+      // Cores de fallback para outros planos - Palette otimizada para dark mode
       const fallbackColors = [
-        'hsl(var(--chart-3))',
-        'hsl(var(--chart-4))',
-        'hsl(var(--chart-5))',
+        '#A78BFA', // Roxo vibrante
+        '#34D399', // Verde esmeralda
+        '#FBBF24', // Amarelo dourado
+        '#F472B6', // Rosa vibrante
+        '#60A5FA', // Azul claro
       ];
 
       // Gerar configuração dinâmica para o gráfico
@@ -266,17 +268,19 @@ export const useDashboard = () => {
           ...planos
         }));
 
-      // Mapeamento específico de cores por plano (mesmo usado em adesões)
+      // Mapeamento específico de cores por plano (mesmo usado em adesões) - Otimizado para dark mode
       const planColorMap: Record<string, string> = {
-        'Plano Familiar': '#FF7E15',
-        'Plano Individual': '#46ECFE',
+        'Plano Familiar': '#FF8C42',  // Laranja mais vibrante para dark mode
+        'Plano Individual': '#60D5FE', // Ciano mais brilhante para dark mode
       };
 
-      // Cores de fallback para outros planos
+      // Cores de fallback para outros planos - Palette otimizada para dark mode
       const fallbackColors = [
-        'hsl(var(--chart-3))',
-        'hsl(var(--chart-4))',
-        'hsl(var(--chart-5))',
+        '#A78BFA', // Roxo vibrante
+        '#34D399', // Verde esmeralda
+        '#FBBF24', // Amarelo dourado
+        '#F472B6', // Rosa vibrante
+        '#60A5FA', // Azul claro
       ];
 
       // Gerar configuração dinâmica para o gráfico

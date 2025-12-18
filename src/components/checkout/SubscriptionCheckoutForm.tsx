@@ -8,6 +8,7 @@ import { Loader2, CreditCard, Smartphone, CheckCircle, AlertCircle, Clock, Copy,
 import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { CardForm } from './CardForm';
 import { CustomerForm } from './CustomerForm';
+import { ContractSignatureModal } from '@/components/adesao/ContractSignatureModal';
 import { toast } from '@/hooks/use-toast';
 
 interface SubscriptionData {
@@ -17,6 +18,13 @@ interface SubscriptionData {
   customer_document: string;
   plan_price: number;
   plan_id: string;
+  contract_status?: string;
+  telefone?: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
+  data_nascimento?: string;
   planos?: {
     nome: string;
     descricao: string;
@@ -40,7 +48,7 @@ interface SubscriptionCheckoutFormProps {
   token: string;
 }
 
-type CheckoutStep = 'payment' | 'awaiting-payment' | 'approved';
+type CheckoutStep = 'contract' | 'payment' | 'awaiting-payment' | 'approved';
 
 export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProps) {
   const navigate = useNavigate();
@@ -49,6 +57,7 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
   const [isProcessing, setIsProcessing] = useState(false);
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'credit_card' | 'pix'>('credit_card');
+  const [showContractModal, setShowContractModal] = useState(false);
   const [cardData, setCardData] = useState({
     number: '',
     cvv: '',
@@ -107,6 +116,13 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         plan_price: checkoutData.plan_price,
         // payment_method: checkoutData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
         status: checkoutData.status,
+        contract_status: checkoutData.contract_status || 'not_requested',
+        telefone: checkoutData.telefone,
+        endereco: checkoutData.endereco,
+        cidade: checkoutData.cidade,
+        estado: checkoutData.estado,
+        cep: checkoutData.cep,
+        data_nascimento: checkoutData.data_nascimento,
         planos: {
           nome: checkoutData.plan_name,
           descricao: 'Plano de saúde',
@@ -124,6 +140,22 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
         email: processedData.customer_email || '',
         cpf: processedData.customer_document || '',
       }));
+
+      // ✅ Verificar se precisa assinar contrato ANTES do pagamento
+      const contractStatus = processedData.contract_status;
+      console.log('🔍 [CHECKOUT] Contract Status:', contractStatus);
+      
+      if (contractStatus === 'not_requested' || contractStatus === 'pending_signature') {
+        console.log('📝 [CHECKOUT] Contrato pendente - Mostrando modal de assinatura');
+        setCurrentStep('contract');
+        setShowContractModal(true);
+      } else if (contractStatus === 'signed') {
+        console.log('✅ [CHECKOUT] Contrato já assinado - Liberando pagamento');
+        setCurrentStep('payment');
+      } else {
+        console.log('⚠️ [CHECKOUT] Status de contrato desconhecido, permitindo pagamento');
+        setCurrentStep('payment');
+      }
 
     } catch (error) {
       console.error('Error fetching subscription data:', error);
@@ -201,8 +233,48 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
     }
   }, [currentStep, subscriptionData?.id]);
 
+  // ✅ Handlers para assinatura de contrato
+  const handleSignatureComplete = async (documentId: string) => {
+    console.log('✅ [CHECKOUT] Contrato assinado:', documentId);
+    setShowContractModal(false);
+    setCurrentStep('payment');
+    
+    // Atualizar o contract_status local
+    if (subscriptionData) {
+      setSubscriptionData({
+        ...subscriptionData,
+        contract_status: 'signed'
+      });
+    }
+    
+    toast({
+      title: "✅ Contrato assinado!",
+      description: "Agora você pode prosseguir com o pagamento.",
+    });
+  };
+
+  const handleContractCancel = () => {
+    toast({
+      title: "Assinatura necessária",
+      description: "Você precisa assinar o contrato antes de prosseguir com o pagamento.",
+      variant: "destructive",
+    });
+    // Não fechar o modal, apenas avisar
+  };
 
   const handlePayment = async () => {
+    // ✅ Verificar se o contrato foi assinado antes de permitir pagamento
+    if (subscriptionData?.contract_status !== 'signed') {
+      toast({
+        title: "Contrato pendente",
+        description: "Você precisa assinar o contrato antes de efetuar o pagamento.",
+        variant: "destructive",
+      });
+      setShowContractModal(true);
+      setCurrentStep('contract');
+      return;
+    }
+
     if (!subscriptionData) return;
 
     setIsProcessing(true);
@@ -777,6 +849,31 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
           </div>
         </div>
       </div>
+      
+      {/* ✅ Modal de Assinatura de Contrato */}
+      {showContractModal && subscriptionData && (
+        <ContractSignatureModal
+          open={showContractModal}
+          beneficiarioId={subscriptionData.id}
+          customerData={{
+            nome: subscriptionData.customer_name,
+            cpf: subscriptionData.customer_document,
+            email: subscriptionData.customer_email,
+            telefone: subscriptionData.telefone || '',
+            endereco: subscriptionData.endereco || '',
+            cidade: subscriptionData.cidade || '',
+            estado: subscriptionData.estado || '',
+            cep: subscriptionData.cep || '',
+            data_nascimento: subscriptionData.data_nascimento || ''
+          }}
+          planoData={{
+            nome: subscriptionData.planos?.nome || '',
+            valor: subscriptionData.plan_price || subscriptionData.planos?.valor || 0
+          }}
+          onSignatureComplete={handleSignatureComplete}
+          onCancel={handleContractCancel}
+        />
+      )}
     </div>
   );
 }
