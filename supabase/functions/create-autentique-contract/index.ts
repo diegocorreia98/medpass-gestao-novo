@@ -599,6 +599,8 @@ serve(async (req) => {
         {
           email: customer_data.email,
           action: "SIGN",
+          // IMPORTANTE: delivery_method LINK gera o short_link para exibir no iframe
+          delivery_method: "DELIVERY_METHOD_LINK",
           positions: [
             {
               x: "50.00",
