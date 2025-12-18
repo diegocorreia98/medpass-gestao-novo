@@ -3,30 +3,42 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Formato real do payload do Autentique
 interface AutentiqueWebhookPayload {
-  event: string;
-  data: {
-    document: {
+  id: string;
+  url: string;
+  name: string;
+  event: {
+    id: string;
+    type: string;
+    data: {
       id: string;
       name: string;
-      status: string;
-      created_at: string;
-      signed_at?: string;
+      files?: {
+        signed?: string;
+        original?: string;
+      };
       signatures?: Array<{
-        public_id: string;
-        name: string;
-        email: string;
-        signed_at?: string;
-        action: {
+        user?: {
           name: string;
+          email: string;
+          cpf?: string;
         };
+        action?: string;
+        signed?: string;
+        rejected?: string;
+        public_id: string;
       }>;
     };
+    object: string;
+    created_at: string;
   };
+  format: string;
+  object: string;
 }
 
 serve(async (req) => {
@@ -45,12 +57,25 @@ serve(async (req) => {
 
     const webhook: AutentiqueWebhookPayload = await req.json();
     
-    console.log('📨 [AUTENTIQUE-WEBHOOK] Payload:', JSON.stringify(webhook, null, 2));
+    console.log('📨 [AUTENTIQUE-WEBHOOK] Payload completo:', JSON.stringify(webhook, null, 2));
 
-    const { event, data } = webhook;
-    const documentId = data.document.id;
+    // Extrair dados no formato correto do Autentique
+    const eventType = webhook.event?.type;
+    const documentData = webhook.event?.data;
+    const documentId = documentData?.id;
 
-    console.log('📄 [AUTENTIQUE-WEBHOOK] Evento:', event, '| Documento:', documentId);
+    console.log('📄 [AUTENTIQUE-WEBHOOK] Evento:', eventType, '| Documento:', documentId);
+
+    if (!eventType || !documentId) {
+      console.error('❌ [AUTENTIQUE-WEBHOOK] Payload inválido - evento ou documento ausente');
+      return new Response(JSON.stringify({ 
+        error: 'Payload inválido',
+        received: webhook
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
 
     // Buscar beneficiário pelo document_id
     const { data: beneficiario, error: findError } = await supabaseClient
@@ -88,7 +113,7 @@ serve(async (req) => {
     });
 
     // Processar diferentes eventos
-    switch (event) {
+    switch (eventType) {
       case 'document.finished':
         console.log('✅ [AUTENTIQUE-WEBHOOK] Documento finalizado (todas assinaturas concluídas)...');
         
@@ -98,7 +123,7 @@ serve(async (req) => {
           .update({
             contract_status: 'signed',
             contract_signed_at: new Date().toISOString(),
-            autentique_signed_data: webhook.data
+            autentique_signed_data: documentData
           })
           .eq('id', beneficiario.id);
 
@@ -153,7 +178,7 @@ serve(async (req) => {
           .from('beneficiarios')
           .update({
             contract_status: 'refused',
-            autentique_signed_data: webhook.data
+            autentique_signed_data: documentData
           })
           .eq('id', beneficiario.id);
 
@@ -195,7 +220,7 @@ serve(async (req) => {
           .update({
             contract_status: 'signed',
             contract_signed_at: new Date().toISOString(),
-            autentique_signed_data: webhook.data
+            autentique_signed_data: documentData
           })
           .eq('id', beneficiario.id);
 
@@ -217,11 +242,11 @@ serve(async (req) => {
         });
 
       default:
-        console.log('ℹ️ [AUTENTIQUE-WEBHOOK] Evento não tratado:', event);
+        console.log('ℹ️ [AUTENTIQUE-WEBHOOK] Evento não tratado:', eventType);
         
         return new Response(JSON.stringify({ 
           received: true,
-          event: event,
+          event: eventType,
           message: 'Evento recebido mas não processado'
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

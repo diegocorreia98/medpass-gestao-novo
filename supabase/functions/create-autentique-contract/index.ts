@@ -668,59 +668,90 @@ serve(async (req) => {
     }
 
     const document = autentiqueResult.data.createDocument;
+    const documentId = document.id;
     
     // Log detalhado da estrutura do documento
-    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Estrutura do documento:', JSON.stringify(document, null, 2));
-    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Signatures:', JSON.stringify(document.signatures, null, 2));
+    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Documento criado com ID:', documentId);
+    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Estrutura inicial:', JSON.stringify(document, null, 2));
 
-    // Encontrar a signature do cliente (a que tem action: SIGN)
-    let clientSignature = null;
+    // 2.5. Buscar o documento para obter o link de assinatura correto
+    // A API não retorna o link na criação, precisamos fazer uma query separada
+    console.log('🔍 [CREATE-AUTENTIQUE-CONTRACT] Buscando documento para obter link de assinatura...');
+    
+    const fetchDocumentQuery = `
+      query {
+        document(id: "${documentId}") {
+          id
+          name
+          signatures {
+            public_id
+            name
+            email
+            action { name }
+            link { short_link }
+          }
+        }
+      }
+    `;
+
+    const fetchResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AUTENTIQUE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: fetchDocumentQuery })
+    });
+
     let signatureLink = null;
     let signaturePublicId = null;
-    
-    if (document.signatures && document.signatures.length > 0) {
-      // Procurar pelo signatário que tem action: SIGN (o cliente)
-      clientSignature = document.signatures.find(
-        (sig: any) => sig.action?.name === 'SIGN' || sig.email === customer_data.email
-      );
+
+    if (fetchResponse.ok) {
+      const fetchResult = await fetchResponse.json();
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Resultado da busca:', JSON.stringify(fetchResult, null, 2));
       
-      // Se não encontrou, usar a primeira signature
-      if (!clientSignature) {
-        clientSignature = document.signatures[0];
+      if (fetchResult.data?.document?.signatures) {
+        const signatures = fetchResult.data.document.signatures;
+        
+        // Procurar pelo signatário que tem action: SIGN (o cliente)
+        let clientSignature = signatures.find(
+          (sig: any) => sig.action?.name === 'SIGN' || sig.email === customer_data.email
+        );
+        
+        // Se não encontrou, usar a primeira signature com link
+        if (!clientSignature) {
+          clientSignature = signatures.find((sig: any) => sig.link?.short_link);
+        }
+        
+        // Se ainda não encontrou, usar a primeira
+        if (!clientSignature && signatures.length > 0) {
+          clientSignature = signatures[0];
+        }
+        
+        if (clientSignature) {
+          console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Client signature encontrada:', {
+            email: clientSignature?.email,
+            public_id: clientSignature?.public_id,
+            action: clientSignature?.action?.name,
+            link: clientSignature?.link
+          });
+          
+          signatureLink = clientSignature?.link?.short_link;
+          signaturePublicId = clientSignature?.public_id;
+        }
       }
-      
-      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Client signature encontrada:', {
-        email: clientSignature?.email,
-        public_id: clientSignature?.public_id,
-        action: clientSignature?.action?.name,
-        link: clientSignature?.link
-      });
-      
-      // Tentar obter o link diretamente
-      signatureLink = clientSignature?.link?.short_link 
-        || clientSignature?.link?.url 
-        || clientSignature?.link;
-      
-      // Salvar o public_id para referência
-      signaturePublicId = clientSignature?.public_id;
-      
-      // Se link é null mas temos public_id, construir o link
-      if (!signatureLink && signaturePublicId) {
-        // URL correta do Autentique para assinatura
-        signatureLink = `https://painel.autentique.com.br/assinar/${signaturePublicId}`;
-        console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Link construído a partir do public_id:', signatureLink);
-      }
+    } else {
+      console.warn('⚠️ [CREATE-AUTENTIQUE-CONTRACT] Não foi possível buscar documento:', await fetchResponse.text());
     }
 
     // Se ainda não temos link, usar o document ID como fallback
     if (!signatureLink) {
-      // Tentar construir o link usando o document ID
-      signatureLink = `https://painel.autentique.com.br/documento/${document.id}`;
-      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Link construído a partir do document ID:', signatureLink);
+      signatureLink = `https://painel.autentique.com.br/documento/${documentId}`;
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Usando link fallback do documento:', signatureLink);
     }
 
     console.log('✅ [CREATE-AUTENTIQUE-CONTRACT] Documento criado:', {
-      document_id: document.id,
+      document_id: documentId,
       signature_public_id: signaturePublicId,
       signature_link: signatureLink
     });
@@ -731,7 +762,7 @@ serve(async (req) => {
     const { error: updateError } = await supabaseClient
       .from('beneficiarios')
       .update({
-        autentique_document_id: document.id,
+        autentique_document_id: documentId,
         autentique_signature_link: signatureLink,
         contract_status: 'pending_signature',
         autentique_data: autentiqueResult.data
@@ -748,7 +779,7 @@ serve(async (req) => {
     // Retornar sucesso
     return new Response(JSON.stringify({
       success: true,
-      document_id: document.id,
+      document_id: documentId,
       signature_link: signatureLink,
       beneficiario_id: beneficiario_id,
       message: 'Contrato criado com sucesso'
