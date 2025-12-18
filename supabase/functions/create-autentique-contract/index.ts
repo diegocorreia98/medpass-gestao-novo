@@ -446,26 +446,83 @@ serve(async (req) => {
     );
 
     // Parse do body
-    const { beneficiario_id, customer_data, plano_data } = await req.json() as CreateContractRequest;
+    const { beneficiario_id, customer_data: frontendCustomerData, plano_data: frontendPlanoData } = await req.json() as CreateContractRequest;
 
     console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Dados recebidos:', {
       beneficiario_id,
-      customer_name: customer_data.nome,
-      customer_email: customer_data.email,
-      plano_nome: plano_data.nome
+      frontend_customer_name: frontendCustomerData?.nome,
+      frontend_plano_nome: frontendPlanoData?.nome
     });
 
-    // Validações
+    // Validações básicas
     if (!beneficiario_id) {
       throw new Error('beneficiario_id é obrigatório');
     }
 
+    // ✅ Buscar dados COMPLETOS do beneficiário do banco de dados
+    // (evita usar dados mascarados do frontend)
+    console.log('🔍 [CREATE-AUTENTIQUE-CONTRACT] Buscando dados completos do beneficiário...');
+    
+    const { data: beneficiarioData, error: beneficiarioError } = await supabaseClient
+      .from('beneficiarios')
+      .select(`
+        id,
+        nome,
+        cpf,
+        email,
+        telefone,
+        endereco,
+        cidade,
+        estado,
+        cep,
+        data_nascimento,
+        plano_id,
+        planos (
+          id,
+          nome,
+          valor
+        )
+      `)
+      .eq('id', beneficiario_id)
+      .single();
+
+    if (beneficiarioError || !beneficiarioData) {
+      console.error('❌ [CREATE-AUTENTIQUE-CONTRACT] Erro ao buscar beneficiário:', beneficiarioError);
+      throw new Error(`Beneficiário não encontrado: ${beneficiarioError?.message || 'ID inválido'}`);
+    }
+
+    console.log('✅ [CREATE-AUTENTIQUE-CONTRACT] Beneficiário encontrado:', {
+      id: beneficiarioData.id,
+      nome: beneficiarioData.nome,
+      email: beneficiarioData.email,
+      plano: beneficiarioData.planos?.nome
+    });
+
+    // Usar dados do banco de dados
+    const customer_data = {
+      nome: beneficiarioData.nome,
+      cpf: beneficiarioData.cpf,
+      email: beneficiarioData.email,
+      telefone: beneficiarioData.telefone,
+      endereco: beneficiarioData.endereco,
+      cidade: beneficiarioData.cidade,
+      estado: beneficiarioData.estado,
+      cep: beneficiarioData.cep,
+      data_nascimento: beneficiarioData.data_nascimento
+    };
+
+    const plano_data = {
+      nome: beneficiarioData.planos?.nome || frontendPlanoData?.nome || 'Plano MedPass',
+      valor: beneficiarioData.planos?.valor || frontendPlanoData?.valor || 0
+    };
+
+    // Validações dos dados do banco
     if (!customer_data.nome || !customer_data.cpf || !customer_data.email) {
-      throw new Error('Nome, CPF e email são obrigatórios');
+      throw new Error('Dados incompletos do beneficiário: nome, CPF e email são obrigatórios');
     }
 
     if (!plano_data.nome || !plano_data.valor) {
-      throw new Error('Dados do plano são obrigatórios');
+      throw new Error('Dados do plano não encontrados para este beneficiário');
     }
 
     // 1. Gerar HTML do contrato preenchido
