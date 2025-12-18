@@ -623,14 +623,14 @@ serve(async (req) => {
     `;
 
     // Preparar variáveis no formato correto da API v2
-    // Configuração com 2 assinantes: CONTRATANTE (cliente) e CONTRATADA (MedPass)
-    // Rubricas nas páginas 1-4 e assinatura completa na página 5
+    // Apenas o CONTRATANTE (cliente) precisa assinar digitalmente
+    // A assinatura da CONTRATADA (MedPass) já está impressa no documento HTML
     const variables = {
       document: {
         name: `Contrato Adesão MedPass - ${customer_data.nome}`
       },
       signers: [
-        // CONTRATANTE (Cliente) - Assina no lado esquerdo
+        // CONTRATANTE (Cliente) - Única assinatura digital necessária
         {
           name: customer_data.nome,
           email: customer_data.email,
@@ -645,25 +645,9 @@ serve(async (req) => {
             // Assinatura completa na página 5 (área de assinatura - lado esquerdo)
             { x: "25.00", y: "75.00", z: 5 }   // Página 5 - Assinatura principal
           ]
-        },
-        // CONTRATADA (MedPass - Ismael) - Assina AUTOMATICAMENTE no lado direito
-        {
-          name: "ISMAEL DE OLIVEIRA DIAS",
-          email: "medpassbeneficios@gmail.com",
-          action: "SIGN",
-          configs: {
-            auto_sign: true  // Assinatura automática - aplica assim que o documento é criado
-          },
-          positions: [
-            // Rubricas nas páginas 1-4 (canto inferior esquerdo)
-            { x: "15.00", y: "95.00", z: 1 },  // Página 1
-            { x: "15.00", y: "95.00", z: 2 },  // Página 2
-            { x: "15.00", y: "95.00", z: 3 },  // Página 3
-            { x: "15.00", y: "95.00", z: 4 },  // Página 4
-            // Assinatura completa na página 5 (área de assinatura - lado direito)
-            { x: "75.00", y: "75.00", z: 5 }   // Página 5 - Assinatura principal
-          ]
         }
+        // A assinatura da CONTRATADA (Ismael/MedPass) já está pré-impressa no documento
+        // Não precisa de assinatura digital adicional
       ],
       file: null  // Será substituído pelo arquivo no multipart
     };
