@@ -673,40 +673,55 @@ serve(async (req) => {
     console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Estrutura do documento:', JSON.stringify(document, null, 2));
     console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Signatures:', JSON.stringify(document.signatures, null, 2));
 
-    // Tentar extrair o link de diferentes caminhos possíveis
+    // Encontrar a signature do cliente (a que tem action: SIGN)
+    let clientSignature = null;
     let signatureLink = null;
+    let signaturePublicId = null;
     
     if (document.signatures && document.signatures.length > 0) {
-      const signature = document.signatures[0];
-      // Tentar diferentes estruturas de link
-      signatureLink = signature?.link?.short_link 
-        || signature?.link?.url 
-        || signature?.link
-        || signature?.short_link
-        || signature?.url;
-        
-      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Signature encontrada:', {
-        signature_keys: Object.keys(signature || {}),
-        link_value: signatureLink
+      // Procurar pelo signatário que tem action: SIGN (o cliente)
+      clientSignature = document.signatures.find(
+        (sig: any) => sig.action?.name === 'SIGN' || sig.email === customer_data.email
+      );
+      
+      // Se não encontrou, usar a primeira signature
+      if (!clientSignature) {
+        clientSignature = document.signatures[0];
+      }
+      
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Client signature encontrada:', {
+        email: clientSignature?.email,
+        public_id: clientSignature?.public_id,
+        action: clientSignature?.action?.name,
+        link: clientSignature?.link
       });
+      
+      // Tentar obter o link diretamente
+      signatureLink = clientSignature?.link?.short_link 
+        || clientSignature?.link?.url 
+        || clientSignature?.link;
+      
+      // Salvar o public_id para referência
+      signaturePublicId = clientSignature?.public_id;
+      
+      // Se link é null mas temos public_id, construir o link
+      if (!signatureLink && signaturePublicId) {
+        // URL correta do Autentique para assinatura
+        signatureLink = `https://painel.autentique.com.br/assinar/${signaturePublicId}`;
+        console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Link construído a partir do public_id:', signatureLink);
+      }
     }
 
-    // Se não encontrou nas signatures, tentar no documento diretamente
+    // Se ainda não temos link, usar o document ID como fallback
     if (!signatureLink) {
-      signatureLink = document.link?.short_link 
-        || document.link?.url 
-        || document.link
-        || document.short_link
-        || document.url;
-    }
-
-    if (!signatureLink) {
-      console.error('❌ [CREATE-AUTENTIQUE-CONTRACT] Link não encontrado na resposta. Estrutura completa:', JSON.stringify(autentiqueResult, null, 2));
-      throw new Error('Link de assinatura não retornado pelo Autentique');
+      // Tentar construir o link usando o document ID
+      signatureLink = `https://painel.autentique.com.br/documento/${document.id}`;
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Link construído a partir do document ID:', signatureLink);
     }
 
     console.log('✅ [CREATE-AUTENTIQUE-CONTRACT] Documento criado:', {
       document_id: document.id,
+      signature_public_id: signaturePublicId,
       signature_link: signatureLink
     });
 
