@@ -552,9 +552,19 @@ serve(async (req) => {
     // 2. Criar documento no Autentique via GraphQL
     console.log('🌐 [CREATE-AUTENTIQUE-CONTRACT] Enviando para Autentique API...');
 
+    // Mutation correta para Autentique API v2
+    // Os argumentos devem ser separados: document, signers, file
     const mutation = `
-      mutation CreateDocument($document: DocumentInput!) {
-        createDocument(document: $document) {
+      mutation CreateDocumentMutation(
+        $document: DocumentInput!,
+        $signers: [SignerInput!]!,
+        $file: Upload!
+      ) {
+        createDocument(
+          document: $document,
+          signers: $signers,
+          file: $file
+        ) {
           id
           name
           refusable
@@ -581,40 +591,32 @@ serve(async (req) => {
       }
     `;
 
-    // Limpar nome para usar no arquivo
-    const nomeArquivo = customer_data.nome.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
-    
+    // Preparar variáveis no formato correto da API v2
     const variables = {
       document: {
-        name: `Contrato Adesão MedPass - ${customer_data.nome}`,
-        refusable: false,
-        sortable: false,
-        file: {
-          name: `contrato_medpass_${nomeArquivo}.html`,
-          content_base64: base64HTML,
-        },
-        signers: [
-          {
-            name: customer_data.nome,
-            email: customer_data.email,
-            action: "SIGN",
-            positions: [
-              {
-                x: "50%",
-                y: "88%",
-                z: 1
-              }
-            ]
-          }
-        ]
-      }
+        name: `Contrato Adesão MedPass - ${customer_data.nome}`
+      },
+      signers: [
+        {
+          email: customer_data.email,
+          action: "SIGN",
+          positions: [
+            {
+              x: "50.00",
+              y: "88.00",
+              z: 1
+            }
+          ]
+        }
+      ],
+      file: base64HTML  // Base64 do arquivo HTML
     };
     
     console.log('📤 [CREATE-AUTENTIQUE-CONTRACT] Enviando documento:', {
       document_name: variables.document.name,
-      file_name: variables.document.file.name,
       signer_email: customer_data.email,
-      base64_preview: base64HTML.substring(0, 100) + '...'
+      signers_count: variables.signers.length,
+      file_size: base64HTML.length
     });
 
     const autentiqueResponse = await fetch('https://api.autentique.com.br/v2/graphql', {
