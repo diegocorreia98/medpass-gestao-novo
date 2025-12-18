@@ -663,13 +663,45 @@ serve(async (req) => {
     }
 
     if (!autentiqueResult.data || !autentiqueResult.data.createDocument) {
+      console.error('❌ [CREATE-AUTENTIQUE-CONTRACT] Resposta sem documento:', autentiqueResult);
       throw new Error('Resposta inválida do Autentique - documento não criado');
     }
 
     const document = autentiqueResult.data.createDocument;
-    const signatureLink = document.signatures[0]?.link?.short_link;
+    
+    // Log detalhado da estrutura do documento
+    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Estrutura do documento:', JSON.stringify(document, null, 2));
+    console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Signatures:', JSON.stringify(document.signatures, null, 2));
+
+    // Tentar extrair o link de diferentes caminhos possíveis
+    let signatureLink = null;
+    
+    if (document.signatures && document.signatures.length > 0) {
+      const signature = document.signatures[0];
+      // Tentar diferentes estruturas de link
+      signatureLink = signature?.link?.short_link 
+        || signature?.link?.url 
+        || signature?.link
+        || signature?.short_link
+        || signature?.url;
+        
+      console.log('📋 [CREATE-AUTENTIQUE-CONTRACT] Signature encontrada:', {
+        signature_keys: Object.keys(signature || {}),
+        link_value: signatureLink
+      });
+    }
+
+    // Se não encontrou nas signatures, tentar no documento diretamente
+    if (!signatureLink) {
+      signatureLink = document.link?.short_link 
+        || document.link?.url 
+        || document.link
+        || document.short_link
+        || document.url;
+    }
 
     if (!signatureLink) {
+      console.error('❌ [CREATE-AUTENTIQUE-CONTRACT] Link não encontrado na resposta. Estrutura completa:', JSON.stringify(autentiqueResult, null, 2));
       throw new Error('Link de assinatura não retornado pelo Autentique');
     }
 
