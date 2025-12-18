@@ -48,7 +48,8 @@ Local: **{{LOCAL\_ASSINATURA}}** Data: **{{DATA\_ASSINATURA}}**
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 
-**CONTRATANTE:** Nome: **{{NOME\_CONTRATANTE}}** Assinatura: 
+**CONTRATANTE:** Nome: **{{NOME\_CONTRATANTE
+}}** Assinatura: 
 
 \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
 

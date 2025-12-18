@@ -13,9 +13,12 @@ import { toast } from '@/hooks/use-toast';
 
 interface SubscriptionData {
   id: string;
+  subscription_id?: string;
+  beneficiario_id?: string; // ✅ ID do beneficiário para o contrato Autentique
   customer_name: string;
   customer_email: string;
   customer_document: string;
+  customer_cpf?: string; // ✅ CPF completo para o contrato
   plan_price: number;
   plan_id: string;
   contract_status?: string;
@@ -109,9 +112,12 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       // Processar dados já mascarados vindos da edge function segura
       const processedData = {
         id: checkoutData.id,
+        subscription_id: checkoutData.subscription_id,
+        beneficiario_id: checkoutData.beneficiario_id, // ✅ ID do beneficiário para o contrato Autentique
         customer_name: checkoutData.customer_name, // Já mascarado pela função
         customer_email: checkoutData.customer_email, // Já mascarado pela função
         customer_document: checkoutData.customer_document, // Sempre mascarado
+        customer_cpf: checkoutData.customer_cpf, // ✅ CPF completo para o contrato
         plan_id: '', // Não expostos no checkout por segurança
         plan_price: checkoutData.plan_price,
         // payment_method: checkoutData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
@@ -854,10 +860,10 @@ export function SubscriptionCheckoutForm({ token }: SubscriptionCheckoutFormProp
       {showContractModal && subscriptionData && (
         <ContractSignatureModal
           open={showContractModal}
-          beneficiarioId={subscriptionData.id}
+          beneficiarioId={subscriptionData.beneficiario_id || subscriptionData.id}
           customerData={{
             nome: subscriptionData.customer_name,
-            cpf: subscriptionData.customer_document,
+            cpf: subscriptionData.customer_cpf || subscriptionData.customer_document,
             email: subscriptionData.customer_email,
             telefone: subscriptionData.telefone || '',
             endereco: subscriptionData.endereco || '',

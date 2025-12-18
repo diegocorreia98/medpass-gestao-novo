@@ -59,9 +59,14 @@ serve(async (req) => {
       success: true,
       data: {
         id: subscriptionData.id,
+        subscription_id: subscriptionData.subscription_id,
+        // ✅ beneficiario_id é o ID correto para o contrato no Autentique
+        beneficiario_id: subscriptionData.beneficiario_id,
         customer_name: subscriptionData.customer_name_masked,
         customer_email: subscriptionData.customer_email_masked,
-        customer_document: '***.***.***-**', // Sempre mascarado
+        customer_document: '***.***.***-**', // Mascarado para exibição
+        // ✅ CPF completo necessário para gerar o contrato
+        customer_cpf: subscriptionData.customer_cpf,
         plan_price: subscriptionData.plan_price,
         // payment_method: subscriptionData.payment_method, // ❌ REMOVIDO: usuário escolhe no frontend
         status: subscriptionData.status,
@@ -75,7 +80,6 @@ serve(async (req) => {
         cep: subscriptionData.cep,
         data_nascimento: subscriptionData.data_nascimento,
         // IDs da Vindi necessários para o checkout
-        vindi_customer_id: subscriptionData.vindi_customer_id,
         vindi_plan_id: subscriptionData.vindi_plan_id,
         vindi_product_id: subscriptionData.vindi_product_id
       }
