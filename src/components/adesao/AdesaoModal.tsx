@@ -122,7 +122,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
           plano_id: values.plano_id,
           nome: values.nome,
           cpf: values.cpf,
-          email: values.email || null,
+          email: values.email?.toLowerCase() || null,
           telefone: values.telefone || null,
           data_nascimento: values.data_nascimento || null,
           endereco: values.endereco ? `${values.endereco}, ${values.numero_endereco}` : null,
@@ -337,7 +337,7 @@ export function AdesaoModal({ open, onClose }: AdesaoModalProps) {
                 id="email"
                 type="email"
                 value={beneficiario.email}
-                onChange={(e) => setBeneficiario({ ...beneficiario, email: e.target.value })}
+                onChange={(e) => setBeneficiario({ ...beneficiario, email: e.target.value.toLowerCase() })}
                 placeholder="email@exemplo.com"
               />
             </div>
